@@ -51,7 +51,7 @@ What a month costs depends on how much your team pushes and builds. Each instanc
 
 ## What diffinery.com is
 
-diffinery.com is the project's home: this site, the [documentation](/docs), and the Diffinery instance that Diffinery itself is developed on, with its CI, deploys and agents. Accounts there are by invitation, for the people working on Diffinery. It isn't a hosted service for other teams; to use Diffinery, run your own instance.
+diffinery.com is the project's home: this site, the [documentation](/docs), and the Diffinery instance that Diffinery itself is developed on, with its CI, deploys and agents. Accounts there are by invitation. If you'd like to try Diffinery before running your own, [request early access](https://diffinery.com/early-access): its administrators review requests and email invitations. It isn't a hosted service for teams; to use Diffinery for your work, run your own instance.
 
 ## Contribute
 
@@ -71,7 +71,7 @@ No. There's one edition, the open-source one, and nothing is sold.
 
 ### Is there a hosted version I can sign up for?
 
-No. diffinery.com is the project's own instance, by invitation for the people working on Diffinery. You deploy your own instance to your Cloudflare account; see [Deploy your own Diffinery](/docs/self-hosting/deploy).
+Not one to sign up for. To try Diffinery, [request early access](https://diffinery.com/early-access) to diffinery.com, the project's own instance, where accounts are by invitation. To use Diffinery for your team, deploy your own instance to your Cloudflare account; see [Deploy your own Diffinery](/docs/self-hosting/deploy).
 
 ### What does running Diffinery cost?
 

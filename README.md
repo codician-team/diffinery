@@ -222,7 +222,7 @@ Not by default. Unless a branch protection rule allows it, agents can't push to 
 Yes. The importer brings a repository or a whole organization with history, issues, pull requests, reviews and releases. Secret names come over with a field to enter each value. `gh`, Octokit, VS Code and JetBrains IDEs work against Diffinery. See [Migrate from GitHub](https://diffinery.com/docs/migrate-from-github).
 
 **Can I sign up on diffinery.com?**
-diffinery.com is the project's home and the instance Diffinery is developed on; accounts there are by invitation for the people working on it. It isn't a hosted service. To use Diffinery, deploy your own instance.
+Not directly. diffinery.com is the project's home and the instance Diffinery is developed on, and accounts there are by invitation. To try Diffinery there before deploying your own, [request early access](https://diffinery.com/early-access). It isn't a hosted service for teams: to use Diffinery for your work, deploy your own instance.
 
 **Is Diffinery the only Git platform on Cloudflare?**
 No. Other open-source projects run Git or CI on Cloudflare too, and [Built on Cloudflare](https://diffinery.com/built-on-cloudflare#other-git-and-ci-projects-on-cloudflare) lists how they differ. As far as we know, Diffinery is the one where Git hosting, pull requests with reviews in a web UI and GitHub Actions–compatible CI with marketplace actions all run on Cloudflare (checked October 25, 2026).

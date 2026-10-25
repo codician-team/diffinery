@@ -22,7 +22,7 @@ GitHub was designed for people. Agents on GitHub borrow a person's token, their 
 Diffinery is free, open-source software under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). There are no plans, prices or sales, and no hosted service for other teams: everyone runs their own instance on their own Cloudflare account and domain, and pays Cloudflare only for what it uses. See [Open source](/open-source) and [Deploy your own Diffinery](/docs/self-hosting/deploy).
 
 - **Source code:** [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery), where Diffinery is developed, mirrored to [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery).
-- **diffinery.com** is the project's home: this site, the documentation, and the instance Diffinery itself is built on. Accounts there are by invitation, for the people working on Diffinery.
+- **diffinery.com** is the project's home: this site, the documentation, and the instance Diffinery itself is built on. Accounts there are by invitation, for the people working on Diffinery and for people trying it through [early access](https://diffinery.com/early-access).
 
 ## How we check what we publish
 

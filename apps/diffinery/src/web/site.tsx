@@ -158,8 +158,12 @@ jobs:
       a: "Yes, under the Apache License 2.0, with no paid edition and nothing sold. The source code is at [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery) and mirrored to [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery). See [Open source](/open-source).",
     },
     {
+      q: "Can I try Diffinery without deploying it?",
+      a: "Yes. [Request early access](https://diffinery.com/early-access) to diffinery.com, the project's own instance: its administrators review requests and email invitations, and you try Diffinery there. To run Diffinery for your team, deploy your own instance. See [Early access](/docs/accounts/early-access).",
+    },
+    {
       q: "How do I start using Diffinery, and what does it cost?",
-      a: "Deploy your own instance to your Cloudflare account and domain with one command, `scripts/setup.sh`, then sign in as its first administrator and invite your team. See [Deploy your own Diffinery](/docs/self-hosting/deploy). Diffinery is free; you pay Cloudflare for what your instance uses, on the Workers Paid plan (a minimum of $5 USD per month per account, plus usage; [Cloudflare's pricing](https://developers.cloudflare.com/workers/platform/pricing/), checked October 25, 2026). There's no hosted service to sign up for: diffinery.com is the project's own instance.",
+      a: "Deploy your own instance to your Cloudflare account and domain with one command, `scripts/setup.sh`, then sign in as its first administrator and invite your team. See [Deploy your own Diffinery](/docs/self-hosting/deploy). Diffinery is free; you pay Cloudflare for what your instance uses, on the Workers Paid plan (a minimum of $5 USD per month per account, plus usage; [Cloudflare's pricing](https://developers.cloudflare.com/workers/platform/pricing/), checked October 25, 2026). There's no hosted service to sign up for; to try Diffinery first, [request early access](https://diffinery.com/early-access) to diffinery.com, the project's own instance.",
     },
   ],
 };
@@ -199,7 +203,7 @@ export function homeMarkdown(o: string): string {
     "",
     "## Open source, on your own Cloudflare account",
     "",
-    `Diffinery is open source under the Apache License 2.0: [source code](${SOURCE.repo}), [mirror on GitHub](${SOURCE.github}). Deploy it with [Deploy your own Diffinery](/docs/self-hosting/deploy); you pay Cloudflare only for what your instance uses. See [Open source](/open-source).`,
+    `Diffinery is open source under the Apache License 2.0: [source code](${SOURCE.repo}), [mirror on GitHub](${SOURCE.github}). Deploy it with [Deploy your own Diffinery](/docs/self-hosting/deploy); you pay Cloudflare only for what your instance uses. To try it first, [request early access](${EARLY_ACCESS}) to diffinery.com. See [Open source](/open-source).`,
     "",
     "## Frequently asked questions",
     "",
@@ -227,6 +231,9 @@ export const SOURCE = {
   license: "https://www.apache.org/licenses/LICENSE-2.0",
   spdx: "Apache-2.0",
 };
+
+/** Where to ask to try Diffinery on the project's own instance, whatever instance serves this page (web/early-access.tsx). */
+export const EARLY_ACCESS = "https://diffinery.com/early-access";
 
 /** schema.org ids for the site's entities, shared by every page's graph. */
 const ids = (o: string) => ({ org: `${o}/#organization`, site: `${o}/#website`, app: `${o}/#software`, source: `${o}/#source` });
@@ -316,11 +323,11 @@ const Cta: FC = () => (
     <a class="btn primary" href="/docs/self-hosting">
       Deploy your own
     </a>
+    <a class="btn" href={EARLY_ACCESS} title="Try Diffinery on diffinery.com before you deploy your own">
+      Request early access
+    </a>
     <a class="btn" href={SOURCE.repo}>
       View the source
-    </a>
-    <a class="btn" href="/docs">
-      Read the docs
     </a>
   </>
 );
@@ -342,7 +349,7 @@ export const Landing: FC = () => (
         <Cta />
       </p>
       <p class="muted small">
-        Free, with nothing to buy: you run Diffinery on your own Cloudflare account. Source on <a href={SOURCE.repo}>Diffinery</a> and <a href={SOURCE.github}>GitHub</a>.
+        Free, with nothing to buy: you run Diffinery on your own Cloudflare account. Want to try it first? <a href={EARLY_ACCESS}>Request early access</a> to diffinery.com. Source on <a href={SOURCE.repo}>Diffinery</a> and <a href={SOURCE.github}>GitHub</a>.
       </p>
     </section>
     <ul class="mk-stats" aria-label="Diffinery in numbers">
@@ -443,7 +450,7 @@ export const Landing: FC = () => (
     </section>
     <section class="mk-band">
       <h2>Run Diffinery on your own Cloudflare account</h2>
-      <p class="muted">Open source under Apache-2.0. Your workflows, your editor and gh keep working, your agents get guardrails, and you pay Cloudflare only for what you use.</p>
+      <p class="muted">Open source under Apache-2.0. Your workflows, your editor and gh keep working, your agents get guardrails, and you pay Cloudflare only for what you use. Not ready to deploy? Request early access and try it on diffinery.com first.</p>
       <p class="row" style="justify-content:center">
         <Cta />
       </p>
@@ -564,7 +571,7 @@ async function sitePageResponse(c: AppContext, p: SitePageInfo): Promise<Respons
       <div class="markdown mk-body">{raw(html)}</div>
       <aside class="mk-band">
         <h2>Run Diffinery yourself</h2>
-        <p class="muted">Open source under Apache-2.0, deployed to your own Cloudflare account.</p>
+        <p class="muted">Open source under Apache-2.0, deployed to your own Cloudflare account. Or request early access and try it on diffinery.com first.</p>
         <p class="row" style="justify-content:center">
           <Cta />
         </p>
@@ -598,7 +605,7 @@ export function siteLlmsLines(o: string): string[] {
     "",
     `- [Home page](${o}/index.md): ${HOME.description}`,
     `- Open source under the Apache License 2.0 (SPDX: ${SOURCE.spdx}). Source code: ${SOURCE.repo}, mirrored to ${SOURCE.github}. Free, with no paid edition and nothing sold.`,
-    `- How to use it: deploy your own instance to your own Cloudflare account and domain (Workers Paid plan); you pay Cloudflare for what it uses. Guide: ${o}/docs/self-hosting/deploy.md. Overview: ${o}/docs/self-hosting.md. There's no hosted service for other teams: diffinery.com is the project's home and its own instance, with accounts by invitation for the people working on Diffinery.`,
+    `- How to use it: deploy your own instance to your own Cloudflare account and domain (Workers Paid plan); you pay Cloudflare for what it uses. Guide: ${o}/docs/self-hosting/deploy.md. Overview: ${o}/docs/self-hosting.md. There's no hosted service for teams to sign up for: diffinery.com is the project's home and its own instance, with accounts by invitation. To try Diffinery before deploying your own, request early access at ${EARLY_ACCESS} (how it works: ${o}/docs/accounts/early-access.md).`,
     `- Runs entirely on Cloudflare (Workers, Durable Objects, R2, D1, Queues, Workflows, Containers): code, pull requests, CI runners and the agent features alike. It is ${CLOUDFLARE_CLAIM} See ${o}/built-on-cloudflare.md, which compares the other Git and CI projects on Cloudflare.`,
     "- Hosted CI runners: Ubuntu 24.04 x64 containers, 4 vCPU and 12 GiB of memory by default, with smaller sizes chosen per job from its measured runs. No hosted macOS, Windows or Arm runners; self-hosted runners cover them.",
     "- Runs GitHub Actions workflow files from `.github/workflows/` as they are; differences are listed at " + `${o}/docs/actions/compatibility.md`,

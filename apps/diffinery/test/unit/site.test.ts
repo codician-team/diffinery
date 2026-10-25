@@ -158,11 +158,13 @@ describe("home page", () => {
     expect(html).toContain("Code hosting and CI for the agentic era</h1>");
     const g = graph(html);
     expect(types(g)).toEqual(expect.arrayContaining(["Organization", "WebSite", "SoftwareApplication", "SoftwareSourceCode", "WebPage", "FAQPage"]));
-    // Open source: the license and the repositories, and no early access or pricing.
+    // Open source: the license and the repositories, no pricing, and early access to try it on diffinery.com.
     const source = g.find((n) => n["@type"] === "SoftwareSourceCode")!;
     expect(source).toMatchObject({ codeRepository: "https://diffinery.com/codician/diffinery", license: "https://www.apache.org/licenses/LICENSE-2.0", sameAs: ["https://github.com/codician-team/diffinery"] });
     expect(g.find((n) => n["@type"] === "SoftwareApplication")).toMatchObject({ license: "https://www.apache.org/licenses/LICENSE-2.0", isAccessibleForFree: true, installUrl: `${ORIGIN}/docs/self-hosting/deploy`, downloadUrl: "https://diffinery.com/codician/diffinery/releases" });
-    expect(html).not.toContain('href="/early-access"');
+    expect(html).toContain('href="https://diffinery.com/early-access"');
+    const faq = g.find((n) => n["@type"] === "FAQPage") as { mainEntity: Array<{ name: string; acceptedAnswer: { text: string } }> };
+    expect(faq.mainEntity.find((q) => q.name === "Can I try Diffinery without deploying it?")?.acceptedAnswer.text).toContain("Request early access to diffinery.com");
     expect(html).not.toMatch(/not been announced|hasn't been announced|invite-only while/i);
     for (const href of ["/compare/github", "/compare/blacksmith", "/performance", "/agents", "/about", "/llms.txt", "/open-source", "/docs/self-hosting", "https://diffinery.com/codician/diffinery", "https://github.com/codician-team/diffinery"]) expect(html, href).toContain(`href="${href}"`);
   });
@@ -199,6 +201,7 @@ describe("crawlers and AI assistants", () => {
     expect(txt).toContain(`(${ORIGIN}/index.md)`);
     for (const p of pages) expect(txt).toContain(`(${ORIGIN}${p.path}.md)`);
     expect(txt.indexOf(`${ORIGIN}/compare/github.md`)).toBeLessThan(txt.indexOf(`${ORIGIN}/docs/quickstart.md`));
+    expect(txt).toContain("request early access at https://diffinery.com/early-access");
   });
 
   it("states the Cloudflare claim the same way everywhere, backed by the sourced list of other projects", async () => {

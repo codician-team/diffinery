@@ -6,6 +6,8 @@ updated: 2026-10-25
 
 Diffinery is open-source software under the Apache License 2.0, and the way to use it is to run your own instance on your own Cloudflare account and domain. There's no hosted service to sign up for: diffinery.com is the project's own instance. This page is the overview; [Deploy your own Diffinery](/docs/self-hosting/deploy) is the step-by-step guide.
 
+> **Want to try it before you deploy?** [Request early access](https://diffinery.com/early-access) to diffinery.com, the project's own instance. Its administrators review requests and email invitations; see [Early access](/docs/accounts/early-access).
+
 ## Get the source
 
 The repository is [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery), mirrored to [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery). Clone either one; both carry the same `main` branch, with the `LICENSE` and `NOTICE` files at the top.

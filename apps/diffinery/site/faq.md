@@ -19,7 +19,7 @@ Yes. Diffinery is open source under the Apache License 2.0. The source code is a
 
 ### How do I start using Diffinery?
 
-Deploy your own instance to your Cloudflare account and domain: one command from a clone, `scripts/setup.sh`, creates everything it needs, and you sign in as its first administrator. Then invite your team, or open sign-up. See [Deploy your own Diffinery](/docs/self-hosting/deploy). Diffinery doesn't offer a hosted service for other teams; diffinery.com is the project's own instance.
+Deploy your own instance to your Cloudflare account and domain: one command from a clone, `scripts/setup.sh`, creates everything it needs, and you sign in as its first administrator. Then invite your team, or open sign-up. See [Deploy your own Diffinery](/docs/self-hosting/deploy). Diffinery doesn't offer a hosted service for teams; to try it before you deploy, [request early access](https://diffinery.com/early-access) to diffinery.com, the project's own instance.
 
 ### Is Diffinery a GitHub alternative?
 

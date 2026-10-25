@@ -5,6 +5,8 @@ description: Ask for an invitation to an invite-only Diffinery instance, what ha
 
 While a Diffinery instance is invite-only (the default), people without an invitation can ask for one at `/early-access` on that instance. The sign-in page and the sign-up address lead there. A request never grants access by itself: a site administrator reads it and decides whether to send an [invitation](/docs/accounts/invitations).
 
+On diffinery.com, the project's own instance, this is how to try Diffinery before you deploy your own: [request early access there](https://diffinery.com/early-access).
+
 The form is only there while sign-up is closed. On an instance with [open sign-up](/docs/accounts/passkeys-and-sign-in#open-sign-up) (`SIGNUP=open`), `/early-access` leads to the sign-up page instead.
 
 ## Request early access
