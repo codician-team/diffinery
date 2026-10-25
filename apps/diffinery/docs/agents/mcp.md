@@ -484,7 +484,7 @@ Then `get_workflow_run` with a run's `id`, and `get_job_logs` with a failed job'
 
 ## List your instance in the MCP registry
 
-The [official MCP registry](https://registry.modelcontextprotocol.io) lists Diffinery's MCP server as `com.diffinery/diffinery`, with the URL `https://{host}/mcp`: clients that read the registry ask for your instance's host name. To list your own instance under your domain as well, prove that you own the domain with a key:
+The [official MCP registry](https://registry.modelcontextprotocol.io) lists Diffinery's MCP server as `com.diffinery/diffinery`, with the URL `https://{diffinery_host}/mcp`: clients that read the registry ask for your instance's host name. To list your own instance under your domain as well, prove that you own the domain with a key:
 
 1. Make a key pair and its proof record (OpenSSL 3):
 
