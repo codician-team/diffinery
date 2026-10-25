@@ -102,11 +102,14 @@ def call(method, url, body=None, token=None):
         req.add_header("Authorization", f"Bearer {token}")
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
-            return r.status, json.load(r)
+            data = r.read()
+            return r.status, json.loads(data) if data else None
     except urllib.error.HTTPError as e:
         return e.code, None
 
 token = os.environ["GITHUB_MIRROR_TOKEN"]
+status, me = call("GET", f"{dst.split('/repos/')[0]}/user", token=token)
+me = me.get("login") if status == 200 else None
 status, releases = call("GET", f"{src}/releases?per_page=100", token=os.environ.get("DIFFINERY_TOKEN"))
 if status != 200:
     raise SystemExit(f"could not list Diffinery releases ({status})")
@@ -115,6 +118,14 @@ for r in releases:
         continue
     want = {"name": r["name"], "body": r["body"] or "", "prerelease": r["prerelease"]}
     status, have = call("GET", f"{dst}/releases/tags/{r['tag_name']}", token=token)
+    if status == 200 and me and (have.get("author") or {}).get("login") != me:
+        # A mirrored release belongs to the mirror's account: one made by anyone else is made again.
+        status, _ = call("DELETE", f"{dst}/releases/{have['id']}", token=token)
+        if status != 204:
+            print(f"warning: could not replace GitHub release {r['tag_name']} ({status})")
+            continue
+        print(f"release {r['tag_name']}: deleted the copy {have['author']['login']} made")
+        status = 404
     if status == 404:
         status, _ = call("POST", f"{dst}/releases", {"tag_name": r["tag_name"], **want}, token)
         print(f"release {r['tag_name']}: created ({status})")
