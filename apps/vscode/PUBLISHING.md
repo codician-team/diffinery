@@ -6,16 +6,15 @@ Windsurf and VSCodium install from Open VSX; VS Code installs from the Visual St
 
 ## Before the first upload
 
-1. Set `"license": "Apache-2.0"` in `package.json` and ship a copy of the repository's `LICENSE` in the package (both
-   registries show it; `vsce` warns without it).
-2. Create the `codician` publisher on the Marketplace (https://marketplace.visualstudio.com/manage, which needs an
-   Azure DevOps organization for the personal access token) and the `codician` namespace on Open VSX
-   (`npx ovsx create-namespace codician`, after signing the Eclipse publisher agreement). The extension id
-   `codician.diffinery` is what the server's OAuth client (`EDITOR_EXTENSION_ID` in `apps/diffinery/src/auth/oauth.ts`)
-   and the docs use, so keep it.
-3. Marketplace builds update through the marketplace: ship them with `diffinery.checkForUpdates` defaulting to
-   `false`, or have `src/updates.ts` skip the check when the extension was installed from a gallery, so the two
-   update paths don't fight.
+1. Create the `codician` publisher on the Marketplace (https://marketplace.visualstudio.com/manage, display name
+   **Codician**; a personal access token for command-line uploads needs an Azure DevOps organization) and the
+   `codician` namespace on Open VSX (`pnpm dlx ovsx create-namespace codician`, after signing the Eclipse publisher
+   agreement). The extension id `codician.diffinery` is what the server's OAuth client (`EDITOR_EXTENSION_ID` in
+   `apps/diffinery/src/auth/oauth.ts`) and the docs use, so keep it.
+2. The package already carries the license (`"license": "Apache-2.0"` and the repository's `LICENSE` as
+   `extension/LICENSE.txt`), and the marketplace build (`--marketplace` below) ships with `diffinery.checkForUpdates`
+   off by default, so the marketplace's updates and the extension's own check against the Diffinery server don't
+   fight.
 
 ## Listing
 
@@ -33,7 +32,9 @@ Windsurf and VSCodium install from Open VSX; VS Code installs from the Visual St
 ## Each release
 
 1. Bump `version` in `package.json` and add a `CHANGELOG.md` entry.
-2. `node scripts/package.mjs --out dist` builds `dist/diffinery-<version>.vsix`, the same file diffinery.com serves.
-3. `npx @vscode/vsce publish --packagePath dist/diffinery-<version>.vsix` and
-   `npx ovsx publish dist/diffinery-<version>.vsix`, with the tokens from step 2 of *Before the first upload* in `VSCE_PAT` and `OVSX_PAT`.
+2. `node scripts/package.mjs --out dist --marketplace` builds `dist/diffinery-<version>-marketplace.vsix`
+   (without `--marketplace`, `dist/diffinery-<version>.vsix` is the file diffinery.com serves).
+3. Upload it on the publisher's page (**New extension → Visual Studio Code**, or **Update** on the extension) and on
+   Open VSX, or from the command line: `pnpm dlx @vscode/vsce publish --packagePath dist/diffinery-<version>-marketplace.vsix` and
+   `pnpm dlx ovsx publish dist/diffinery-<version>-marketplace.vsix`, with the tokens from step 1 of *Before the first upload* in `VSCE_PAT` and `OVSX_PAT`.
 4. Deploying Diffinery keeps diffinery.com serving the same version for people who installed from there.

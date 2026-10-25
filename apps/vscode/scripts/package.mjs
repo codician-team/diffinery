@@ -1,6 +1,10 @@
 // Builds the extension and packs it as a .vsix, the file VS Code, Cursor, Windsurf and VSCodium install.
 //
-//   node apps/vscode/scripts/package.mjs [--out dir]      (writes <dir>/diffinery-<version>.vsix, default apps/vscode/dist)
+//   node apps/vscode/scripts/package.mjs [--out dir] [--marketplace]
+//
+// writes <dir>/diffinery-<version>.vsix (default dir apps/vscode/dist). --marketplace writes
+// diffinery-<version>-marketplace.vsix instead, the build for the Visual Studio Marketplace and Open VSX:
+// the same extension with diffinery.checkForUpdates off by default, because the marketplace updates it.
 //
 // apps/diffinery/scripts/build-docs.mjs calls packageExtension() too, so the Worker serves the build at
 // /-/vscode/diffinery.vsix. The .vsix has the layout `vsce package` writes (extension.vsixmanifest,
@@ -18,13 +22,18 @@ const EXTENSION_NAME = "diffinery";
 
 const xml = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-/** The manifest as installed: the workspace package's fields, named for the editor (publisher.name = codician.diffinery). */
-function manifestFor(pkg) {
-  const { scripts: _s, devDependencies: _d, dependencies: _deps, private: _p, ...rest } = pkg;
+/**
+ * The manifest as installed: the workspace package's fields, named for the editor (publisher.name = codician.diffinery).
+ * A marketplace build turns the extension's own update check off by default, so it doesn't offer diffinery.com's
+ * build next to the marketplace's updates.
+ */
+export function manifestFor(pkg, { marketplace = false } = {}) {
+  const { scripts: _s, devDependencies: _d, dependencies: _deps, private: _p, ...rest } = structuredClone(pkg);
+  if (marketplace) rest.contributes.configuration.properties["diffinery.checkForUpdates"].default = false;
   return { ...rest, name: EXTENSION_NAME };
 }
 
-function vsixManifest(m) {
+export function vsixManifest(m) {
   const props = [
     ["Microsoft.VisualStudio.Code.Engine", m.engines.vscode],
     ["Microsoft.VisualStudio.Code.ExtensionDependencies", (m.extensionDependencies ?? []).join(",")],
@@ -62,6 +71,7 @@ ${props.map(([k, v]) => `      <Property Id="${k}" Value="${xml(v)}" />`).join("
     <Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true" />
     <Asset Type="Microsoft.VisualStudio.Services.Content.Details" Path="extension/readme.md" Addressable="true" />
     <Asset Type="Microsoft.VisualStudio.Services.Content.Changelog" Path="extension/changelog.md" Addressable="true" />
+    <Asset Type="Microsoft.VisualStudio.Services.Content.License" Path="extension/LICENSE.txt" Addressable="true" />
     <Asset Type="Microsoft.VisualStudio.Services.Icons.Default" Path="extension/${xml(m.icon)}" Addressable="true" />
   </Assets>
 </PackageManifest>
@@ -69,7 +79,7 @@ ${props.map(([k, v]) => `      <Property Id="${k}" Value="${xml(v)}" />`).join("
 }
 
 function contentTypes(names) {
-  const types = { ".json": "application/json", ".js": "application/javascript", ".md": "text/markdown", ".png": "image/png", ".woff": "font/woff", ".vsixmanifest": "text/xml" };
+  const types = { ".json": "application/json", ".js": "application/javascript", ".md": "text/markdown", ".txt": "text/plain", ".png": "image/png", ".woff": "font/woff", ".vsixmanifest": "text/xml" };
   const exts = [...new Set(names.map((n) => path.extname(n).toLowerCase()).filter((e) => e && types[e]))].sort();
   return `<?xml version="1.0" encoding="utf-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">${exts.map((e) => `<Default Extension="${e}" ContentType="${types[e]}"/>`).join("")}</Types>
@@ -146,10 +156,10 @@ function zip(entries) {
   return Buffer.concat([...locals, ...central, end]);
 }
 
-/** Builds and packs the extension. Returns its version and the .vsix bytes. */
-export async function packageExtension() {
+/** Builds and packs the extension (for a marketplace with `marketplace: true`). Returns its version and the .vsix bytes. */
+export async function packageExtension({ marketplace = false } = {}) {
   const pkg = JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8"));
-  const manifest = manifestFor(pkg);
+  const manifest = manifestFor(pkg, { marketplace });
   const bundle = await build({
     entryPoints: [path.join(ROOT, "src/extension.ts")],
     bundle: true,
@@ -166,6 +176,7 @@ export async function packageExtension() {
     ["extension/package.json", JSON.stringify(manifest, null, 2)],
     ["extension/readme.md", await readFile(path.join(ROOT, "README.md"))],
     ["extension/changelog.md", await readFile(path.join(ROOT, "CHANGELOG.md"))],
+    ["extension/LICENSE.txt", await readFile(path.join(ROOT, "../../LICENSE"))],
     ["extension/dist/extension.js", bundle.outputFiles[0].contents],
     [`extension/${manifest.icon}`, await readFile(path.join(ROOT, manifest.icon))],
     ["extension/media/diffinery-icons.woff", await readFile(path.join(ROOT, "media/diffinery-icons.woff"))],
@@ -181,9 +192,10 @@ export async function packageExtension() {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const i = process.argv.indexOf("--out");
   const out = i > 0 ? path.resolve(process.argv[i + 1]) : path.join(ROOT, "dist");
-  const { version, vsix } = await packageExtension();
+  const marketplace = process.argv.includes("--marketplace");
+  const { version, vsix } = await packageExtension({ marketplace });
   await mkdir(out, { recursive: true });
-  const file = path.join(out, `${EXTENSION_NAME}-${version}.vsix`);
+  const file = path.join(out, `${EXTENSION_NAME}-${version}${marketplace ? "-marketplace" : ""}.vsix`);
   await writeFile(file, vsix);
   console.log(`vscode: ${path.relative(process.cwd(), file)} (${(vsix.length / 1024).toFixed(0)} KB)`);
 }
