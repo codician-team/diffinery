@@ -1,6 +1,6 @@
 [
   { "title": "Product", "pages": ["/features", "/open-source", "/agents", "/performance", "/security", "/built-on-cloudflare"] },
   { "title": "Compare", "pages": ["/compare", "/compare/github", "/compare/gitlab", "/compare/blacksmith", "/compare/depot", "/compare/circleci", "/compare/buildkite", "/compare/bitbucket", "/compare/gitea"] },
-  { "title": "Company", "pages": ["/about", "/faq"] },
+  { "title": "Company", "pages": ["/about", "/faq", "/privacy"] },
   { "title": "Blog", "pages": ["/blog", "/blog/github-actions-on-cloudflare-containers"] }
 ]
