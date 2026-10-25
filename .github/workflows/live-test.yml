@@ -1,0 +1,814 @@
+name: Live test
+
+# End-to-end checks against the real diffinery.com after each deploy: email
+# sending, web UI features (syntax highlighting, settings pages, view transitions, milestones, variables), hosted Actions jobs in Cloudflare Containers (with Docker builds and services), the container registry, agent sandboxes,
+# webhooks, scheduled workflows, Git LFS, imports from GitHub, that tokens can't mint tokens, and pull requests (test merge commits, pull_request_target and the merge
+# queue). Each run works in a throwaway private repository that it
+# deletes at the end.
+#
+# Needs DIFFINERY_LIVE_TOKEN in the production environment: a write-scope token
+# (Settings -> Tokens) with access to all repositories, for a dedicated account that isn't
+# a site administrator (give it a quota override). The checks that need a site
+# administrator are skipped with a notice when the token isn't one's.
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  # To see whether the Deploy run it follows deployed anything.
+  actions: read
+
+concurrency:
+  group: live-test
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: Containers, registry, sandboxes, webhooks, schedules, LFS and pull requests
+    # Runs on the host that deploys production (see the gate in deploy.yml).
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.server_url == 'https://diffinery.com' && github.event.workflow_run.conclusion == 'success') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    env:
+      DIFFINERY: https://diffinery.com
+      TOKEN: ${{ secrets.DIFFINERY_LIVE_TOKEN }}
+      REPO: live-${{ github.run_id }}-${{ github.run_attempt }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: Check the token
+        id: token
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
+            # Deploy's gate skips a commit that is no longer main's tip (the newer commit's run deploys it):
+            # then nothing new is live, and this run would only test the site as it was.
+            deployed=$(curl -fsS "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$DEPLOY_RUN/jobs" -H "Authorization: Bearer $GH_TOKEN" | jq -r '[.jobs[] | select(.name == "Deploy to Cloudflare") | .conclusion][0] // "unknown"' || echo unknown)
+            if [ "$deployed" = skipped ]; then
+              echo "::notice::Deploy deployed nothing for $HEAD_SHA (main has moved on), so there is nothing new to test"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          if [ -z "$TOKEN" ]; then
+            # After a deploy of diffinery.com a missing token is an error: a green run would mean nothing was tested.
+            if [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
+              echo "::error::DIFFINERY_LIVE_TOKEN is not set in the production environment, so nothing was tested. Create a write token at $DIFFINERY/settings/tokens and save it as a production environment secret."
+              exit 1
+            fi
+            echo "::warning::DIFFINERY_LIVE_TOKEN is not set, so the live test is skipped. Create a write token at $DIFFINERY/settings/tokens and save it as a production environment secret."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          login=$(curl -fsS "$DIFFINERY/api/v3/user" -H "Authorization: Bearer $TOKEN" | jq -r .login)
+          echo "OWNER=$login" >> "$GITHUB_ENV"
+          echo "testing as $login in $login/$REPO"
+
+      - name: Choose the registry check's image sizes
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          # Layers over Cloudflare's 100 MB request limit (which hosted runners push through
+          # the registry relay) take minutes to push and pull. They're pushed on manual runs and
+          # whenever the registry, the runner image or this test changed since the last
+          # successful live test; other deploys push small images through the same path.
+          full=true
+          if [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
+            api() { curl -fsS "$DIFFINERY/api/v3/repos/$GITHUB_REPOSITORY$1" -H "Authorization: Bearer $TOKEN"; }
+            last=$(api "/actions/runs?workflow=live-test.yml&status=success&per_page=1" | jq -r '.workflow_runs[0].head_sha // empty' || true)
+            if [ -n "$last" ] && files=$(api "/compare/$last...$HEAD_SHA" | jq -r '.files[].filename'); then
+              grep -qE '^(apps/diffinery/src/registry/|containers/runner/|\.github/workflows/live-test\.yml$)' <<<"$files" || full=false
+              echo "changed since $last: $(wc -l <<<"$files") files"
+            fi
+          fi
+          if [ "$full" = true ]; then
+            echo "BIG=150000000" >> "$GITHUB_ENV"
+            echo "BUILDX=120000000" >> "$GITHUB_ENV"
+          else
+            echo "BIG=5000000" >> "$GITHUB_ENV"
+            echo "BUILDX=4000000" >> "$GITHUB_ENV"
+          fi
+          echo "registry check: full=$full"
+
+      - name: Profile picture upload (WASM resize in the Worker)
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          av="$DIFFINERY/api/avatars/$OWNER"
+          # Keep the account's current picture, if it has one, to put it back afterwards.
+          had=$(curl -fsS -o before.webp -w '%{content_type}' "$av?s=256&v=1")
+          restore() {
+            if [ "$had" = image/webp ]; then
+              curl -fsS -X PUT "$DIFFINERY/api/v3/user/avatar" -H "Authorization: Bearer $TOKEN" -H "content-type: image/webp" --data-binary @before.webp | jq -r '"restored the previous picture: \(.avatar_url)"'
+            else
+              curl -fsS -o /dev/null -X DELETE "$DIFFINERY/api/v3/user/avatar" -H "Authorization: Bearer $TOKEN"
+            fi
+          }
+          trap restore EXIT
+          # A 600×400 PNG gradient; the server crops it to a square and makes small WebPs.
+          python3 - <<'EOF'
+          import struct, zlib
+          w, h = 600, 400
+          rows = b"".join(b"\0" + bytes(c for x in range(w) for c in (x * 255 // w, y * 255 // h, 128)) for y in range(h))
+          chunk = lambda t, d: struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d))
+          open("avatar.png", "wb").write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))
+          EOF
+          url=$(curl -fsS -X PUT "$DIFFINERY/api/v3/user/avatar" -H "Authorization: Bearer $TOKEN" -H "content-type: image/png" --data-binary @avatar.png | jq -r .avatar_url)
+          echo "uploaded: $url"
+          v=${url##*v=}
+          type=$(curl -fsS -o small.webp -w '%{content_type}' "$av?s=64&v=$v")
+          [ "$type" = image/webp ] || { echo "::error::expected image/webp, got $type"; exit 1; }
+          python3 - <<'EOF'
+          import struct, sys
+          b = open("small.webp", "rb").read()
+          ok = b[:4] == b"RIFF" and b[8:12] == b"WEBP"
+          if b[12:16] == b"VP8 ":
+              size = (struct.unpack("<H", b[26:28])[0] & 0x3FFF, struct.unpack("<H", b[28:30])[0] & 0x3FFF)
+          elif b[12:16] == b"VP8X":
+              size = (int.from_bytes(b[24:27], "little") + 1, int.from_bytes(b[27:30], "little") + 1)
+          else:
+              size = None
+          print(f"64 px avatar: {len(b)} bytes, {size}")
+          if not ok or size != (64, 64) or len(b) > 5000:
+              print("::error::the 64 px avatar is not a 64x64 WebP under 5 KB"); sys.exit(1)
+          EOF
+          curl -fsS -X DELETE "$DIFFINERY/api/v3/user/avatar" -H "Authorization: Bearer $TOKEN" >/dev/null
+          # A `v` that is not current bypasses the edge cache, so this sees the removal from any colo.
+          type=$(curl -fsS -o /dev/null -w '%{content_type}' "$av?s=64&v=1")
+          [[ "$type" == image/svg+xml* ]] || { echo "::error::after removal expected the initials SVG, got $type"; exit 1; }
+          echo "removed: initials again ($type)"
+
+      - name: Public docs are served without signing in
+        run: |
+          set -euo pipefail
+          check() { # path, content type, text it must contain
+            body=$(curl -fsS -D /tmp/h "$DIFFINERY$1")
+            grep -qi "content-type: $2" /tmp/h || { echo "::error::$1 is not $2"; exit 1; }
+            grep -qF -- "$3" <<<"$body" || { echo "::error::$1 doesn't contain: $3"; exit 1; }
+            echo "$1 ok ($(wc -c <<<"$body") bytes)"
+          }
+          check /docs "text/html" "Overview"
+          check /docs/actions/workflow-syntax "text/html" "View as Markdown"
+          check /docs/quickstart.md "text/markdown" "# Quickstart"
+          check /llms.txt "text/plain" "/docs/actions/workflow-syntax.md"
+          check /llms-full.txt "text/plain" "# REST API reference"
+          check /docs/api/openapi.json "application/json" '"openapi": "3.1.0"'
+          check /-/cli/diffinery.mjs "text/javascript" "#!/usr/bin/env node"
+          md=$(curl -fsS -H "Accept: text/markdown" "$DIFFINERY/docs/agents/mcp")
+          grep -q "^# MCP" <<<"$md" || { echo "::error::Accept: text/markdown didn't return Markdown"; exit 1; }
+          curl -fsS "$DIFFINERY/-/cli/diffinery.mjs" -o /tmp/diffinery.mjs && node /tmp/diffinery.mjs --version
+
+      - name: Email sending is configured
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          s=$(curl -sS -w '\n%{http_code}' "$DIFFINERY/api/v3/diffinery/admin/email" -H "Authorization: Bearer $TOKEN")
+          code=${s##*$'\n'}; s=${s%$'\n'*}
+          # Only a site administrator's token reads the email settings, and the live-test account isn't one.
+          if [ "$code" = 403 ]; then echo "::notice::skipped: the live-test token isn't a site administrator's"; exit 0; fi
+          [ "$code" = 200 ] || { echo "::error::/diffinery/admin/email answered $code"; exit 1; }
+          echo "$s" | jq '{sending, queue, from, last_24h}'
+          [ "$(jq -r .sending <<<"$s")" = true ] || { echo "::error::the Worker has no Email Sending binding"; exit 1; }
+          [ "$(jq -r .queue <<<"$s")" = true ] || { echo "::error::the Worker has no mail queue binding"; exit 1; }
+          failed=$(jq -r .last_24h.failed <<<"$s")
+          [ "$failed" = 0 ] || echo "::warning::$failed emails failed in the last 24 hours; see Settings -> Email in site administration"
+
+      - name: Create a throwaway repository with a webhook
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          api() { curl -fsS -X "$1" "$DIFFINERY/api/v3$2" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" ${3:+--data "$3"}; }
+          api POST /user/repos "{\"name\":\"$REPO\",\"private\":true}" >/dev/null
+          # Webhooks may only reach public hosts other than Diffinery itself; the push's delivery goes to example.com.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$DIFFINERY/api/v3/repos/$OWNER/$REPO/hooks" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" --data "{\"config\":{\"url\":\"$DIFFINERY/healthz\"},\"events\":[\"push\"]}")
+          [ "$code" = 422 ] || { echo "::error::a webhook to Diffinery itself answered $code, not 422"; exit 1; }
+          api POST "/repos/$OWNER/$REPO/hooks" "{\"config\":{\"url\":\"https://example.com/diffinery-live-test\"},\"events\":[\"push\"]}" >/dev/null
+          echo "created $OWNER/$REPO"
+
+      - name: Wait for jobs to start on the deployed runner image
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          # A deploy's container rollout updates instances over a while after it starts, and an
+          # instance not yet updated starts jobs on the previous runner image. Jobs report their
+          # image (`runner.image`), so a probe workflow runs until three jobs in a row land on the
+          # image the deploy set (/meta's runner_image) before the Docker and registry checks.
+          api() { curl -fsS -X "$1" "$DIFFINERY/api/v3$2" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" ${3:+--data "$3"}; }
+          expected=$(api GET /meta | jq -r '.runner_image // empty')
+          if [ -z "$expected" ]; then
+            echo "::warning::/meta doesn't name the deployed runner image, so jobs aren't checked against it"
+            exit 0
+          fi
+          echo "DEPLOYED_RUNNER_IMAGE=$expected" >> "$GITHUB_ENV"
+          mkdir -p src/.github/workflows && cd src
+          git init -q -b main
+          git config user.name "Live test" && git config user.email "live-test@diffinery.com"
+          cat > .github/workflows/probe.yml <<'EOF'
+          on: workflow_dispatch
+          jobs:
+            probe:
+              runs-on: ubuntu-latest
+              strategy:
+                matrix:
+                  n: [1, 2, 3]
+              steps:
+                - run: echo "probe ok"
+          EOF
+          git add -A && git commit -q -m "Runner image probe"
+          git push -q "https://x-token:${TOKEN}@${DIFFINERY#https://}/$OWNER/$REPO.git" main
+          deadline=$(( $(date +%s) + 15 * 60 ))
+          while :; do
+            before=$(api GET "/repos/$OWNER/$REPO/actions/runs?event=workflow_dispatch" | jq '.workflow_runs | length')
+            api POST "/repos/$OWNER/$REPO/actions/workflows/probe.yml/dispatches" '{"ref":"main"}' >/dev/null
+            run=""
+            # Up to 10 minutes: a job turned away from a replaced image starts again after 30 s, 1, 2 and 4 minutes.
+            for i in $(seq 1 120); do
+              runs=$(api GET "/repos/$OWNER/$REPO/actions/runs?event=workflow_dispatch")
+              if [ "$(jq '.workflow_runs | length' <<<"$runs")" -gt "$before" ]; then
+                run=$(jq -c '.workflow_runs[0]' <<<"$runs")
+                [ "$(jq -r .status <<<"$run")" = completed ] && break
+              fi
+              sleep 5
+            done
+            [ -n "$run" ] || { echo "::error::the probe workflow didn't start"; exit 1; }
+            probe=$(api GET "/repos/$OWNER/$REPO/actions/runs/$(jq -r .id <<<"$run")/jobs")
+            images=$(jq -r '.jobs[] | .runner.image // "no image reported"' <<<"$probe")
+            echo "probe jobs ran on: $(sort <<<"$images" | uniq -c | sed 's/^ *//' | paste -sd ','), started again $(jq '[.jobs[].placementTries // 0] | add // 0' <<<"$probe") time(s) in all"
+            [ "$(grep -cxF "$expected" <<<"$images" || true)" = 3 ] && { echo "jobs start on $expected"; exit 0; }
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::15 minutes after the deploy, jobs still start on a runner image other than the deployed $expected"
+              exit 1
+            fi
+            sleep 20
+          done
+
+      - name: Push workflows and an LFS file
+        id: push
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p src/.github/workflows && cd src
+          git init -q -b main
+          git config user.name "Live test" && git config user.email "live-test@diffinery.com"
+          git lfs install --local >/dev/null
+          git lfs track "*.bin" >/dev/null
+          head -c 3145728 /dev/urandom > blob.bin
+          sha256sum blob.bin | cut -d' ' -f1 > ../blob.sha
+          echo "# $REPO" > README.md
+          cat > .github/workflows/ci.yml <<'EOF'
+          on: push
+          jobs:
+            hosted:
+              runs-on: ubuntu-latest
+              strategy:
+                matrix:
+                  n: [1, 2]
+              steps:
+                - uses: actions/checkout@v4
+                - run: echo "live ok ${{ '${{' }} matrix.n }} $(cat README.md)"
+                # Passwordless sudo, as on GitHub's runners (`sudo apt-get install ...` is common).
+                - run: sudo -n true && echo "sudo ok $(sudo -n id -u)"
+            docker:
+              runs-on: ubuntu-latest
+              services:
+                cache:
+                  image: redis:7-alpine
+                  ports: ["6379"]
+                  options: --health-cmd "redis-cli ping" --health-interval 1s --health-retries 30
+              steps:
+                - run: |
+                    printf 'FROM alpine:3.20\nRUN echo built > /msg\nCMD ["cat", "/msg"]\n' > Dockerfile
+                    docker build -q -t live-image .
+                    echo "docker ok $(docker run --rm live-image)"
+                    exec 3<>/dev/tcp/127.0.0.1/${{ '${{' }} job.services.cache.ports['6379'] }}
+                    printf 'PING\r\n' >&3
+                    read -r line <&3
+                    echo "service ok ${line%$'\r'}"
+            # Container registry: a layer pushed with the job's GITHUB_TOKEN (over Cloudflare's
+            # 100 MB request limit on full runs), plus the docker/*-action route most ghcr.io
+            # workflows use. __BIG__ and __BUILDX__ are the layer sizes.
+            publish:
+              runs-on: ubuntu-latest
+              permissions:
+                packages: write
+              steps:
+                - run: |
+                    image="diffinery.com/${GITHUB_REPOSITORY,,}"
+                    echo "${{ '${{' }} secrets.GITHUB_TOKEN }}" | docker login diffinery.com -u "${{ '${{' }} github.actor }}" --password-stdin
+                    head -c __BIG__ /dev/urandom > big.bin
+                    sha256sum big.bin | cut -d' ' -f1 > big.sha
+                    printf 'FROM scratch\nCOPY big.bin big.sha /\n' > Dockerfile
+                    docker build -q -t "$image:live" .
+                    docker push "$image:live"
+                    echo "pushed $(cat big.sha)"
+            buildx:
+              runs-on: ubuntu-latest
+              permissions:
+                packages: write
+              steps:
+                - run: |
+                    echo "IMAGE=diffinery.com/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+                    head -c __BUILDX__ /dev/urandom > big.bin
+                    printf 'FROM scratch\nCOPY big.bin /\n' > Dockerfile
+                - uses: docker/setup-buildx-action@v3
+                - uses: docker/login-action@v3
+                  with:
+                    registry: diffinery.com
+                    username: ${{ '${{' }} github.actor }}
+                    password: ${{ '${{' }} secrets.GITHUB_TOKEN }}
+                - uses: docker/build-push-action@v6
+                  with:
+                    context: .
+                    push: true
+                    tags: ${{ '${{' }} env.IMAGE }}:buildx
+            pull:
+              needs: [publish, buildx]
+              runs-on: ubuntu-latest
+              permissions:
+                packages: read
+              steps:
+                - run: |
+                    image="diffinery.com/${GITHUB_REPOSITORY,,}"
+                    echo "${{ '${{' }} secrets.GITHUB_TOKEN }}" | docker login diffinery.com -u "${{ '${{' }} github.actor }}" --password-stdin
+                    docker pull -q "$image:live"
+                    id=$(docker create "$image:live" true)
+                    docker cp "$id:/big.bin" big.bin && docker cp "$id:/big.sha" big.sha
+                    [ "$(sha256sum big.bin | cut -d' ' -f1)" = "$(cat big.sha)" ] && echo "registry ok $(stat -c %s big.bin) bytes"
+                    docker pull -q "$image:buildx"
+                    id=$(docker create "$image:buildx" true)
+                    docker cp "$id:/big.bin" buildx.bin
+                    echo "buildx ok $(stat -c %s buildx.bin) bytes"
+          EOF
+          cat > .github/workflows/tick.yml <<'EOF'
+          on:
+            schedule:
+              - cron: "*/5 * * * *"
+          jobs:
+            tick:
+              runs-on: ubuntu-latest
+              steps:
+                - run: echo "scheduled ok"
+          EOF
+          sed -i "s/__BIG__/$BIG/g; s/__BUILDX__/$BUILDX/g" .github/workflows/ci.yml
+          git add -A && git commit -q -m "Live test"
+          git push -q "https://x-token:${TOKEN}@${DIFFINERY#https://}/$OWNER/$REPO.git" main
+          git lfs ls-files
+
+      - name: Web UI features (highlighting, settings pages, view transitions, base permission, invitations)
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          page() { curl -fsS "$DIFFINERY$1" -H "Authorization: Bearer $TOKEN"; }
+          has() { grep -qF -- "$2" <<<"$1" || { echo "::error::$3"; exit 1; }; }
+          html=$(page "/$OWNER/$REPO/blob/main/.github/workflows/ci.yml")
+          has "$html" '<td class="sh">' "the workflow file is not syntax highlighted"
+          has "$html" "--shiki-dark" "highlighted code has no dark theme colours"
+          has "$html" "@view-transition{navigation:auto}" "pages don't opt in to view transitions"
+          has "$html" "prefers-reduced-motion:no-preference" "view transitions ignore reduced motion"
+          has "$(page /settings/appearance)" 'name="appearance"' "Settings -> Appearance has no theme choice"
+          has "$(page /notifications)" 'href="/settings/notifications"' "the notifications page doesn't link to notification settings"
+          code=$(curl -sS -o /tmp/out -w '%{http_code}' -X POST "$DIFFINERY/api/v3/user/repos" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" --data "{\"name\":\"$REPO-internal\",\"visibility\":\"internal\"}")
+          [ "$code" = 422 ] || { echo "::error::visibility internal got $code, expected 422"; curl -sS -o /dev/null -X DELETE "$DIFFINERY/api/v3/repos/$OWNER/$REPO-internal" -H "Authorization: Bearer $TOKEN"; exit 1; }
+          org=$(page /api/v3/user/orgs | jq -r '.[0].login // empty')
+          if [ -n "$org" ]; then
+            perm=$(page "/api/v3/orgs/$org" | jq -r '.default_repository_permission // empty')
+            case "$perm" in none|read|write|admin) echo "$org's base permission: $perm" ;; *) echo "::error::GET /orgs/$org has no default_repository_permission"; exit 1 ;; esac
+            # A malformed rename is refused before anything is written (422 for owners, 403 for everyone else).
+            code=$(curl -sS -o /tmp/out -w '%{http_code}' -X PATCH "$DIFFINERY/api/v3/orgs/$org" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" --data '{"name":123}')
+            case "$code" in 422|403) ;; *) echo "::error::PATCH /orgs/$org with a numeric name got $code"; cat /tmp/out; exit 1 ;; esac
+          fi
+          page "/api/v3/repos/$OWNER/$REPO/invitations" | jq -e 'type == "array"' >/dev/null || { echo "::error::GET /repos/$OWNER/$REPO/invitations doesn't list pending invitations"; exit 1; }
+          tools=$(curl -fsS -X POST "$DIFFINERY/mcp" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" -H "accept: application/json, text/event-stream" --data '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | jq -r '.result.tools[].name')
+          for t in get_organization list_invitations revoke_invitation; do grep -qx "$t" <<<"$tools" || { echo "::error::the MCP server has no $t tool"; exit 1; }; done
+          echo "highlighting, Appearance, notification settings link, view transitions, visibility, organization and invitation checks passed"
+
+      - name: Diffy placeholders, Actions settings, milestones and variables
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          page() { curl -fsS "$DIFFINERY$1" -H "Authorization: Bearer $TOKEN"; }
+          api() { curl -fsS -X "$1" "$DIFFINERY/api/v3$2" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" ${3:+--data "$3"}; }
+          code() { curl -sS -o /tmp/out -w '%{http_code}' -X "$1" "$DIFFINERY/api/v3$2" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" ${3:+--data "$3"}; }
+          fail() { echo "::error::$1"; cat /tmp/out 2>/dev/null || true; exit 1; }
+          has() { grep -qF -- "$2" <<<"$1" || fail "$3"; }
+          R="/repos/$OWNER/$REPO"
+          has "$(page /new/import)" 'diffy/hello-world' "the importer's placeholder isn't Diffy"
+          has "$(page "/$OWNER/$REPO/settings/actions")" 'Allow GitHub Actions to create and approve pull requests' "repository settings have no Actions page"
+          # Milestones: created closed, checked before an issue edit is saved, shown in the response, and filterable.
+          [ "$(api POST "$R/milestones" '{"title":"Shipped","state":"closed"}' | jq -r .state)" = closed ] || fail "POST milestones ignored state"
+          ms=$(api POST "$R/milestones" '{"title":"Live v1"}' | jq -r .number)
+          n=$(api POST "$R/issues" '{"title":"Planned"}' | jq -r .number)
+          [ "$(code PATCH "$R/issues/$n" '{"title":"Renamed","milestone":999999}')" = 422 ] || fail "an unknown milestone wasn't refused with 422"
+          [ "$(api GET "$R/issues/$n" | jq -r .title)" = Planned ] || fail "a refused milestone edit saved the title"
+          [ "$(api PATCH "$R/issues/$n" "{\"milestone\":$ms}" | jq -r .milestone.number)" = "$ms" ] || fail "PATCH issue doesn't return the new milestone"
+          [ "$(api GET "$R/issues?milestone=$ms&state=all" | jq -r '[.[].number] | join(",")')" = "$n" ] || fail "issues aren't filtered by milestone"
+          loc=$(curl -sS -o /dev/null -w '%{redirect_url}' "$DIFFINERY/$OWNER/$REPO/milestone/$ms" -H "Authorization: Bearer $TOKEN")
+          has "$loc" "/issues?milestone=$ms" "the milestone link doesn't open its issue list"
+          # Repository variable deletes ignore letter case.
+          [ "$(code PUT "$R/actions/variables/LIVE_CASE" '{"value":"x"}')" = 204 ] || fail "couldn't set a repository variable"
+          [ "$(code DELETE "$R/actions/variables/live_case")" = 204 ] || fail "couldn't delete a repository variable"
+          [ "$(code GET "$R/actions/variables/LIVE_CASE")" = 404 ] || fail "deleting a variable in lower case left it in place"
+          org=$(page /api/v3/user/orgs | jq -r '.[0].login // empty')
+          if [ -n "$org" ]; then
+            # Deleting an organization variable or secret that doesn't exist is a 404 (403 for someone who isn't an admin).
+            for path in variables secrets; do
+              c=$(code DELETE "/orgs/$org/actions/$path/LIVE_NEVER_SET_$GITHUB_RUN_ID")
+              case "$c" in 404|403) ;; *) fail "DELETE of a missing organization $path entry got $c" ;; esac
+            done
+          fi
+          echo "Diffy placeholders, Actions settings page, milestone and variable checks passed"
+
+      - name: Hosted Actions jobs (and Docker) run in Cloudflare Containers
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          api() { curl -fsS "$DIFFINERY/api/v3$1" -H "Authorization: Bearer $TOKEN"; }
+          for i in $(seq 1 90); do
+            run=$(api "/repos/$OWNER/$REPO/actions/runs?event=push" | jq -c '.workflow_runs[0] // empty')
+            [ -n "$run" ] && [ "$(jq -r .status <<<"$run")" = completed ] && break
+            sleep 10
+          done
+          echo "$run" | jq '{id, status, conclusion}'
+          id=$(jq -r .id <<<"$run")
+          jobs=$(api "/repos/$OWNER/$REPO/actions/runs/$id/jobs")
+          # placementTries: times a job went back in line (no machine, or a runner on a replaced image turned away).
+          # restarts: times it started over because the platform replaced its runner before its steps ran.
+          jq -r '.jobs[] | "  \(.name): \(.conclusion)\(if .failure then " - " + (.failure.message // "") else "" end)\(try " (\((.completed_at | fromdateiso8601) - (.started_at | fromdateiso8601))s)" catch "")\(if (.placementTries // 0) > 0 then ", started again \(.placementTries) time(s)" else "" end)\(if (.restarts // 0) > 0 then ", restarted \(.restarts) time(s) after its runner was replaced" else "" end)"' <<<"$jobs"
+          if [ "$(jq -r .conclusion <<<"$run")" != success ]; then
+            for job in $(jq -r '.jobs[] | select(.conclusion == "failure" or .conclusion == "timed_out") | .id' <<<"$jobs"); do
+              echo "::group::Last log lines of job $job"
+              api "/repos/$OWNER/$REPO/actions/jobs/$job/logs" | tail -n 80 || true
+              echo "::endgroup::"
+            done
+            echo "::error::the push run did not succeed"
+            exit 1
+          fi
+          if [ -n "${DEPLOYED_RUNNER_IMAGE:-}" ]; then
+            # Every job ran the deployed runner, so these checks test what was just deployed.
+            stale=$(jq -r --arg want "$DEPLOYED_RUNNER_IMAGE" '.jobs[] | select(.runner.image != $want) | "\(.name) on \(.runner.image // "no image reported")"' <<<"$jobs")
+            [ -z "$stale" ] || { echo "::error::jobs ran on a runner image other than the deployed $DEPLOYED_RUNNER_IMAGE: $(paste -sd ';' <<<"$stale")"; exit 1; }
+            echo "every job ran on $DEPLOYED_RUNNER_IMAGE"
+          fi
+          for job in $(jq -r '.jobs[] | select(.name | startswith("hosted")) | .id' <<<"$jobs"); do
+            log=$(api "/repos/$OWNER/$REPO/actions/jobs/$job/logs")
+            grep -F "live ok" <<<"$log" | grep -F "# $REPO" || { echo "::error::job $job did not print its line (checkout or run step failed)"; exit 1; }
+            grep -F "sudo ok 0" <<<"$log" || { echo "::error::job $job could not run sudo without a password"; exit 1; }
+          done
+          job=$(jq -r '.jobs[] | select(.name == "docker") | .id' <<<"$jobs")
+          log=$(api "/repos/$OWNER/$REPO/actions/jobs/$job/logs")
+          grep -F "docker ok built" <<<"$log" || { echo "::error::docker build or run failed on a hosted runner"; exit 1; }
+          grep -F "service ok +PONG" <<<"$log" || { echo "::error::the redis service container was not reachable"; exit 1; }
+          job=$(jq -r '.jobs[] | select(.name == "pull") | .id' <<<"$jobs")
+          log=$(api "/repos/$OWNER/$REPO/actions/jobs/$job/logs")
+          grep -F "registry ok $BIG bytes" <<<"$log" || { echo "::error::the image pushed with a $BIG-byte layer did not come back intact from the registry"; exit 1; }
+          grep -F "buildx ok $BUILDX bytes" <<<"$log" || { echo "::error::the image pushed by docker/build-push-action did not come back from the registry"; exit 1; }
+          api "/users/$OWNER/packages/container/${REPO,,}/versions" | jq -c '.[] | {tags: .metadata.container.tags, size, platforms}'
+
+      - name: An organization's packages page keeps its tabs
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          org=$(curl -fsS "$DIFFINERY/api/v3/user/orgs" -H "Authorization: Bearer $TOKEN" | jq -r '.[0].login // empty')
+          [ -n "$org" ] || { echo "$OWNER is in no organization; skipped"; exit 0; }
+          html=$(curl -fsS "$DIFFINERY/$org/-/packages" -H "Authorization: Bearer $TOKEN")
+          grep -qF "<a href=\"/$org/-/packages\" class=\"on\">" <<<"$html" || { echo "::error::$org's packages page lost the organization's tab bar"; exit 1; }
+          grep -qF "href=\"/$org?tab=repositories\"" <<<"$html" || { echo "::error::$org's packages page has no Repositories tab"; exit 1; }
+          echo "$org's packages page shows the organization's tabs with Packages selected"
+
+      - name: Git LFS round trip
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          git clone -q "https://x-token:${TOKEN}@${DIFFINERY#https://}/$OWNER/$REPO.git" clone
+          [ "$(sha256sum clone/blob.bin | cut -d' ' -f1)" = "$(cat blob.sha)" ] || { echo "::error::the LFS file came back different"; exit 1; }
+          echo "LFS file matches ($(stat -c %s clone/blob.bin) bytes)"
+
+      - name: Webhook delivered
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            hook=$(curl -fsS "$DIFFINERY/api/v3/repos/$OWNER/$REPO/hooks" -H "Authorization: Bearer $TOKEN" | jq -c '.[0]')
+            # GitHub's hook shape: the target is config.url, the last delivery's status last_response.code.
+            [ "$(jq -r '.last_response.code // empty' <<<"$hook")" != "" ] && break
+            sleep 5
+          done
+          echo "$hook" | jq '{target: .config.url, last_response, updated_at}'
+          [ "$(jq -r '.last_response.code // empty' <<<"$hook")" != "" ] || { echo "::error::the push webhook was never delivered"; exit 1; }
+
+      - name: Tokens can't mint tokens (API or web forms)
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          # Revokes anything a failed check minted, then fails.
+          minted() { echo "::error::$1"; curl -fsS "$DIFFINERY/api/v3/diffinery/tokens" -H "Authorization: Bearer $TOKEN" | jq -r '.[] | select(.name == "live-test escalation") | .id' | while read -r id; do curl -sS -o /dev/null -X DELETE "$DIFFINERY/api/v3/diffinery/tokens/$id" -H "Authorization: Bearer $TOKEN"; done; exit 1; }
+          code=$(curl -sS -o /tmp/out -w '%{http_code}' -X POST "$DIFFINERY/api/v3/diffinery/tokens" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" --data '{"name":"live-test escalation","scopes":["read"],"expires_in_days":1}')
+          [ "$code" = 403 ] || minted "an admin token minted a token through the API ($code)"
+          grep -q "browser session" /tmp/out || minted "unexpected refusal: $(cat /tmp/out)"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$DIFFINERY/api/v3/diffinery/agents" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" --data '{"login":"live-test-escalation"}')
+          [ "$code" = 403 ] || { echo "::error::an admin token created an agent ($code); disable live-test-escalation by hand"; exit 1; }
+          # A web form with a token and a forged double-submit CSRF pair.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$DIFFINERY/settings/tokens" -H "Authorization: Bearer $TOKEN" -H "cookie: dfy_csrf=forged" --data "_csrf=forged&name=live-test%20escalation&scope=read&days=1")
+          [ "$code" = 403 ] || minted "a token submitted the web token form ($code)"
+          echo "tokens can't mint tokens or agents, through the API or the web forms"
+
+      - name: Agent sandbox
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          base="$DIFFINERY/api/v3/repos/$OWNER/$REPO/diffinery/sandboxes"
+          id=$(curl -fsS --retry 1 --retry-delay 15 -X POST "$base" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" --data '{}' | jq -r .id)
+          echo "sandbox $id"
+          for i in $(seq 1 40); do
+            out=$(curl -sS -X POST "$base/$id/exec" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" --data '{"cmd":"cat README.md && git lfs ls-files | wc -l"}' || true)
+            jq -e '.exitCode == 0' >/dev/null 2>&1 <<<"$out" && break
+            sleep 6
+          done
+          echo "$out" | jq '{exitCode, stdout}'
+          curl -sS -X POST "$base/$id/close" -H "Authorization: Bearer $TOKEN" >/dev/null || true
+          jq -e --arg r "# $REPO" '.exitCode == 0 and (.stdout | contains($r))' >/dev/null <<<"$out" || { echo "::error::the sandbox did not run the command in the repository"; exit 1; }
+
+      # Owned by the agentic thread: proves the agent jails (containers/runner/src/jail.ts) on Cloudflare: a terminal
+      # task's, and a headless run's (phase 5d), which reaches Diffinery only at its model endpoints.
+      - name: Agent jails (bubblewrap, no network but the allowlist proxy and the model proxy)
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          base="$DIFFINERY/api/v3/repos/$OWNER/$REPO/diffinery/sandboxes"
+          id=""
+          close() { if [ -n "$id" ]; then curl -sS --max-time 60 -X POST "$base/$id/close" -H "Authorization: Bearer $TOKEN" >/dev/null || true; fi; id=""; }
+          trap close EXIT
+          run() { curl -sS --max-time "${2:-240}" -X POST "$base/$id/exec" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" --data "$(jq -n --arg c "$1" '{cmd: $c, timeoutMs: 180000}')"; }
+          # One create (no retry: a retried POST could open a second sandbox nothing closes), then wait for it to answer.
+          open() {
+            close
+            id=$(curl -sS --max-time 240 -X POST "$base" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" --data '{}' | jq -r '.id // empty' || true)
+            [ -n "$id" ] || { echo "::error::could not open a sandbox for the jail check"; exit 1; }
+            for i in $(seq 1 30); do
+              jq -e '.exitCode == 0' >/dev/null 2>&1 <<<"$(run true 20 || true)" && return 0
+              sleep 6
+            done
+            echo "::error::the sandbox never became ready"
+            exit 1
+          }
+          # Sandboxes roll out on their own: one opened right after a deploy can still be on the previous image.
+          jail=no
+          for attempt in 1 2 3 4 5; do
+            open
+            # A runner with headless jails asks for the run's model token; an older one ignores --egress.
+            has=$(run 'mkdir -p ../probe ../probe.out; [ -n "${DIFFINERY_JAIL:-}" ] && [ -x "$DIFFINERY_JAIL" ] && "$DIFFINERY_JAIL" agent --dir ../probe --out ../probe.out --egress model -- true 2>&1 | grep -q DIFFINERY_MODEL_TOKEN && echo yes || echo no' 20 | jq -r '.stdout // empty' || true)
+            if [ "$has" = yes ]; then jail=yes; break; fi
+            echo "sandbox $id is on a runner image without the jail; trying another in a minute"
+            close
+            sleep 60
+          done
+          [ "$jail" = yes ] || { echo "::error::the sandbox started on a runner image without the jail (rollout not finished?)"; exit 1; }
+          inside='echo "direct=$(node -e "require(\"net\").connect(443, \"1.1.1.1\").on(\"connect\", () => (console.log(\"open\"), process.exit())).on(\"error\", (e) => (console.log(e.code), process.exit()))")"
+          echo "other=$(curl -sS -m 20 -o /dev/null -w "%{http_connect}" https://example.com 2>/dev/null || true)"
+          echo "sni=$(curl -sS -m 20 -o /dev/null -w "%{http_code}" --connect-to example.com:443:registry.npmjs.org:443 https://example.com 2>/dev/null; true)"
+          echo "checkout=$(ls -A /workspace/repo | paste -sd,)"
+          echo "credential=$(cat /workspace/repo/.git/config 2>/dev/null || echo hidden)"
+          v=$(npm view left-pad version --no-update-notifier --loglevel=error 2>/tmp/npm.err)
+          echo "npm=$(printf "%s\n" "$v" | grep -E "^[0-9]+\.[0-9]+\.[0-9]+$" | tail -1)"
+          echo "npmerr=$(tail -3 /tmp/npm.err | paste -sd" " -)"'
+          out=$(run "mkdir -p ../jail-check ../jail-check.out && \"\$DIFFINERY_JAIL\" agent --dir ../jail-check --out ../jail-check.out -- sh -c $(printf '%q' "$inside")")
+          echo "$out" | jq -r '"exit \(.exitCode)", .stdout, .stderr'
+          o=$(jq -r .stdout <<<"$out")
+          fail=0
+          jq -e '.exitCode == 0' >/dev/null <<<"$out" || { echo "::error::the jail didn't run (exit $(jq -r .exitCode <<<"$out"))"; fail=1; }
+          grep -qE '^direct=(ENETUNREACH|EHOSTUNREACH|ECONNREFUSED|EACCES)$' <<<"$o" || { echo "::error::the jail has a route out of its own"; fail=1; }
+          grep -qx 'other=403' <<<"$o" || { echo "::error::the proxy didn't refuse example.com"; fail=1; }
+          grep -qx 'checkout=.git' <<<"$o" || { echo "::error::the jail sees the person's checkout"; fail=1; }
+          grep -qx 'credential=hidden' <<<"$o" || { echo "::error::the jail sees the checkout's git config"; fail=1; }
+          grep -qE '^npm=[0-9]+\.[0-9]+' <<<"$o" || { echo "::error::npm view left-pad didn't work through the proxy"; fail=1; }
+          grep -qx 'sni=000' <<<"$o" || { echo "::error::the proxy let TLS for example.com through a tunnel to registry.npmjs.org"; fail=1; }
+
+          # A headless run's jail: registries only, and Diffinery only at /-/model/ through the model proxy outside,
+          # which adds the run's token (a stand-in here, so Diffinery answers 401) and drops whatever the agent sends.
+          host=${DIFFINERY#https://}
+          headless='echo "model=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$ANTHROPIC_BASE_URL/v1/messages" -H "x-api-key: $ANTHROPIC_API_KEY" -H "content-type: application/json" -d "{}")"
+          echo "api=$(curl -s -o /dev/null -w "%{http_code}" --path-as-is "$ANTHROPIC_BASE_URL/../../api/v3/user")"
+          echo "connect=$(curl -sS -m 20 -o /dev/null -w "%{http_connect}" https://'"$host"'/api/v3/user 2>/dev/null || true)"
+          echo "vendor=$(curl -sS -m 20 -o /dev/null -w "%{http_connect}" https://api.anthropic.com 2>/dev/null || true)"
+          echo "token=$(env | grep -c dmt_ || true)"
+          echo "credential=$(cat /workspace/repo/.git/config 2>/dev/null || echo hidden)"
+          v=$(npm view left-pad version --no-update-notifier --loglevel=error 2>/dev/null)
+          echo "npm=$(printf "%s\n" "$v" | grep -E "^[0-9]+\.[0-9]+\.[0-9]+$" | tail -1)"'
+          out=$(run "mkdir -p ../headless-check ../headless-check.out && DIFFINERY_MODEL_TOKEN=dmt_livetest_standin DIFFINERY_MODEL_ORIGIN=$(printf '%q' "$DIFFINERY") ANTHROPIC_BASE_URL=http://127.0.0.1:3129/-/model/anthropic ANTHROPIC_API_KEY=diffinery-jail \"\$DIFFINERY_JAIL\" agent --dir ../headless-check --out ../headless-check.out --egress model -- sh -c $(printf '%q' "$headless")")
+          echo "$out" | jq -r '"exit \(.exitCode)", .stdout, .stderr'
+          o=$(jq -r .stdout <<<"$out")
+          jq -e '.exitCode == 0' >/dev/null <<<"$out" || { echo "::error::the headless jail didn't run (exit $(jq -r .exitCode <<<"$out"))"; fail=1; }
+          grep -qx 'model=401' <<<"$o" || { echo "::error::the model proxy didn't reach Diffinery's model endpoint with the run's token"; fail=1; }
+          grep -qx 'api=403' <<<"$o" || { echo "::error::the model proxy forwarded a path outside /-/model/"; fail=1; }
+          grep -qx 'connect=403' <<<"$o" || { echo "::error::the headless jail could open a tunnel to Diffinery"; fail=1; }
+          grep -qx 'vendor=403' <<<"$o" || { echo "::error::the headless jail could reach a CLI vendor"; fail=1; }
+          grep -qx 'token=0' <<<"$o" || { echo "::error::the run's token is inside the headless jail"; fail=1; }
+          grep -qx 'credential=hidden' <<<"$o" || { echo "::error::the headless jail sees the checkout's git config"; fail=1; }
+          grep -qE '^npm=[0-9]+\.[0-9]+' <<<"$o" || { echo "::error::npm view left-pad didn't work in the headless jail"; fail=1; }
+          exit $fail
+
+      - name: Pull requests and the merge queue
+        if: steps.token.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          Q="$REPO-pr"
+          api() { curl -fsS -X "$1" "$DIFFINERY/api/v3$2" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" ${3:+--data "$3"}; }
+          api POST /user/repos "{\"name\":\"$Q\",\"private\":true}" >/dev/null
+          echo "PR_REPO=$Q" >> "$GITHUB_ENV"
+          api PUT "/repos/$OWNER/$Q/actions/secrets/TOPSECRET" '{"value":"s3cret"}' >/dev/null
+          remote="https://x-token:${TOKEN}@${DIFFINERY#https://}/$OWNER/$Q.git"
+          mkdir -p pr/.github/workflows && cd pr
+          git init -q -b main
+          git config user.name "Live test" && git config user.email "live-test@diffinery.com"
+          printf 'a\nb\nc\n' > app.txt
+          cat > .github/workflows/ci.yml <<'EOF'
+          name: CI
+          on:
+            pull_request:
+            merge_group:
+          jobs:
+            test:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - run: echo "pr ok event=${{ '${{' }} github.event_name }} ref=${{ '${{' }} github.ref }} sha=${{ '${{' }} github.sha }} head=$(git rev-parse HEAD) app=$(tr '\n' ' ' < app.txt)"
+          EOF
+          cat > .github/workflows/target.yml <<'EOF'
+          name: Target
+          on: pull_request_target
+          jobs:
+            t:
+              runs-on: ubuntu-latest
+              steps:
+                - run: echo "target ok secret=${{ '${{' }} secrets.TOPSECRET == 's3cret' }} ref=${{ '${{' }} github.ref }}"
+          EOF
+          git add -A && git commit -q -m "PR test" && git push -q "$remote" main
+          # The pull request changes app.txt and tries to rewrite the pull_request_target workflow.
+          git checkout -q -b change
+          printf 'A\nb\nc\n' > app.txt
+          sed -i 's/target ok/PWNED/' .github/workflows/target.yml
+          git commit -q -am "Change" && git push -q "$remote" change
+          head=$(git rev-parse HEAD)
+          # Main moves on, so the test merge commit holds both sides.
+          git checkout -q main
+          printf 'a\nb\nC\n' > app.txt
+          git commit -q -am "Main moves" && git push -q "$remote" main
+          n=$(api POST "/repos/$OWNER/$Q/pulls" '{"title":"Change","head":"change","base":"main"}' | jq -r .number)
+          echo "opened pull request #$n (head $head)"
+
+          wait_run() { # event -> the completed run JSON
+            for i in $(seq 1 60); do
+              run=$(api GET "/repos/$OWNER/$Q/actions/runs?event=$1" | jq -c '.workflow_runs[0] // empty')
+              [ -n "$run" ] && [ "$(jq -r .status <<<"$run")" = completed ] && { echo "$run"; return; }
+              sleep 10
+            done
+            echo "::error::no completed $1 run" >&2; exit 1
+          }
+          log_of() { for job in $(api GET "/repos/$OWNER/$Q/actions/runs/$1/jobs" | jq -r '.jobs[].id'); do api GET "/repos/$OWNER/$Q/actions/jobs/$job/logs"; done; }
+          pr=$(wait_run pull_request)
+          echo "$pr" | jq '{event, ref, sha, head_sha, conclusion}'
+          [ "$(jq -r .conclusion <<<"$pr")" = success ] || { echo "::error::the pull_request run failed"; exit 1; }
+          [ "$(jq -r .ref <<<"$pr")" = "refs/pull/$n/merge" ] && [ "$(jq -r .head_sha <<<"$pr")" = "$head" ] && [ "$(jq -r .sha <<<"$pr")" != "$head" ] || { echo "::error::the pull_request run did not use the test merge commit"; exit 1; }
+          log_of "$(jq -r .id <<<"$pr")" | grep -F "pr ok event=pull_request ref=refs/pull/$n/merge" | grep -F "app=A b C" || { echo "::error::the pull_request job did not check out the merged code"; exit 1; }
+          target=$(wait_run pull_request_target)
+          echo "$target" | jq '{event, ref, sha, head_sha, conclusion}'
+          tlog=$(log_of "$(jq -r .id <<<"$target")")
+          grep -F "target ok secret=true ref=refs/heads/main" <<<"$tlog" || { echo "::error::pull_request_target did not run the base workflow with secrets"; exit 1; }
+          ! grep -q PWNED <<<"$tlog" || { echo "::error::pull_request_target ran the pull request's workflow"; exit 1; }
+
+          api PUT "/repos/$OWNER/$Q/branches/main/protection" '{"requirePullRequest":true,"requiredChecks":["CI / test"],"mergeQueue":{"method":"squash","checkTimeoutMinutes":20}}' >/dev/null
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X PUT "$DIFFINERY/api/v3/repos/$OWNER/$Q/pulls/$n/merge" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" --data '{}')
+          [ "$code" = 405 ] || { echo "::error::a direct merge into a merge queue branch returned $code"; exit 1; }
+          api PUT "/repos/$OWNER/$Q/pulls/$n/merge-queue" '{"delete_branch":true}' | jq '{state, position: .entry.position, merge_group: .entry.merge_group}'
+          for i in $(seq 1 60); do
+            merged=$(api GET "/repos/$OWNER/$Q/pulls/$n" | jq -r .merged)
+            [ "$merged" = true ] && break
+            sleep 10
+          done
+          [ "$merged" = true ] || { echo "::error::the merge queue did not merge #$n"; api GET "/repos/$OWNER/$Q/merge-queue/main" | jq .; exit 1; }
+          group=$(wait_run merge_group)
+          echo "$group" | jq '{event, ref, sha, conclusion}'
+          [[ "$(jq -r .ref <<<"$group")" == refs/heads/gh-readonly-queue/main/pr-$n-* ]] || { echo "::error::the merge_group run is not on a queue branch"; exit 1; }
+          sha=$(api GET "/repos/$OWNER/$Q/branches/main" | jq -r .commit.sha)
+          [ "$sha" = "$(jq -r .sha <<<"$group")" ] || { echo "::error::main ($sha) is not the tested merge group"; exit 1; }
+          git fetch -q "$remote" main && [ "$(git show FETCH_HEAD:app.txt | tr '\n' ' ')" = "A b C " ] || { echo "::error::main does not hold the merged change"; exit 1; }
+          echo "pull request #$n merged through the queue as $sha"
+
+      - name: Import a public GitHub repository
+        if: steps.token.outputs.skip != 'true'
+        env:
+          # A small public repository with issues and pull requests; a repository variable can change it.
+          SOURCE: ${{ vars.LIVE_IMPORT_SOURCE || 'octocat/git-consortium' }}
+          # Token-free: Diffinery keeps no GitHub credentials of its own (the importer takes a person's token when they import).
+          GITHUB_TOKEN_FOR_IMPORT: ""
+        run: |
+          set -euo pipefail
+          api() { curl -fsS -X "$1" "$DIFFINERY/api/v3$2" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" ${3:+--data "$3"}; }
+          name="$REPO-import"
+          body=$(jq -nc --arg s "$SOURCE" --arg o "$OWNER" --arg n "$name" --arg t "${GITHUB_TOKEN_FOR_IMPORT:-}" \
+            '{source: $s, owner: $o, name: $n, visibility: "private"} + (if $t == "" then {} else {github_token: $t} end)')
+          # Token-free, GitHub allows 60 requests an hour per address: a rate limit skips this check with a warning.
+          # Starting the import reads the repository from GitHub; a GitHub outage (502 "could not reach GitHub")
+          # is retried, and skips this check with a warning if it outlasts the retries. While other imports hold
+          # every slot (an import campaign), it waits up to 15 minutes for one, so a busy account doesn't hide this check.
+          tries=0 waits=0
+          while :; do
+            code=$(curl -sS -o import.json -w '%{http_code}' -X POST "$DIFFINERY/api/v3/diffinery/imports" -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" \
+              --data-binary @- <<<"$body" || true)
+            unreachable=$(jq -r '.message // "" | startswith("could not reach GitHub")' import.json 2>/dev/null || echo false)
+            busy=$(jq -r '.message // "" | startswith("too many repository imports are already running")' import.json 2>/dev/null || echo false)
+            if [ "$code" = 429 ] && [ "$busy" = true ]; then
+              waits=$((waits + 1))
+              [ "$waits" -le 30 ] || break
+              [ "$waits" -gt 1 ] || echo "every import slot is taken ($(jq -r .message import.json)); waiting for one, up to 15 minutes"
+              sleep 30
+              continue
+            fi
+            { [ "$code" = 502 ] && [ "$unreachable" = true ]; } || [ "$code" = 000 ] || break
+            tries=$((tries + 1))
+            [ "$tries" -lt 4 ] || break
+            echo "starting the import returned $code ($(jq -r .message import.json 2>/dev/null)); trying again in 30 seconds"
+            sleep 30
+          done
+          if [ "$code" = 429 ] && [ "$busy" = true ]; then echo "::warning::no import slot came free in 15 minutes, so the import check is skipped: $(jq -r .message import.json)"; exit 0; fi
+          if [ "$code" = 429 ]; then echo "::warning::GitHub's rate limit stopped the import check: $(jq -r .message import.json)"; exit 0; fi
+          if [ "$code" = 502 ] && [ "$unreachable" = true ]; then echo "::warning::GitHub could not be reached, so the import check is skipped: $(jq -r .message import.json)"; exit 0; fi
+          [ "$code" = 201 ] || { echo "::error::starting the import returned $code: $(cat import.json)"; exit 1; }
+          echo "IMPORT_REPO=$name" >> "$GITHUB_ENV"
+          id=$(jq -r .id import.json)
+          echo "import $id: $SOURCE -> $OWNER/$name"
+          for i in $(seq 1 90); do
+            imp=$(api GET "/diffinery/imports/$id")
+            status=$(jq -r .status <<<"$imp")
+            case "$status" in succeeded|failed|cancelled) break ;; esac
+            if jq -e '[.steps[].message // ""] | any(test("rate limit"))' >/dev/null <<<"$imp"; then
+              api POST "/diffinery/imports/$id/cancel" >/dev/null || true
+              echo "::warning::GitHub's rate limit paused the import, so the import check is skipped: $(jq -r '[.steps[].message // ""] | map(select(test("rate limit")))[0]' <<<"$imp")"
+              exit 0
+            fi
+            sleep 10
+          done
+          jq '{status, error, warnings, steps: [.steps[] | "\(.name): \(.status) \(.message // "")"], git}' <<<"$imp"
+          [ "$status" = succeeded ] || { echo "::error::the import ended $status"; exit 1; }
+
+          # The same refs, issue and pull request numbers as on GitHub (when GitHub still answers this runner).
+          R="/repos/$OWNER/$name"
+          [ "$(api GET "$R" | jq -r .private)" = true ] || { echo "::error::the imported repository is not private"; exit 1; }
+          gh() { curl -fsS "https://api.github.com/repos/$SOURCE$1" -H "Accept: application/vnd.github+json" ${GITHUB_TOKEN_FOR_IMPORT:+-H "Authorization: Bearer $GITHUB_TOKEN_FOR_IMPORT"}; }
+          if src=$(gh "") && branches=$(gh "/branches?per_page=100") && items=$(gh "/issues?state=all&per_page=30&sort=created&direction=asc"); then
+            def=$(jq -r .default_branch <<<"$src")
+            want=$(jq -r --arg b "$def" '.[] | select(.name == $b) | .commit.sha' <<<"$branches")
+            got=$(api GET "$R/branches/$def" | jq -r .commit.sha)
+            [ "$got" = "$want" ] || { echo "::error::$def is $got on Diffinery, $want on GitHub"; exit 1; }
+            diff <(jq -r '.[].name' <<<"$branches" | sort) <(api GET "$R/branches?per_page=100" | jq -r '.[].name' | sort) || { echo "::error::the branches differ"; exit 1; }
+            n=0
+            for row in $(jq -r '.[] | "\(.number):\(if .pull_request then "pulls" else "issues" end)"' <<<"$items"); do
+              num=${row%%:*} kind=${row#*:}
+              want=$(jq -r --argjson n "$num" '.[] | select(.number == $n) | .title' <<<"$items")
+              got=$(api GET "$R/$kind/$num" | jq -r .title)
+              [ "$got" = "$want" ] || { echo "::error::$kind #$num is \"$got\" on Diffinery, \"$want\" on GitHub"; exit 1; }
+              n=$((n + 1))
+            done
+            echo "$def at $got, $(jq length <<<"$branches") branches and $n issues and pull requests match GitHub"
+          else
+            echo "::warning::GitHub did not answer this runner (rate limit?), so the import is checked without comparing to GitHub"
+          fi
+          # No side effects: importing runs no workflows and sends no notifications.
+          runs=$(api GET "$R/actions/runs" | jq .total_count)
+          [ "$runs" = 0 ] || { echo "::error::the import started $runs workflow runs"; exit 1; }
+
+      - name: Scheduled workflow
+        # Runs even when the import check failed: the two are independent. It needs the scheduled
+        # workflow pushed, though, so a failed setup doesn't add a 13-minute wait for a run that can't come.
+        if: ${{ !cancelled() && steps.token.outputs.skip != 'true' && steps.push.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          # The cron trigger fires every 5 minutes, so allow two windows.
+          for i in $(seq 1 75); do
+            run=$(curl -fsS "$DIFFINERY/api/v3/repos/$OWNER/$REPO/actions/runs?event=schedule" -H "Authorization: Bearer $TOKEN" | jq -c '.workflow_runs[0] // empty')
+            [ -n "$run" ] && [ "$(jq -r .status <<<"$run")" = completed ] && break
+            sleep 10
+          done
+          if [ -z "$run" ]; then
+            # Whether the scheduler stopped ticking (last_tick_at is old) or ticked without starting the run
+            # (site administrators only: another token prints the 403).
+            echo "scheduler: $(curl -sS "$DIFFINERY/api/v3/diffinery/admin/scheduler" -H "Authorization: Bearer $TOKEN") (now $(date -u +%FT%TZ))"
+            echo "::error::no scheduled run started"
+            exit 1
+          fi
+          echo "$run" | jq '{id, event, status, conclusion}'
+          [ "$(jq -r .conclusion <<<"$run")" = success ] || { echo "::error::the scheduled run did not succeed"; exit 1; }
+
+      - name: Delete the throwaway repositories
+        if: always() && steps.token.outputs.skip != 'true'
+        run: |
+          curl -sS -o /dev/null -w 'package %{http_code}\n' -X DELETE "$DIFFINERY/api/v3/users/$OWNER/packages/container/${REPO,,}" -H "Authorization: Bearer $TOKEN"
+          curl -sS -o /dev/null -w '%{http_code}\n' -X DELETE "$DIFFINERY/api/v3/repos/$OWNER/$REPO" -H "Authorization: Bearer $TOKEN"
+          [ -z "${PR_REPO:-}" ] || curl -sS -o /dev/null -w '%{http_code}\n' -X DELETE "$DIFFINERY/api/v3/repos/$OWNER/$PR_REPO" -H "Authorization: Bearer $TOKEN"
+          [ -z "${IMPORT_REPO:-}" ] || curl -sS -o /dev/null -w '%{http_code}\n' -X DELETE "$DIFFINERY/api/v3/repos/$OWNER/$IMPORT_REPO" -H "Authorization: Bearer $TOKEN"

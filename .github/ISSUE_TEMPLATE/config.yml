@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://diffinery.com/security/report
+    about: Please report security problems privately, not in a public issue.
+  - name: Documentation
+    url: https://diffinery.com/docs
+    about: Guides for every feature, the REST API, CLI and MCP references, and self-hosting.

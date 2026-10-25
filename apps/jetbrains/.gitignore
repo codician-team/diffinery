@@ -1,0 +1,6 @@
+.gradle/
+.kotlin/
+build/
+.intellijPlatform/
+# The plugin zip diffinery.com serves is checked in (see README.md).
+!dist/

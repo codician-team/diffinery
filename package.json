@@ -1,0 +1,24 @@
+{
+  "name": "diffinery",
+  "private": true,
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "dev": "pnpm --filter @diffinery/app dev",
+    "setup:cloudflare": "scripts/setup.sh"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.7",
+    "typescript": "^5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd",
+      "sharp"
+    ]
+  }
+}

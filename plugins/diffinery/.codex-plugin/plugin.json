@@ -1,0 +1,40 @@
+{
+  "name": "diffinery",
+  "version": "0.1.3",
+  "description": "Work with repositories hosted on Diffinery: pull requests, CI checks, workflow logs and issues through the diffinery CLI and the Diffinery MCP server.",
+  "author": {
+    "name": "Codician"
+  },
+  "homepage": "https://diffinery.com/docs/connect/claude-code",
+  "repository": "https://diffinery.com/codician/diffinery",
+  "license": "Apache-2.0",
+  "keywords": [
+    "diffinery",
+    "git",
+    "pull-requests",
+    "ci",
+    "code-review",
+    "mcp"
+  ],
+  "skills": [
+    "./skills/",
+    "./codex-skills/"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Diffinery",
+    "shortDescription": "Pull requests, CI and issues on Diffinery",
+    "longDescription": "Lets Codex open pull requests, watch CI checks, read failing job logs and manage issues on repositories hosted on Diffinery, through the diffinery CLI and the Diffinery MCP server.",
+    "developerName": "Codician",
+    "category": "Coding",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://diffinery.com/docs/connect/claude-code",
+    "defaultPrompt": [
+      "Show the pull request and CI checks for this branch"
+    ]
+  },
+  "hooks": "./hooks/hooks.json"
+}

@@ -1,0 +1,61 @@
+name: CI
+
+# Deploy waits for this workflow to pass on main. The end-to-end suite is its own
+# workflow (e2e.yml), so deploys don't wait for it too.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Two jobs in parallel: each needs the install and build, but typecheck and the unit
+  # tests together took longer than either does alone.
+  typecheck:
+    name: Typecheck and bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm -r --if-present build
+      - name: Typecheck
+        run: pnpm -r --if-present typecheck
+      - name: Bundle the Worker (dry run)
+        working-directory: apps/diffinery
+        run: pnpm exec wrangler deploy --dry-run --env dev --outdir dist
+
+  test:
+    name: Unit tests (${{ matrix.shard }}/2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Two halves of every package's test files, side by side: CI is the first step of a deploy.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm -r --if-present build
+      - name: Unit tests
+        run: pnpm -r --if-present run test --shard=${{ matrix.shard }}/2

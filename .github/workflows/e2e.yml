@@ -1,0 +1,136 @@
+name: End-to-end
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The suite in parallel shards of about the same length: the git, pull request and
+  # Actions file split in three (its real histories and large pushes on their own), agents, security, and
+  # every other test/e2e/*.test.mjs file (so a new file runs without editing this).
+  # Only the last shard needs a browser (passkeys).
+  e2e:
+    name: End-to-end (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: git, PRs, Actions
+            shard: core
+          - name: real histories
+            shard: histories
+          - name: large pushes
+            shard: large
+          - name: agent reviews, tasks, Today
+            shard: agents
+          - name: security
+            shard: security
+          - name: passkeys, registry, email
+            shard: rest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r --if-present build
+      - if: matrix.shard == 'rest'
+        run: pnpm --filter @diffinery/app exec playwright install --with-deps chromium
+      # Agent runs (terminal tasks, and headless runs in the agents shard) are in a bubblewrap jail
+      # (containers/runner/src/jail.ts); Ubuntu's AppArmor otherwise keeps
+      # it from creating user namespaces. Diffinery's own runner image already has bwrap and no sudo, running as root.
+      - if: matrix.shard == 'rest' || matrix.shard == 'agents'
+        run: |
+          as_root() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
+          if ! command -v bwrap >/dev/null; then
+            as_root apt-get install -y --no-install-recommends bubblewrap || { as_root apt-get update -qq && as_root apt-get install -y --no-install-recommends bubblewrap; }
+          fi
+          as_root sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 2>/dev/null || true
+          bwrap --unshare-all --ro-bind / / --dev /dev --proc /proc -- true
+      - name: Run the shard's tests
+        working-directory: apps/diffinery
+        run: |
+          # Shards of similar length; a new test file runs in "rest" unless it's added to another.
+          core='/e2e\.test\.mjs$'
+          agents='/(agentic|review|tasks)\.test\.mjs$'
+          # security.test.mjs, security-*.test.mjs (security-txt's too) and status.test.mjs.
+          security='/(security(-[a-z-]+)?|status)\.test\.mjs$'
+          # The core file's real histories and large pushes take minutes each (jquery's alone 2 to 3 on
+          # Diffinery's runners): two shards of their own, so no part of the file runs into node's
+          # per-file timeout, which is the --test-timeout here.
+          histories='^real histories:'
+          large='^(large files|large pushes):'
+          opts=(--test-timeout=600000)
+          case "${{ matrix.shard }}" in
+            core) files=$(ls test/e2e/*.test.mjs | grep -E "$core"); opts+=(--test-skip-pattern="$histories" --test-skip-pattern="$large") ;;
+            histories) files=$(ls test/e2e/*.test.mjs | grep -E "$core"); opts=(--test-timeout=900000 --test-name-pattern="$histories") ;;
+            large) files=$(ls test/e2e/*.test.mjs | grep -E "$core"); opts+=(--test-name-pattern="$large") ;;
+            agents) files=$(ls test/e2e/*.test.mjs | grep -E "$agents") ;;
+            security) files=$(ls test/e2e/*.test.mjs | grep -E "$security") ;;
+            *) files=$(ls test/e2e/*.test.mjs | grep -vE "$core|$agents|$security") ;;
+          esac
+          echo "$files"
+          # Two files at a time: each starts its own local server on its own port, database and
+          # directory, so they don't share state, and a file's server mostly keeps one core busy.
+          node --test --test-concurrency=2 "${opts[@]}" $files
+
+  # Docker as the hosted runner image runs it, with this change's docker wrapper, daemon config
+  # and agent (its registry relay): this job runs on a hosted runner, so the real dockerd is there.
+  # A daemon an earlier step started is stopped first, so the first uses below start it afresh.
+  runner-docker:
+    name: End-to-end (runner Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @diffinery/runner build
+      - name: Use this change's Docker wrapper, daemon config and agent
+        run: |
+          set -euo pipefail
+          as_root() { if [ "$(id -u)" = 0 ]; then "$@"; else sudo "$@"; fi; }
+          if [ ! -f /opt/diffinery/agent.mjs ] || ! grep -q "registry relay" /usr/local/bin/docker 2>/dev/null; then
+            echo "::error::this job needs a Diffinery hosted runner (its docker wrapper and agent)"
+            exit 1
+          fi
+          as_root pkill -x dockerd || true
+          as_root pkill -f -- "--registry-relay" || true
+          for _ in $(seq 1 60); do pgrep -x dockerd >/dev/null || break; sleep 0.5; done
+          as_root rm -f /run/diffinery-dockerd.ready
+          as_root cp --remove-destination containers/runner/image/docker /usr/local/bin/docker
+          as_root cp --remove-destination containers/runner/image/daemon.json /etc/docker/daemon.json
+          as_root cp --remove-destination containers/runner/dist/agent.mjs /opt/diffinery/agent.mjs
+      - name: Docker's first uses, several at once
+        timeout-minutes: 4
+        run: |
+          set -uo pipefail
+          start=$(date +%s)
+          docker info >/dev/null & a=$!
+          docker ps >/dev/null & b=$!
+          docker version >/dev/null & c=$!
+          failed=0
+          for p in $a $b $c; do wait "$p" || failed=1; done
+          echo "three docker commands at once, the daemon starting: $(( $(date +%s) - start )) s"
+          [ "$failed" = 0 ] || { echo "::error::a docker command failed while the daemon started"; exit 1; }
+          docker run --rm mirror.gcr.io/library/alpine:3.20 echo "container ok"
+      - name: Runner Docker tests (job containers, services, Docker actions)
+        timeout-minutes: 10
+        working-directory: containers/runner
+        run: pnpm exec vitest run test/docker.test.ts test/docker-wrapper.test.ts

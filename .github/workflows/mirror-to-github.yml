@@ -1,0 +1,51 @@
+name: Mirror to GitHub
+
+# Keeps the public copy at github.com/codician-team/diffinery in step with main,
+# through the deterministic rewrite in scripts/mirror-to-github.sh. Runs on Diffinery
+# only. Uses GITHUB_MIRROR_TOKEN (a fine-grained GitHub token with Contents and
+# Workflows write on that one repository), a secret of the github-mirror environment.
+# That environment is limited to protected branches, so the token also reaches runs
+# after an agent's merge. Without the token the job says so and does nothing.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-to-github
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Push main to the GitHub mirror
+    if: ${{ github.server_url != 'https://github.com' && github.repository == 'codician/diffinery' }}
+    runs-on: ubuntu-latest
+    environment: github-mirror
+    timeout-minutes: 10
+    env:
+      GITHUB_MIRROR_TOKEN: ${{ secrets.GITHUB_MIRROR_TOKEN }}
+    steps:
+      - name: Check the GitHub token
+        id: token
+        run: |
+          if [ -z "$GITHUB_MIRROR_TOKEN" ]; then
+            echo "::notice::GITHUB_MIRROR_TOKEN is not set, so GitHub is not updated."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.skip != 'true'
+        with:
+          ref: main
+          fetch-depth: 0
+      - if: steps.token.outputs.skip != 'true'
+        # Pinned: another filter-repo version could write different commits.
+        run: python3 -m pip install --quiet --break-system-packages git-filter-repo==2.47.0 || python3 -m pip install --quiet git-filter-repo==2.47.0
+      - if: steps.token.outputs.skip != 'true'
+        run: scripts/mirror-to-github.sh
+        env:
+          MIRROR_SRC: ${{ github.workspace }}

@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+  - containers/*
+
+# pnpm's side-effects cache made each install 8-10 s slower on hosted runners (12 s against 3.4 s
+# for the same restored store): reusing the cached build of esbuild and workerd cost more than
+# running their postinstall again. Measured on the speed-bench branch, 2026-10-16.
+sideEffectsCache: false

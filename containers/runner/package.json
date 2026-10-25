@@ -1,0 +1,24 @@
+{
+  "name": "@diffinery/runner",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/agent.mjs --external:bufferutil --external:utf-8-validate \"--banner:js=import { createRequire as __diffineryCreateRequire } from 'node:module'; const require = __diffineryCreateRequire(import.meta.url);\"",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@diffinery/shared": "workspace:*",
+    "@diffinery/workflow-yaml": "workspace:*",
+    "ws": "8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "8.18.1",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  }
+}

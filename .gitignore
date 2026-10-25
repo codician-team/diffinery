@@ -1,0 +1,11 @@
+node_modules
+dist/
+.wrangler/
+.turbo/
+.dev.vars
+*.log
+coverage/
+.DS_Store
+wrangler.deploy.jsonc
+# Written by turbo for AI agents; opted out in turbo.json (agentGuidance)
+/AGENTS.md

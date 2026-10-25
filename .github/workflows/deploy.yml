@@ -1,0 +1,187 @@
+name: Deploy
+
+# Deploys Diffinery from main. Uses the repository secrets
+# CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, and these optional repository
+# variables (the same ones scripts/bootstrap.sh reads):
+#   DIFFINERY_DOMAIN     where it is served (default diffinery.com)
+#   DIFFINERY_ZONE       the Cloudflare zone for the route (default: the domain's last two labels)
+#   MAIL_DOMAIN          sends from notifications@<MAIL_DOMAIN> (default DIFFINERY_DOMAIN)
+#   ACCESS_TEAM_DOMAIN   e.g. example.cloudflareaccess.com
+#
+# It deploys a main commit only once CI (typecheck, unit tests and the Worker bundle) has
+# passed on it, so it doesn't run those itself. End-to-end tests run alongside the deploy.
+# Only main's current tip deploys: re-running an old CI run (which anyone with write access
+# can do) doesn't bring back a version from before a fix.
+#
+# The Cloudflare secrets are the production environment's, and only the steps that talk to
+# Cloudflare get them: installs, builds and third-party actions run without them.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Main's current tip
+    # Production deploys from Diffinery itself, on its own hosted runners (any
+    # Diffinery, so self-hosted copies deploy themselves too). Running this
+    # workflow by hand on GitHub still deploys, as a fallback.
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.server_url != 'https://github.com' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      deploy: ${{ steps.tip.outputs.deploy }}
+    steps:
+      - name: Deploy only main's current tip
+        id: tip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WANT: ${{ github.event.workflow_run.head_sha || github.sha }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$REF" != refs/heads/main ]; then
+            echo "::error::Deploy runs from main only (this run is on $REF)"; exit 1
+          fi
+          tip=$(curl -fsS "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/branches/main" -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" | jq -r .commit.sha)
+          if [ "$tip" = "$WANT" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            echo "deploying $WANT, main's tip"
+          else
+            # A later commit's CI run deploys it: a re-run of an old CI run deploys nothing.
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::not deploying $WANT: main is at $tip now, and that commit's own run deploys it"
+          fi
+
+  deploy:
+    name: Deploy to Cloudflare
+    needs: gate
+    if: ${{ needs.gate.outputs.deploy == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: production
+      url: https://${{ vars.DIFFINERY_DOMAIN || 'diffinery.com' }}
+    env:
+      DIFFINERY_DOMAIN: ${{ vars.DIFFINERY_DOMAIN || 'diffinery.com' }}
+      DIFFINERY_ZONE: ${{ vars.DIFFINERY_ZONE }}
+      MAIL_DOMAIN: ${{ vars.MAIL_DOMAIN }}
+      ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
+      # Who becomes site administrator on first sign-in. Unset keeps the deployed Worker's list (scripts/bootstrap-admins.sh).
+      BOOTSTRAP_ADMINS: ${{ vars.BOOTSTRAP_ADMINS }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The commit CI passed on, not whatever main is by now.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build runner agent and web islands
+        run: pnpm -r --if-present build
+      - name: Runner image (built only when the runner changed)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: scripts/runner-image.sh
+
+      - name: Create or update Cloudflare resources
+        id: bootstrap
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: scripts/bootstrap.sh
+
+      - name: Deploy Worker and runner image
+        working-directory: apps/diffinery
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy -c wrangler.deploy.jsonc
+
+      - name: Wait for new containers to get the new image
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # The Live test follows this workflow, and its checks must run on the new image.
+        # This job runs on an old-image container, so finishing after the rollout's last step
+        # also shows that a deploy doesn't stop a running job.
+        run: scripts/wait-container-rollout.sh
+
+      - name: Worker secrets (generated on the first deploy; TURNSTILE_SECRET when missing)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: scripts/ensure-secrets.sh
+
+      - name: Finish Access setup on first deploy
+        if: steps.bootstrap.outputs.access_team == ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          scripts/bootstrap.sh
+          cd apps/diffinery && pnpm exec wrangler deploy -c wrangler.deploy.jsonc --containers-rollout none
+
+      - name: Smoke test
+        run: |
+          # A new custom domain can take a few minutes to get its certificate.
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' https://$DIFFINERY_DOMAIN/healthz) && [ "$code" = 200 ] && exit 0
+            sleep 10
+          done
+          echo "::error::https://$DIFFINERY_DOMAIN/healthz did not return 200 (last: $code). Check that the $DIFFINERY_DOMAIN DNS record is proxied (orange cloud)."; exit 1
+
+      - name: Check sign-in pages
+        run: |
+          set -u
+          page=$(curl -sS https://$DIFFINERY_DOMAIN/login)
+          grep -q "Sign in with a passkey" <<<"$page" || { echo "::error::/login is not the Diffinery sign-in page"; exit 1; }
+          echo "/login serves the passkey sign-in page"
+          loc=$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' https://$DIFFINERY_DOMAIN/auth/access)
+          echo "/auth/access -> $loc"
+          [[ "$loc" == 302\ https://*.cloudflareaccess.com/* ]] || echo "::warning::/auth/access is not behind Cloudflare Access yet, so email recovery and first admin sign-in will not work"
+          report=$(curl -sS -w '\n%{http_code}' https://$DIFFINERY_DOMAIN/security/report)
+          code=${report##*$'\n'}
+          if grep -q 'class="cf-turnstile"' <<<"$report"; then
+            echo "/security/report shows Turnstile to people who aren't signed in"
+          elif grep -q 'has no Turnstile configured' <<<"$report"; then
+            echo "::warning::/security/report has no Turnstile, so only people who are signed in can send security reports: the Worker lacks TURNSTILE_SITE_KEY or TURNSTILE_SECRET (see the bootstrap and Worker secrets steps)"
+          else
+            echo "::warning::/security/report has no Turnstile, so only people who are signed in can send security reports: it answered $code without the form"
+          fi
+          for kind in js css; do
+            asset=$(grep -o "/-/kumo/[a-z0-9]*\.$kind" <<<"$page" | head -1)
+            [ -n "$asset" ] || { echo "::error::/login does not load the Kumo $kind bundle"; exit 1; }
+            code=$(curl -sS -o /dev/null -w '%{http_code}' "https://$DIFFINERY_DOMAIN$asset")
+            [ "$code" = 200 ] || { echo "::error::$asset returned $code"; exit 1; }
+            echo "$asset -> 200"
+          done
+      - name: Check favicon and search metadata
+        run: |
+          set -u
+          for p in /favicon.ico /favicon.svg /favicon-48.png /apple-touch-icon.png /og-image.png /site.webmanifest /robots.txt /sitemap.xml; do
+            code=$(curl -sS -o /dev/null -w '%{http_code} %{content_type}' "https://$DIFFINERY_DOMAIN$p")
+            [[ "$code" == 200\ * ]] || { echo "::error::$p returned $code"; exit 1; }
+            echo "$p -> $code"
+          done
+          home=$(curl -sS https://$DIFFINERY_DOMAIN/)
+          for tag in 'rel="icon" href="/favicon.ico"' 'property="og:image"' 'rel="canonical"' 'application/ld+json'; do
+            grep -qF "$tag" <<<"$home" || { echo "::error::the home page is missing $tag"; exit 1; }
+          done
+          echo "the home page carries the favicon, canonical, Open Graph and structured data tags"
+          bm=$(curl -sS -D - -o /dev/null https://$DIFFINERY_DOMAIN/sitemap.xml | tr -d '\r' | sed -n 's/^x-d1-bookmark: //Ip')
+          [ -n "$bm" ] || { echo "::error::D1 queries don't run in a session (no x-d1-bookmark header)"; exit 1; }
+          echo "D1 sessions are on (bookmark $bm)"

@@ -1,0 +1,148 @@
+[
+  {
+    "title": "Get started",
+    "pages": [
+      "index",
+      "quickstart",
+      "concepts",
+      "migrate-from-github"
+    ]
+  },
+  {
+    "title": "Guides",
+    "pages": [
+      "guides",
+      "guides/move-github-actions-workflows",
+      "guides/faster-ci",
+      "guides/ai-agent-with-guardrails",
+      "guides/mirror-from-github"
+    ]
+  },
+  {
+    "title": "Connect AI apps",
+    "pages": [
+      "connect",
+      "connect/claude",
+      "connect/claude-code",
+      "connect/ci-status-in-claude",
+      "connect/codex",
+      "connect/cloud-agents",
+      "connect/other-apps",
+      "connect/how-sign-in-works"
+    ]
+  },
+  {
+    "title": "Accounts",
+    "pages": [
+      "accounts/passkeys-and-sign-in",
+      "accounts/invitations",
+      "accounts/early-access",
+      "accounts/organizations",
+      "accounts/permissions",
+      "accounts/tokens",
+      "accounts/cli-sign-in",
+      "accounts/notifications",
+      "accounts/blocking-and-reporting",
+      "accounts/profile-and-preferences",
+      "accounts/account-data"
+    ]
+  },
+  {
+    "title": "Repositories",
+    "pages": [
+      "repositories/overview",
+      "repositories/git",
+      "repositories/clone-in-your-editor",
+      "repositories/clone-in-jetbrains-ides",
+      "repositories/git-lfs",
+      "repositories/browsing-code",
+      "repositories/branch-protection",
+      "repositories/webhooks",
+      "repositories/apps"
+    ]
+  },
+  {
+    "title": "Collaboration",
+    "pages": [
+      "collaboration/issues",
+      "collaboration/pull-requests",
+      "collaboration/merge-on-green",
+      "collaboration/merge-queue",
+      "collaboration/checks-and-statuses",
+      "collaboration/releases"
+    ]
+  },
+  {
+    "title": "Actions",
+    "pages": [
+      "actions/overview",
+      "actions/workflow-syntax",
+      "actions/events",
+      "actions/expressions",
+      "actions/runners",
+      "actions/docker",
+      "actions/reusable-workflows",
+      "actions/secrets-and-variables",
+      "actions/workflow-permissions",
+      "actions/environments",
+      "actions/deploy-to-cloudflare-workers",
+      "actions/oidc",
+      "actions/caching-and-artifacts",
+      "actions/compatibility"
+    ]
+  },
+  {
+    "title": "Packages",
+    "pages": [
+      "packages/container-registry"
+    ]
+  },
+  {
+    "title": "Agents and AI",
+    "pages": [
+      "agents/overview",
+      "agents/today",
+      "agents/tasks",
+      "agents/projects",
+      "agents/review",
+      "agents/mcp",
+      "agents/github-cli",
+      "agents/sandboxes",
+      "agents/terminal",
+      "agents/organizations",
+      "agents/docs-for-agents"
+    ]
+  },
+  {
+    "title": "Security",
+    "pages": [
+      "security/overview",
+      "security/push-protection",
+      "security/audit-log",
+      "security/disclosure"
+    ]
+  },
+  {
+    "title": "Administration",
+    "pages": [
+      "self-hosting",
+      "admin/site-administration",
+      "self-hosting/deploy",
+      "self-hosting/configuration",
+      "self-hosting/architecture",
+      "self-hosting/status-page"
+    ]
+  },
+  {
+    "title": "Reference",
+    "pages": [
+      "reference/rest-api",
+      "reference/graphql-api",
+      "api",
+      "reference/cli",
+      "reference/mcp-tools",
+      "reference/webhook-events",
+      "reference/limits"
+    ]
+  }
+]

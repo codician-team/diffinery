@@ -1,0 +1,14 @@
+Diffinery
+Copyright 2026 The Diffinery Authors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes software developed by third parties:
+
+- Phosphor Icons (https://phosphoricons.com), MIT License, Copyright (c) 2023
+  Phosphor Icons. Used for the web UI's icons (apps/diffinery/src/web/icons.ui.generated.ts).
+- Gradle Wrapper (https://gradle.org), Apache License 2.0, Copyright Gradle, Inc.
+  Used to build the JetBrains plugin (apps/jetbrains/gradle/wrapper).
+
+Dependencies installed through package managers keep their own licenses, listed in
+their packages.

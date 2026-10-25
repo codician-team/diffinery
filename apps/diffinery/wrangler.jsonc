@@ -1,0 +1,178 @@
+// Diffinery: one Worker, everything on Cloudflare.
+// `scripts/bootstrap.sh` creates the account resources and writes
+// wrangler.deploy.jsonc (this file plus real IDs) for CI deploys.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "diffinery",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  // A zone route, not a Custom Domain: diffinery.com already has DNS records, and a
+  // route runs the Worker in front of them as long as the record is proxied (orange cloud).
+  "routes": [{ "pattern": "diffinery.com/*", "zone_name": "diffinery.com" }],
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
+  // The deployed version's id and time: IndexNow checks the site's pages once per new version (src/web/indexnow.ts).
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
+  "upload_source_maps": true,
+  "limits": { "cpu_ms": 300000 },
+
+  "vars": {
+    "PUBLIC_URL": "https://diffinery.com",
+    "MAIL_FROM": "notifications@diffinery.com",
+    // Emails that become site administrators on first sign-in. Left empty here: the deploy takes the
+    // list from the BOOTSTRAP_ADMINS environment variable, else keeps the deployed Worker's (scripts/bootstrap-admins.sh).
+    "BOOTSTRAP_ADMINS": "",
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": ""
+  },
+
+  "d1_databases": [
+    { "binding": "DB", "database_name": "diffinery", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
+  ],
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "diffinery-data" }],
+  "queues": {
+    "producers": [
+      { "binding": "EVENTS", "queue": "diffinery-events" },
+      { "binding": "MAIL", "queue": "diffinery-mail" }
+    ],
+    "consumers": [
+      // 20 events per batch: each makes D1 queries (webhooks, notifications, audit), and one consumer
+      // invocation may make at most 1,000.
+      { "queue": "diffinery-events", "max_batch_size": 20, "max_batch_timeout": 2, "max_retries": 8, "dead_letter_queue": "diffinery-events-dlq" },
+      { "queue": "diffinery-mail", "max_batch_size": 20, "max_batch_timeout": 2, "max_retries": 8, "dead_letter_queue": "diffinery-mail-dlq" },
+      // Bounces and complaints: subscribe this queue to Email Sending's events (docs/admin/site-administration.md).
+      { "queue": "diffinery-mail-events", "max_batch_size": 50, "max_batch_timeout": 5, "max_retries": 8 }
+    ]
+  },
+  // Cloudflare Email Sending (notifications, security alerts, invites). The sending
+  // domain is onboarded under Compute > Email Service > Email Sending (see scripts/email-sending.sh).
+  "send_email": [{ "name": "EMAIL" }],
+  // Request rate limits per minute (src/lib/rate-limit.ts; RATE_LIMITS there must match). Local
+  // development declares none, so nothing is limited there.
+  "ratelimits": [
+    { "name": "RL_AUTH", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } },
+    { "name": "RL_ANON", "namespace_id": "1002", "simple": { "limit": 300, "period": 60 } },
+    { "name": "RL_ACCOUNT", "namespace_id": "1003", "simple": { "limit": 2000, "period": 60 } },
+    { "name": "RL_CREATE", "namespace_id": "1004", "simple": { "limit": 60, "period": 60 } },
+    // Model requests through the proxy (/-/model/*), per paying person (agentic/proxy.ts MODEL_RATE_LIMIT).
+    { "name": "RL_MODEL", "namespace_id": "1005", "simple": { "limit": 600, "period": 60 } }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "REPO", "class_name": "RepoDO" },
+      { "name": "SCHEDULER", "class_name": "SchedulerDO" },
+      { "name": "COMPOSE", "class_name": "ComposeDO" },
+      { "name": "RUNNER", "class_name": "RunnerContainer" },
+      // Smaller hosted runners (src/runner/sizes.ts), the same runner on smaller instance types.
+      { "name": "RUNNER_MEDIUM", "class_name": "RunnerContainerMedium" },
+      { "name": "RUNNER_SMALL", "class_name": "RunnerContainerSmall" },
+      { "name": "RUNNER_TINY", "class_name": "RunnerContainerTiny" },
+      { "name": "SANDBOX", "class_name": "SandboxContainer" },
+      { "name": "IMPORTER", "class_name": "ImportContainer" },
+      { "name": "PROJECT", "class_name": "ProjectDO" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["RepoDO", "RunnerContainer", "SandboxContainer"] },
+    { "tag": "v2", "new_sqlite_classes": ["ImportContainer"] },
+    // Agent tasks, one Durable Object per repository (agentic/ProjectDO.ts).
+    { "tag": "v3", "new_sqlite_classes": ["ProjectDO"] },
+    // Workflow schedules (scheduler.ts).
+    { "tag": "v4", "new_sqlite_classes": ["SchedulerDO"] },
+    // Smaller hosted runner sizes (src/runner/sizes.ts).
+    { "tag": "v5", "new_sqlite_classes": ["RunnerContainerMedium", "RunnerContainerSmall", "RunnerContainerTiny"] },
+    // Joining large uploads' blocks, a step per object (compose.ts).
+    { "tag": "v6", "new_sqlite_classes": ["ComposeDO"] }
+  ],
+  "workflows": [
+    { "name": "diffinery-run", "binding": "RUN_WORKFLOW", "class_name": "RunWorkflow" },
+    { "name": "diffinery-import", "binding": "IMPORT_WORKFLOW", "class_name": "ImportWorkflow" },
+    // Account exports and deletions (src/accounts/workflow.ts).
+    { "name": "diffinery-account", "binding": "ACCOUNT_WORKFLOW", "class_name": "AccountWorkflow" }
+  ],
+  // A deploy that changes the image rolls the running containers: once a container has been up
+  // longer than rollout_active_grace_period seconds, it gets SIGTERM and is killed 15 minutes later.
+  // Runner and import containers are covered for their whole life (a job is capped at 6 hours, an
+  // import transfer too), so a deploy shouldn't cut one short; they pick up the new image next start.
+  // The platform doesn't guarantee it: a job that started on an old-image container during a rollout
+  // was replaced minutes in. So a runner on a replaced image is turned away before it runs anything
+  // (repo/actions.ts STALE_IMAGE_TRIES), and a job whose runner is replaced before its steps ran
+  // starts again on a new one (MAX_RUNNER_RESTARTS).
+  // The rollout is one step (rollout_step_percentage 100): with the default [10, 100], the first
+  // step still starts 90% of new containers on the old image, and the next step replaced such a
+  // job's container seconds after it started. The rollout's SIGTERM reaches every process in the
+  // container, so the job's steps died with it.
+  "containers": [
+    // standard-4 (4 vCPU, 12 GiB, 20 GB): standard-2 has 1 vCPU, on which typecheck and test steps took
+    // 2.3 to 2.6 times as long. Active CPU is what's billed, so a faster job costs about the same.
+    { "class_name": "RunnerContainer", "image": "../../containers/runner/Dockerfile", "image_build_context": "../../containers/runner", "instance_type": "standard-4", "max_instances": 100, "rollout_active_grace_period": 23400, "rollout_step_percentage": 100 },
+    // Smaller sizes for jobs that use little of a large runner (src/runner/sizes.ts): Cloudflare bills a container's
+    // memory and disk as provisioned, used or not, so a job that waits on the network costs a large runner's memory.
+    // A job gets one when runs-on asks for it, or when its own earlier runs show it fits with room to spare.
+    { "class_name": "RunnerContainerMedium", "image": "../../containers/runner/Dockerfile", "image_build_context": "../../containers/runner", "instance_type": "standard-3", "max_instances": 100, "rollout_active_grace_period": 23400, "rollout_step_percentage": 100 },
+    { "class_name": "RunnerContainerSmall", "image": "../../containers/runner/Dockerfile", "image_build_context": "../../containers/runner", "instance_type": "standard-1", "max_instances": 100, "rollout_active_grace_period": 23400, "rollout_step_percentage": 100 },
+    { "class_name": "RunnerContainerTiny", "image": "../../containers/runner/Dockerfile", "image_build_context": "../../containers/runner", "instance_type": "basic", "max_instances": 100, "rollout_active_grace_period": 23400, "rollout_step_percentage": 100 },
+    { "class_name": "SandboxContainer", "image": "../../containers/runner/Dockerfile", "image_build_context": "../../containers/runner", "instance_type": "standard-1", "max_instances": 50, "rollout_active_grace_period": 3600, "rollout_step_percentage": 100 },
+    // GitHub imports: a mirror clone of a large repository needs disk and memory.
+    { "class_name": "ImportContainer", "image": "../../containers/runner/Dockerfile", "image_build_context": "../../containers/runner", "instance_type": "standard-4", "max_instances": 20, "rollout_active_grace_period": 25200, "rollout_step_percentage": 100 }
+  ],
+  // Housekeeping, and a check that the workflow scheduler's alarm is set (src/scheduler.ts).
+  "triggers": { "crons": ["*/5 * * * *"] },
+
+  "env": {
+    // Local development and end-to-end tests: no Access, a fixed dev identity, no containers.
+    "dev": {
+      "routes": [],
+      "workers_dev": true,
+      "vars": {
+        "PUBLIC_URL": "http://localhost:8787",
+        "MAIL_FROM": "notifications@diffinery.com",
+        "BOOTSTRAP_ADMINS": "dev@diffinery.local",
+        "ACCESS_TEAM_DOMAIN": "",
+        "ACCESS_AUD": "",
+        "DEV_AUTH": "dev@diffinery.local",
+        // Containers do not run under wrangler dev: an import agent started by hand (or by the e2e test) claims Git transfers.
+        "IMPORT_GIT_AGENT": "external"
+      },
+      "version_metadata": { "binding": "CF_VERSION_METADATA" },
+      "d1_databases": [{ "binding": "DB", "database_name": "diffinery-dev", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }],
+      "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "diffinery-data-dev" }],
+      "queues": {
+        "producers": [
+          { "binding": "EVENTS", "queue": "diffinery-events-dev" },
+          { "binding": "MAIL", "queue": "diffinery-mail-dev" }
+        ],
+        "consumers": [
+          { "queue": "diffinery-events-dev", "max_batch_size": 50, "max_batch_timeout": 1 },
+          { "queue": "diffinery-mail-dev", "max_batch_size": 20, "max_batch_timeout": 1 },
+          { "queue": "diffinery-mail-events-dev", "max_batch_size": 50, "max_batch_timeout": 1 }
+        ]
+      },
+      // Local email: Miniflare captures sent messages instead of delivering them.
+      "send_email": [{ "name": "EMAIL" }],
+      "durable_objects": {
+        "bindings": [
+          { "name": "REPO", "class_name": "RepoDO" },
+          { "name": "SCHEDULER", "class_name": "SchedulerDO" },
+          { "name": "COMPOSE", "class_name": "ComposeDO" },
+          { "name": "RUNNER", "class_name": "RunnerContainer" },
+          { "name": "RUNNER_MEDIUM", "class_name": "RunnerContainerMedium" },
+          { "name": "RUNNER_SMALL", "class_name": "RunnerContainerSmall" },
+          { "name": "RUNNER_TINY", "class_name": "RunnerContainerTiny" },
+          // Sandboxes run in an `agent.mjs --sandbox-pool` process (SANDBOX_POOL_URL), not containers.
+          { "name": "SANDBOX", "class_name": "SandboxPoolDO" },
+          { "name": "IMPORTER", "class_name": "ImportContainer" },
+          { "name": "PROJECT", "class_name": "ProjectDO" }
+        ]
+      },
+      "workflows": [
+        { "name": "diffinery-run-dev", "binding": "RUN_WORKFLOW", "class_name": "RunWorkflow" },
+        { "name": "diffinery-import-dev", "binding": "IMPORT_WORKFLOW", "class_name": "ImportWorkflow" },
+        { "name": "diffinery-account-dev", "binding": "ACCOUNT_WORKFLOW", "class_name": "AccountWorkflow" }
+      ],
+      "triggers": { "crons": [] },
+      "containers": []
+    }
+  }
+}

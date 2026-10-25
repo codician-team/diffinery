@@ -1,0 +1,135 @@
+{
+  "name": "@diffinery/vscode",
+  "displayName": "Diffinery",
+  "description": "Clone, publish and push Diffinery repositories from VS Code, Cursor, Windsurf and other editors built on VS Code.",
+  "version": "0.1.1",
+  "publisher": "codician",
+  "private": true,
+  "license": "Apache-2.0",
+  "homepage": "https://diffinery.com/docs/repositories/clone-in-your-editor",
+  "repository": {
+    "type": "git",
+    "url": "https://diffinery.com/codician/diffinery.git"
+  },
+  "bugs": {
+    "url": "https://diffinery.com/codician/diffinery/issues"
+  },
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#18181b",
+    "theme": "dark"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "keywords": [
+    "diffinery",
+    "git",
+    "clone",
+    "remote",
+    "scm"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "extensionDependencies": [
+    "vscode.git",
+    "vscode.git-base"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onAuthenticationRequest:diffinery",
+    "onUri"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": false,
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
+  "contributes": {
+    "authentication": [
+      {
+        "id": "diffinery",
+        "label": "Diffinery"
+      }
+    ],
+    "icons": {
+      "diffinery-logo": {
+        "description": "Diffinery",
+        "default": {
+          "fontPath": "./media/diffinery-icons.woff",
+          "fontCharacter": "\\E001"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "diffinery.clone",
+        "title": "Clone Repository",
+        "category": "Diffinery",
+        "icon": "$(diffinery-logo)"
+      },
+      {
+        "command": "diffinery.signIn",
+        "title": "Sign In",
+        "category": "Diffinery"
+      },
+      {
+        "command": "diffinery.signInWithToken",
+        "title": "Sign In with an Access Token",
+        "category": "Diffinery"
+      },
+      {
+        "command": "diffinery.signOut",
+        "title": "Sign Out",
+        "category": "Diffinery"
+      },
+      {
+        "command": "diffinery.checkForUpdates",
+        "title": "Check for Extension Updates",
+        "category": "Diffinery"
+      }
+    ],
+    "configuration": {
+      "title": "Diffinery",
+      "properties": {
+        "diffinery.serverUrl": {
+          "type": "string",
+          "default": "https://diffinery.com",
+          "scope": "application",
+          "markdownDescription": "The Diffinery server to sign in to. Change it only for a self-hosted Diffinery."
+        },
+        "diffinery.gitAuthentication": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "markdownDescription": "Answer Git's requests for a password for the Diffinery server with your signed-in account, so clone, pull and push just work."
+        },
+        "diffinery.checkForUpdates": {
+          "type": "boolean",
+          "default": true,
+          "scope": "application",
+          "markdownDescription": "Check once a day whether the Diffinery server offers a newer version of this extension, and offer to install it."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "package": "node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "1.85.0",
+    "esbuild": "0.25.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  }
+}

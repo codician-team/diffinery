@@ -1,0 +1,43 @@
+<idea-plugin>
+  <id>com.diffinery</id>
+  <name>Diffinery</name>
+  <vendor url="https://diffinery.com">Diffinery</vendor>
+  <description><![CDATA[
+    <p>Work with <a href="https://diffinery.com">Diffinery</a> repositories in IntelliJ IDEA, PyCharm, WebStorm,
+    GoLand and the other JetBrains IDEs, as you do with GitHub repositories.</p>
+    <ul>
+      <li><b>Clone from Diffinery.</b> <b>Get from Version Control</b> lists <b>Diffinery</b> next to GitHub: your
+      repositories and your organizations', with search, or paste <code>owner/name</code>.</li>
+      <li><b>Sign in with your passkey.</b> The IDE opens diffinery.com in your browser, you approve the connection,
+      and you're back in the IDE. Nothing to copy.</li>
+      <li><b>Push and pull without passwords.</b> When Git asks for a password for Diffinery, the plugin answers with
+      your signed-in account, and renews its token before it runs out.</li>
+      <li><b>Share Project on Diffinery.</b> Publish a local Git repository as a new Diffinery repository.</li>
+    </ul>
+    <p>Guide: <a href="https://diffinery.com/docs/repositories/clone-in-jetbrains-ides">Clone in JetBrains IDEs</a>.</p>
+  ]]></description>
+
+  <depends>com.intellij.modules.platform</depends>
+  <depends>com.intellij.modules.vcs</depends>
+  <depends>Git4Idea</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <openapi.vcs.ui.cloneDialog.VcsCloneDialogExtension implementation="com.diffinery.jetbrains.CloneExtension"/>
+    <applicationConfigurable parentId="project.propVCSSupport.Mappings" instance="com.diffinery.jetbrains.SettingsPage" id="com.diffinery.settings" displayName="Diffinery"/>
+    <notificationGroup id="Diffinery" displayType="BALLOON"/>
+  </extensions>
+
+  <extensions defaultExtensionNs="Git4Idea">
+    <GitHttpAuthDataProvider implementation="com.diffinery.jetbrains.GitAuth"/>
+  </extensions>
+
+  <actions>
+    <action id="Diffinery.Clone" class="com.diffinery.jetbrains.CloneAction" text="Clone from Diffinery…" description="Clone one of your Diffinery repositories" icon="/icons/diffinery.svg">
+      <add-to-group group-id="Git.MainMenu" anchor="last"/>
+    </action>
+    <action id="Diffinery.Share" class="com.diffinery.jetbrains.ShareAction" text="Share Project on Diffinery…" description="Create a Diffinery repository for this project and push it" icon="/icons/diffinery.svg">
+      <add-to-group group-id="Vcs.Import" anchor="last"/>
+      <add-to-group group-id="Git.MainMenu" anchor="last"/>
+    </action>
+  </actions>
+</idea-plugin>

@@ -1,0 +1,219 @@
+#!/bin/bash
+# Hosted Diffinery runners: starts the Docker daemon the first time anything needs
+# it (a step running `docker`, job containers, services, Docker actions), then runs
+# the real CLI. The daemon runs in its own session so step cleanup leaves it alone.
+#
+# The daemon reaches the Diffinery container registry through the runner's registry
+# relay (agent.mjs --registry-relay), which splits image layers into chunks under
+# Cloudflare's 100 MB request limit. BuildKit builders that `docker buildx create`
+# starts (docker/setup-buildx-action) are set up here too, see below.
+real=/usr/bin/docker
+ready=/run/diffinery-dockerd.ready
+state=/run/diffinery
+relay_port=3129
+sys_path=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# The Diffinery host this runner reports to, when it is reached over HTTPS.
+registry_host() {
+  local url=${DIFFINERY_API_URL:-}
+  [[ "$url" == https://* ]] || return 1
+  url=${url#https://}
+  echo "${url%%/*}"
+}
+
+# Starts the relay without waiting for it: dockerd starts alongside it, since the daemon only
+# reaches the relay once it pulls or pushes. relay_up then waits for it.
+start_relay() {
+  local host=$1
+  mkdir -p "$state" "/etc/docker/certs.d/$host" || return 1
+  # A certificate for the Diffinery host that only this daemon (and its builders) trust.
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 30 -subj "/CN=$host" \
+    -addext "subjectAltName=DNS:$host" -keyout "$state/relay.key" -out "$state/relay.crt" >/dev/null 2>&1 || return 1
+  cp "$state/relay.crt" "/etc/docker/certs.d/$host/ca.crt"
+  printf '[registry."%s"]\n  ca = ["%s"]\n' "$host" "$state/relay.crt" >"$state/buildkitd.toml"
+  # Under web-only egress the relay's own HTTPS needs the egress CA (src/egress.ts).
+  env -i PATH="$sys_path" ${NODE_EXTRA_CA_CERTS:+"NODE_EXTRA_CA_CERTS=$NODE_EXTRA_CA_CERTS"} DIFFINERY_RELAY_HOST="$host" DIFFINERY_RELAY_UPSTREAM="https://$host" DIFFINERY_RELAY_PORT="$relay_port" \
+    DIFFINERY_RELAY_CERT="$state/relay.crt" DIFFINERY_RELAY_KEY="$state/relay.key" \
+    setsid -f node /opt/diffinery/agent.mjs --registry-relay >/var/log/diffinery-relay.log 2>&1 </dev/null 9>&-
+}
+
+# Waits up to 20 s for the relay to listen.
+relay_up() {
+  for _ in $(seq 1 400); do
+    if (exec 3<>"/dev/tcp/127.0.0.1/$relay_port") 2>/dev/null; then
+      echo "$1" >"$state/relay.host"
+      return 0
+    fi
+    sleep 0.05
+  done
+  return 1
+}
+
+# Whether process $1 is still running (an exited process nobody has reaped yet is not).
+running() {
+  local stat
+  stat=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
+  stat=${stat##*) }
+  [ "${stat%% *}" != Z ]
+}
+
+# Starts dockerd in its own session, noting its pid. The daemons must not inherit the lock (fd 9):
+# they would hold it for good, and a second docker command that arrives while this one is still
+# starting the daemon would wait forever.
+start_dockerd() {
+  mkdir -p "$state"
+  env -i PATH="$sys_path" "$@" setsid -f bash -c 'echo $$ >"$1"; exec dockerd' _ "$state/dockerd.pid" >/var/log/dockerd.log 2>&1 </dev/null 9>&-
+}
+
+if [ ! -e "$ready" ] && [ -z "${DOCKER_HOST:-}" ] && [ "$(id -u)" = 0 ]; then
+  exec 9>/run/diffinery-dockerd.lock
+  # Starting the daemon takes at most about a minute and a half (the relay and dockerd together,
+  # and dockerd once more if the relay fails), so a command that waits longer for another one to
+  # start it gives up rather than hang the step.
+  if ! flock -w 150 9 && [ ! -e "$ready" ]; then
+    echo "The Docker daemon did not start: another docker command has been starting it for over 2 minutes." >&2
+    tail -n 20 /var/log/dockerd.log >&2 2>/dev/null
+    exit 1
+  fi
+  if [ ! -e "$ready" ]; then
+    if ! "$real" version >/dev/null 2>&1; then
+      echo "Starting the Docker daemon" >&2
+      proxy=()
+      relay=""
+      if host=$(registry_host) && start_relay "$host"; then
+        relay=$host
+        proxy=(HTTPS_PROXY="http://127.0.0.1:$relay_port")
+      fi
+      start_dockerd "${proxy[@]}"
+      if [ -n "${host:-}" ] && { [ -z "$relay" ] || ! relay_up "$relay"; }; then
+        echo "The registry relay did not start, so image layers over 100 MB can't be pushed to $host:" >&2
+        tail -n 5 /var/log/diffinery-relay.log >&2 2>/dev/null
+        if [ -n "$relay" ]; then
+          # The daemon was started with the relay as its proxy: start it again without one.
+          pid=$(cat "$state/dockerd.pid" 2>/dev/null)
+          if [ -n "$pid" ] && kill "$pid" 2>/dev/null; then
+            for _ in $(seq 1 300); do running "$pid" || break; sleep 0.05; done
+            kill -9 "$pid" 2>/dev/null
+          fi
+          start_dockerd
+        fi
+      fi
+      for _ in $(seq 1 600); do "$real" version >/dev/null 2>&1 && break; sleep 0.1; done
+      "$real" version >/dev/null 2>&1 || { echo "The Docker daemon did not start:" >&2; tail -n 20 /var/log/dockerd.log >&2; exit 1; }
+    fi
+    touch "$ready"
+  fi
+  exec 9>&-
+fi
+
+# BuildKit builders. The docker-container driver talks to its BuildKit container through
+# `docker exec`, which can't join that container's cgroup inside a Cloudflare Container.
+# So `docker buildx create` (docker-container driver, as docker/setup-buildx-action runs it)
+# starts the BuildKit container itself, on the host network with its socket on the host,
+# and registers it as a remote builder. When the registry relay runs, BuildKit uses it as
+# its HTTPS proxy and trusts it for the Diffinery host. `docker buildx rm` removes it.
+buildkit_dir=/run/diffinery-buildkit
+
+buildx_create() {
+  local name="" driver=docker-container image=moby/buildkit:buildx-stable-1 cfg="" use=0 bootstrap=0
+  local -a flags=() env=() keep=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --name) name=${2:-}; shift ;;
+      --name=*) name=${1#--name=} ;;
+      --driver) driver=${2:-}; shift ;;
+      --driver=*) driver=${1#--driver=} ;;
+      --driver-opt | --driver-opt=*)
+        local opt
+        if [ "$1" = --driver-opt ]; then opt=${2:-}; shift; else opt=${1#--driver-opt=}; fi
+        local o
+        IFS=, read -ra o <<<"$opt"
+        for o in "${o[@]}"; do
+          case "$o" in
+            image=*) image=${o#image=} ;;
+            env.*=*) o=${o#env.}; env+=(-e "$o") ;;
+            network=* | cgroup-parent=* | restart-policy=* | memory=* | memory-swap=* | cpu-*=* | default-load=* | provenance-add-gha=*) ;;
+            *) return 2 ;;
+          esac
+        done
+        ;;
+      --buildkitd-flags) read -ra flags <<<"${2:-}"; shift ;;
+      --buildkitd-flags=*) read -ra flags <<<"${1#--buildkitd-flags=}" ;;
+      --buildkitd-config | --config) cfg=${2:-}; shift ;;
+      --buildkitd-config=* | --config=*) cfg=${1#*=} ;;
+      --use) use=1 ;;
+      --bootstrap) bootstrap=1 ;;
+      --platform) keep+=("$1" "${2:-}"); shift ;;
+      --platform=*) keep+=("$1") ;;
+      --node | --node=*) [ "$1" = --node ] && shift ;;
+      # Appending nodes, endpoints and anything else: leave it to buildx.
+      *) return 2 ;;
+    esac
+    shift
+  done
+  [ "$driver" = docker-container ] || return 2
+  [ -n "$name" ] || name="builder-$(cat /proc/sys/kernel/random/uuid)"
+  local dir="$buildkit_dir/$name" box="buildx_buildkit_${name}0"
+  mkdir -p "$dir" "$state"
+  local -a args=(--config /etc/buildkit/buildkitd.toml)
+  : >"$dir/buildkitd.toml"
+  [ -n "$cfg" ] && cat "$cfg" >>"$dir/buildkitd.toml"
+  if [ -s "$state/relay.host" ]; then
+    local host
+    host=$(cat "$state/relay.host")
+    if ! grep -qF "registry.\"$host\"" "$dir/buildkitd.toml"; then
+      { echo; cat "$state/buildkitd.toml"; } >>"$dir/buildkitd.toml"
+    fi
+    env+=(-e "HTTPS_PROXY=http://127.0.0.1:$relay_port" -e "https_proxy=http://127.0.0.1:$relay_port")
+  fi
+  "$real" rm -f "$box" >/dev/null 2>&1
+  "$real" run -d --name "$box" --label "diffinery.buildkit=$name" --privileged --network host \
+    -v "$dir:/run/buildkit" -v "$dir/buildkitd.toml:/etc/buildkit/buildkitd.toml:ro" -v "$state:$state:ro" \
+    -v "${box}_state:/var/lib/buildkit" "${env[@]}" "$image" "${args[@]}" "${flags[@]}" >/dev/null || return 1
+  for _ in $(seq 1 120); do
+    [ -S "$dir/buildkitd.sock" ] && break
+    if [ "$("$real" inspect -f '{{.State.Running}}' "$box" 2>/dev/null)" != true ]; then
+      echo "BuildKit did not start:" >&2
+      "$real" logs "$box" 2>&1 | tail -n 20 >&2
+      return 1
+    fi
+    sleep 0.25
+  done
+  local -a create=(buildx create --name "$name" --driver remote "${keep[@]}")
+  [ "$use" = 1 ] && create+=(--use)
+  [ "$bootstrap" = 1 ] && create+=(--bootstrap)
+  exec "$real" "${create[@]}" "unix://$dir/buildkitd.sock"
+}
+
+if [ "${1:-}" = buildx ] && [ "${2:-}" = create ] && [ -z "${DOCKER_HOST:-}" ] && [ "$(id -u)" = 0 ]; then
+  buildx_create "${@:3}"
+  [ $? = 2 ] || exit 1
+fi
+
+# docker buildx rm: also remove the BuildKit containers buildx_create started.
+if [ "${1:-}" = buildx ] && [ "${2:-}" = rm ] && [ -d "$buildkit_dir" ]; then
+  "$real" "$@"
+  status=$?
+  for arg in "${@:3}"; do
+    case "$arg" in -*) continue ;; esac
+    if [ -d "$buildkit_dir/$arg" ]; then
+      "$real" rm -f -v "buildx_buildkit_${arg}0" >/dev/null 2>&1
+      "$real" volume rm "buildx_buildkit_${arg}0_state" >/dev/null 2>&1
+      rm -rf "${buildkit_dir:?}/$arg"
+    fi
+  done
+  exit "$status"
+fi
+
+# docker push: when it fails, show what the registry relay saw (its error alone doesn't say).
+if { [ "${1:-}" = push ] || { [ "${1:-}" = image ] && [ "${2:-}" = push ]; }; } && [ -s "$state/relay.host" ]; then
+  "$real" "$@"
+  status=$?
+  if [ "$status" != 0 ]; then
+    echo "The registry relay's last lines:" >&2
+    tail -n 20 /var/log/diffinery-relay.log >&2 2>/dev/null
+  fi
+  exit "$status"
+fi
+
+exec "$real" "$@"

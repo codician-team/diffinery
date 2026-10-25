@@ -1,0 +1,11 @@
+{
+  "name": "@diffinery/workflow-yaml",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": { "yaml": "^2.9.1" },
+  "devDependencies": { "typescript": "^5.9.3", "vitest": "^4.1.0" }
+}

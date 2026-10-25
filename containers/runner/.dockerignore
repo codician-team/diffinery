@@ -1,0 +1,4 @@
+*
+!dist/agent.mjs
+!dist/image-tag
+!image/
