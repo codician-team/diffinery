@@ -12,7 +12,7 @@ Units: 1 KiB is 1,024 bytes, 1 MiB is 1,048,576 bytes, and 1 GB in the cache and
 | Limit | Value | Applies to |
 | --- | --- | --- |
 | Browser session lifetime | 30 days, extended to 30 days from now on each day the session is used, never past 90 days after sign-in | The session cookie you get after signing in with a passkey, a sign-in link or email recovery. An unused session ends 30 days after its last extension, and every session ends 90 days after its sign-in. |
-| Recent sign-in for sensitive actions | 2 hours | Adding or removing a passkey, creating a token, an agent or an agent token, changing your username, issuing a sign-in link, deleting, transferring or purging unreachable objects of a repository, and deleting an organization. An older browser sign-in gets **Confirm it's you** (`403` with a `confirm` URL over the API). See [Confirming it's you](/docs/security/overview#confirming-its-you). |
+| Recent sign-in for sensitive actions | 2 hours | Adding or removing a passkey, creating a token, an agent or an agent token, changing your username, issuing a sign-in link, deleting, transferring, purging unreachable objects of or deleting the closed pull requests of a repository, and deleting an organization. An older browser sign-in gets **Confirm it's you** (`403` with a `confirm` URL over the API). See [Confirming it's you](/docs/security/overview#confirming-its-you). |
 | Passkey browser prompt | 2 minutes | Time to complete the browser's passkey dialog when signing in or adding a passkey. |
 | Passkey sign-in attempt | 5 minutes | A sign-in or registration that started more than 5 minutes ago can't be completed; start again. |
 | Sign-in link lifetime | 24 hours, single use | Links a site administrator sends with **Sign-in link** in **Settings → People and invitations**. |
@@ -226,6 +226,7 @@ Quotas are per account, and the account they count against is the one that owns 
 | Unfinished runs per repository | 500 | Past it, a `workflow_dispatch` or `repository_dispatch` is refused with `429 this repository has 500 unfinished workflow runs, the most allowed; wait for some to finish`, and other events start no run. |
 | Self-hosted runners per repository | 100, each with at most 20 labels | Registering one more gets `429 this repository has 100 self-hosted runners, the most allowed; remove one first`. A registration token works for an hour. |
 | Purging unreachable objects | Repositories of up to 300,000 objects | A larger repository gets `422`; ask a site administrator. See [Removing a secret that was pushed](/docs/security/push-protection#removing-a-secret-that-was-pushed). |
+| Deleting closed pull requests | Repositories of up to 300,000 objects | It purges unreachable objects too, so the same limit applies. See [Start over with fresh history](/docs/repositories/overview#start-over-with-fresh-history). |
 | Jobs during a deploy | Not interrupted | A deploy doesn't replace the container of a running hosted job: it finishes on the version it started with. If the platform replaces a job's container anyway, the job keeps going for up to 13 minutes, then is cancelled. |
 | Service container health check | 15 minutes | How long a job waits for a `services:` container's health check to pass. |
 | Log line length | 16,384 characters | Longer lines are cut and end with `…`. |

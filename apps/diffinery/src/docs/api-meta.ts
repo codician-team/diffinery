@@ -420,6 +420,11 @@ export const API_DOCS: Record<string, OpDoc> = {
     description: "Permanently deletes every commit, tree and file that no branch, tag, pull request, merge queue entry or unfinished workflow run reaches, and empties the archive cache, so a secret force-pushed away can't be fetched by its SHA. Returns `{ objects, bytes }`. People only, not agents. Repositories of up to 300,000 objects (422 otherwise). From a browser session whose sign-in is more than 2 hours old: 403 `Confirm it's you: sign in with your passkey again to do this.` with a `confirm` URL. Audited as `repo.purge_unreachable`. See /docs/security/push-protection#removing-a-secret-that-was-pushed.",
     access: "admin",
   },
+  "POST /repos/{owner}/{repo}/diffinery/delete-closed-pulls": {
+    summary: "Delete closed pull requests",
+    description: "For starting over with fresh history after rewriting the branches. Permanently deletes every closed and merged pull request (not ones still in the merge queue) with its comments, reviews, review comments, timeline events, reactions and `refs/pull/{number}/*` refs, then purges unreachable objects as `POST .../diffinery/purge-unreachable` does. Issues, open pull requests, branches, tags and workflow runs stay; pull request numbers are not reused. Returns `{ pull_requests, objects, bytes }`. People only, not agents. Repositories of up to 300,000 objects (422 otherwise). From a browser session whose sign-in is more than 2 hours old: 403 `Confirm it's you: sign in with your passkey again to do this.` with a `confirm` URL. Audited as `repo.delete_closed_pulls`. See /docs/repositories/overview#start-over-with-fresh-history.",
+    access: "admin",
+  },
   "DELETE /repos/{owner}/{repo}": { summary: "Delete a repository", description: "People only; agents can't delete repositories. Works on an archived repository too. Audited. From a browser session whose sign-in is more than 2 hours old: 403 `Confirm it's you: sign in with your passkey again to do this.` with a `confirm` URL (see /docs/security/overview#confirming-its-you).", access: "admin", status: 204 },
   "POST /repos/{owner}/{repo}/transfer": {
     summary: "Transfer a repository",

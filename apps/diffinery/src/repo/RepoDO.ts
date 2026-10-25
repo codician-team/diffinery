@@ -396,52 +396,89 @@ export class RepoDO extends DurableObject<Env> {
    */
   async purgeUnreachable(caller: Caller): Promise<{ objects: number; bytes: number }> {
     if (caller.kind !== "user" || caller.permissions || !atLeast(caller.role, "admin")) throw new HttpError(403, "only repository admins can purge unreachable objects");
+    this.checkPurgeSize();
+    return this.ctx.blockConcurrencyWhile(() => this.purgeHeld());
+  }
+
+  /**
+   * Start over with fresh history: delete every closed and merged pull request (its conversation,
+   * reviews, review comments, events, reactions and refs/pull/<n>/* refs), then purge what nothing
+   * reaches any more. Without it, refs/pull keeps every old commit fetchable after the branches were
+   * rewritten. Issues, open pull requests (and those in the merge queue), branches, tags and workflow
+   * runs stay, and numbers are never reused. Runs with every other request held, like a purge.
+   */
+  async deleteClosedPullRequests(caller: Caller): Promise<{ pullRequests: number; objects: number; bytes: number }> {
+    if (caller.kind !== "user" || caller.permissions || !atLeast(caller.role, "admin")) throw new HttpError(403, "only repository admins can delete closed pull requests");
+    this.checkPurgeSize();
+    return this.ctx.blockConcurrencyWhile(async () => {
+      const numbers = this.sql
+        .exec<{ number: number }>("SELECT number FROM issues WHERE kind = 'pull' AND state = 'closed' AND number NOT IN (SELECT number FROM merge_queue) ORDER BY number")
+        .toArray()
+        .map((r) => r.number);
+      for (const n of numbers) this.forgetPull(n);
+      const purged = await this.purgeHeld();
+      return { pullRequests: numbers.length, ...purged };
+    });
+  }
+
+  /** Every row and ref a pull request left behind. */
+  private forgetPull(n: number): void {
+    const comments = this.sql.exec<{ id: string; review_id: string | null }>("SELECT id, review_id FROM comments WHERE number = ?", n).toArray();
+    for (const c of comments) this.sql.exec("DELETE FROM reactions WHERE subject = ?", `${c.review_id ? "review_comment" : "comment"}:${c.id}`);
+    this.sql.exec("DELETE FROM reactions WHERE subject = ?", `issue:${n}`);
+    for (const table of ["comments", "reviews", "issue_events", "issue_milestones", "pull_merge_state", "pulls", "issues"]) this.sql.exec(`DELETE FROM ${table} WHERE number = ?`, n);
+    this.sql.exec("DELETE FROM refs WHERE name >= ? AND name < ?", `refs/pull/${n}/`, `refs/pull/${n}/￿`);
+  }
+
+  private checkPurgeSize(): void {
     const total = this.store.count();
     if (total > MAX_PURGE_OBJECTS) throw new HttpError(422, `this repository has ${total} objects; purging works for up to ${MAX_PURGE_OBJECTS}. Ask a site administrator`);
-    return this.ctx.blockConcurrencyWhile(async () => {
-      const roots = [
-        ...this.sql.exec<{ oid: string }>("SELECT oid FROM refs").toArray().map((r) => r.oid),
-        ...this.sql.exec<{ oid: string }>("SELECT head_sha AS oid FROM pulls UNION SELECT head_sha FROM merge_queue UNION SELECT group_sha FROM merge_queue WHERE group_sha IS NOT NULL UNION SELECT parent_sha FROM merge_queue WHERE parent_sha IS NOT NULL").toArray().map((r) => r.oid),
-        ...this.sql.exec<{ oid: string }>("SELECT sha AS oid FROM runs WHERE status != 'completed' UNION SELECT head_sha FROM runs WHERE status != 'completed' AND head_sha IS NOT NULL").toArray().map((r) => r.oid),
-      ];
-      const keep = new Set<string>();
-      const stack = [...roots];
-      while (stack.length) {
-        const oid = stack.pop()!;
-        if (keep.has(oid)) continue;
-        const row = this.sql.exec<{ type: number }>("SELECT type FROM objects WHERE oid = ?", oid).toArray()[0];
-        if (!row) continue;
-        keep.add(oid);
-        const type = CODE_TYPES[row.type];
-        if (type === "blob") continue;
-        const obj = await this.store.read(oid);
-        if (!obj) continue;
-        if (type === "commit") {
-          const c = parseCommit(obj.content);
-          stack.push(c.tree, ...c.parents);
-        } else if (type === "tree") {
-          // A gitlink (160000) names a commit in another repository.
-          for (const e of parseTree(obj.content)) if (e.mode !== "160000") stack.push(e.oid);
-        } else if (type === "tag") {
-          const target = /^object ([0-9a-f]{40})/.exec(fromUtf8(obj.content))?.[1];
-          if (target) stack.push(target);
-        }
+  }
+
+  /** The purge itself; the caller holds every other request (blockConcurrencyWhile). */
+  private async purgeHeld(): Promise<{ objects: number; bytes: number }> {
+    const roots = [
+      ...this.sql.exec<{ oid: string }>("SELECT oid FROM refs").toArray().map((r) => r.oid),
+      ...this.sql.exec<{ oid: string }>("SELECT head_sha AS oid FROM pulls UNION SELECT head_sha FROM merge_queue UNION SELECT group_sha FROM merge_queue WHERE group_sha IS NOT NULL UNION SELECT parent_sha FROM merge_queue WHERE parent_sha IS NOT NULL").toArray().map((r) => r.oid),
+      ...this.sql.exec<{ oid: string }>("SELECT sha AS oid FROM runs WHERE status != 'completed' UNION SELECT head_sha FROM runs WHERE status != 'completed' AND head_sha IS NOT NULL").toArray().map((r) => r.oid),
+    ];
+    const keep = new Set<string>();
+    const stack = [...roots];
+    while (stack.length) {
+      const oid = stack.pop()!;
+      if (keep.has(oid)) continue;
+      const row = this.sql.exec<{ type: number }>("SELECT type FROM objects WHERE oid = ?", oid).toArray()[0];
+      if (!row) continue;
+      keep.add(oid);
+      const type = CODE_TYPES[row.type];
+      if (type === "blob") continue;
+      const obj = await this.store.read(oid);
+      if (!obj) continue;
+      if (type === "commit") {
+        const c = parseCommit(obj.content);
+        stack.push(c.tree, ...c.parents);
+      } else if (type === "tree") {
+        // A gitlink (160000) names a commit in another repository.
+        for (const e of parseTree(obj.content)) if (e.mode !== "160000") stack.push(e.oid);
+      } else if (type === "tag") {
+        const target = /^object ([0-9a-f]{40})/.exec(fromUtf8(obj.content))?.[1];
+        if (target) stack.push(target);
       }
-      const doomed = this.sql.exec<{ oid: string; r2: number; size: number }>("SELECT oid, r2, size FROM objects").toArray().filter((r) => !keep.has(r.oid));
-      for (let i = 0; i < doomed.length; i += 100) {
-        const chunk = doomed.slice(i, i + 100).map((r) => r.oid);
-        this.sql.exec(`DELETE FROM objects WHERE oid IN (${chunk.map(() => "?").join(",")})`, ...chunk);
-      }
-      this.store.forget();
-      this.store.recount();
-      this.storageChanged();
-      this.purgeEpoch++;
-      const r2 = doomed.filter((r) => r.r2).map((r) => this.store.r2KeyOf(r.oid));
-      for (let i = 0; i < r2.length; i += 1000) await this.env.BUCKET.delete(r2.slice(i, i + 1000));
-      // Cached zipballs and tarballs are rebuilt from what's left on the next download.
-      await deletePrefixes(this.env.BUCKET, [archivePrefix(this.meta.repoId)], 50);
-      return { objects: doomed.length, bytes: doomed.reduce((n, r) => n + r.size, 0) };
-    });
+    }
+    const doomed = this.sql.exec<{ oid: string; r2: number; size: number }>("SELECT oid, r2, size FROM objects").toArray().filter((r) => !keep.has(r.oid));
+    for (let i = 0; i < doomed.length; i += 100) {
+      const chunk = doomed.slice(i, i + 100).map((r) => r.oid);
+      this.sql.exec(`DELETE FROM objects WHERE oid IN (${chunk.map(() => "?").join(",")})`, ...chunk);
+    }
+    this.store.forget();
+    this.store.recount();
+    this.storageChanged();
+    this.purgeEpoch++;
+    const r2 = doomed.filter((r) => r.r2).map((r) => this.store.r2KeyOf(r.oid));
+    for (let i = 0; i < r2.length; i += 1000) await this.env.BUCKET.delete(r2.slice(i, i + 1000));
+    // Cached zipballs and tarballs are rebuilt from what's left on the next download.
+    await deletePrefixes(this.env.BUCKET, [archivePrefix(this.meta.repoId)], 50);
+    return { objects: doomed.length, bytes: doomed.reduce((n, r) => n + r.size, 0) };
   }
 
   // ---------------------------------------------------------------- storage (the owner's storage quota, lib/quotas.ts)

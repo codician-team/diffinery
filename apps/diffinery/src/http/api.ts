@@ -443,6 +443,14 @@ api.post("/repos/:owner/:repo/diffinery/purge-unreachable", async (c) => {
   auditRepo(c, caller, repo, "repo.purge_unreachable", { objects: r.objects, bytes: r.bytes, via: "api" });
   return c.json({ objects: r.objects, bytes: r.bytes });
 });
+// Start over with fresh history: delete every closed pull request and its refs/pull refs, then purge.
+api.post("/repos/:owner/:repo/diffinery/delete-closed-pulls", async (c) => {
+  const { stub, caller, repo } = await loadRepo(c, P(c).owner, P(c).repo, "admin");
+  requireRecentSignIn(c, `/${repo.owner_login}/${repo.name}/settings`);
+  const r = await stub.deleteClosedPullRequests(caller);
+  auditRepo(c, caller, repo, "repo.delete_closed_pulls", { pull_requests: r.pullRequests, objects: r.objects, bytes: r.bytes, via: "api" });
+  return c.json({ pull_requests: r.pullRequests, objects: r.objects, bytes: r.bytes });
+});
 api.delete("/repos/:owner/:repo", async (c) => {
   const { repo, caller } = await loadRepo(c, P(c).owner, P(c).repo, "admin", { whileArchived: true });
   if (caller.kind === "agent") throw new HttpError(403, "agents cannot delete repositories");

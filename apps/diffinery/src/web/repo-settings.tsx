@@ -384,6 +384,17 @@ async function generalPage(c: AppContext, l: Loaded) {
             <button class="btn danger">Purge</button>
           </Form>
           <hr />
+          <Form action={`${base}/settings/delete-closed-pulls`} t={t} match={full}>
+            <b>Delete closed pull requests</b>
+            <p class="muted small">
+              To start over with fresh history after rewriting the branches: permanently delete every closed and merged pull request with its conversation, reviews and refs, then purge the commits and files nothing else reaches. Issues, open pull requests, branches, tags and workflow runs stay. Type <b class="mono">{full}</b> to confirm.
+            </p>
+            <div class="row">
+              <input name="confirm" type="text" required autocomplete="off" style="max-width:320px" aria-label="Confirm repository name" />
+              <button class="btn danger">Delete closed pull requests</button>
+            </div>
+          </Form>
+          <hr />
           <Form action={`${base}/settings/delete`} t={t} match={full}>
             <b>Delete this repository</b>
             <p class="muted small">
@@ -1026,6 +1037,19 @@ export function registerRepoSettings(web: WebApp): void {
       const r = await l.stub.purgeUnreachable(l.caller);
       audit(c, l, "repo.purge_unreachable", { objects: r.objects, bytes: r.bytes });
       flash(c, "notice", r.objects ? `Purged ${r.objects} unreachable object${r.objects === 1 ? "" : "s"}.` : "Nothing to purge: every object is reachable.");
+    });
+  });
+
+  post(web, "/:owner/:repo/settings/delete-closed-pulls", async (c, f) => {
+    const l = await load(c);
+    requireAccount(c);
+    const full = `${l.repo.owner_login}/${l.repo.name}`;
+    return act(c, `${repoUrl(l.repo)}/settings`, async () => {
+      if (f.s("confirm").trim() !== full) throw new HttpError(422, `type ${full} to confirm`);
+      requireRecentSignIn(c, `${repoUrl(l.repo)}/settings`);
+      const r = await l.stub.deleteClosedPullRequests(l.caller);
+      audit(c, l, "repo.delete_closed_pulls", { pull_requests: r.pullRequests, objects: r.objects, bytes: r.bytes });
+      flash(c, "notice", r.pullRequests ? `Deleted ${r.pullRequests} closed pull request${r.pullRequests === 1 ? "" : "s"} and purged ${r.objects} unreachable object${r.objects === 1 ? "" : "s"}.` : `No closed pull requests to delete; purged ${r.objects} unreachable object${r.objects === 1 ? "" : "s"}.`);
     });
   });
 

@@ -151,7 +151,7 @@ The **General** page has these fields, saved together with **Save changes**:
 - **Default branch**: a list of the repository's branches (a text field while the repository is empty). The default branch is what the repository page shows, what clones check out, the base for new pull requests, and it is always protected from agents.
 - **Visibility**: **Private** or **Public**.
 
-Below it, the **Danger zone** has **Archive this repository**, **Transfer ownership** (see [Transfer a repository](#transfer-a-repository)), **Purge unreachable objects** (see [Removing a secret that was pushed](/docs/security/push-protection#removing-a-secret-that-was-pushed)) and **Delete this repository**.
+Below it, the **Danger zone** has **Archive this repository**, **Transfer ownership** (see [Transfer a repository](#transfer-a-repository)), **Purge unreachable objects** (see [Removing a secret that was pushed](/docs/security/push-protection#removing-a-secret-that-was-pushed)), **Delete closed pull requests** (see [Start over with fresh history](#start-over-with-fresh-history)) and **Delete this repository**.
 
 ### Secrets and variables
 
@@ -386,6 +386,18 @@ The redirect ends for good when a repository is created at the old owner and nam
 | `this token is limited to repositories and can't change account settings` (403) | Use an `admin` token that isn't restricted to repositories. |
 | `type acme/website to confirm the transfer` | The web confirmation box didn't match the repository's full name. |
 | `choose the new owner` | Pick a **New owner** in the web form. |
+
+## Start over with fresh history
+
+To restart a repository's history (for example a single new first commit before you open-source it) while keeping its issues, settings, secrets, environments and collaborators:
+
+1. **Back up the old history** if you want to keep it: `git clone --mirror` the repository, or `git bundle create backup.bundle --all` in a mirror clone, and keep the bundle somewhere private, such as a release asset in a private repository.
+2. **Rewrite the branches.** For a single first commit with today's files: `git commit-tree "$(git rev-parse 'main^{tree}')" -m "Initial commit"` gives the commit. A repository admin then force-pushes it to the default branch (`git push --force origin <sha>:main`); agents can't push to the default branch, and a branch protection rule with **Do not allow administrators to bypass these rules** refuses it until you turn that off. Delete or rewrite the other branches and tags.
+3. **Delete the old pull requests.** Pull requests keep their commits fetchable through `refs/pull/<number>/head` and `refs/pull/<number>/merge`, as on GitHub. Under **Settings → General → Danger zone**, click **Delete closed pull requests**, type the repository's full name and confirm. Or `POST /api/v3/repos/{owner}/{repo}/diffinery/delete-closed-pulls`, which answers `{"pull_requests": 42, "objects": 1830, "bytes": 5242880}`.
+
+**Delete closed pull requests** permanently deletes every closed and merged pull request with its comments, reviews, review comments, timeline events, reactions and `refs/pull` refs, then [purges unreachable objects](/docs/security/push-protection#removing-a-secret-that-was-pushed), so the old commits can't be fetched by their SHA any more. It can't be undone. Issues, open pull requests (close the ones you want gone first; pull requests in the merge queue stay), branches, tags and workflow runs stay, and new pull requests and issues keep counting from the last number, so old links answer 404 instead of pointing at something new.
+
+Only repository admins (people, not agents) can do it, with a sign-in from the last 2 hours in the browser (otherwise you're asked to [Confirm it's you](/docs/security/overview#confirming-its-you)). It works for repositories of up to 300,000 objects. It is recorded in the [audit log](/docs/security/audit-log) as `repo.delete_closed_pulls` with the number of pull requests and objects deleted.
 
 ## Delete a repository
 

@@ -2095,6 +2095,58 @@ test("security: an admin can purge objects a force-push left unreachable", async
   assert.equal((await ok("GET", `${R}/branches/main`)).commit.sha, g(["rev-parse", "HEAD"]));
 });
 
+test("security: an admin can start over by deleting closed pull requests and the commits only they keep", async () => {
+  const R = `/repos/${OWNER}/fresh-start`;
+  const first = await repoWithReadme("fresh-start");
+  await collaborator(R, "rita", "write", T.rita);
+  const merged = await pullFrom(R, first, "merged-change");
+  await ok("PUT", `${R}/pulls/${merged.number}/merge`, { merge_method: "squash" });
+  const closed = await pullFrom(R, first, "closed-change");
+  const comment = await ok("POST", `${R}/issues/${closed.number}/comments`, { body: "not this one" });
+  await status(201, "POST", `${R}/issues/comments/${comment.id}/reactions`, { content: "+1" });
+  await status(201, "POST", `${R}/issues/${closed.number}/reactions`, { content: "eyes" });
+  await ok("PATCH", `${R}/pulls/${closed.number}`, { state: "closed" });
+  const open = await pullFrom(R, first, "open-change");
+  const issue = await ok("POST", `${R}/issues`, { title: "Keep me" });
+
+  // Fresh history: main back to the first commit, the old branches gone. The closed pull
+  // requests still keep their commits fetchable, even through a purge.
+  await ok("PATCH", `${R}/git/refs/heads/main`, { sha: first, force: true });
+  await status(204, "DELETE", `${R}/git/refs/heads/merged-change`);
+  await status(204, "DELETE", `${R}/git/refs/heads/closed-change`);
+  await ok("POST", `${R}/diffinery/purge-unreachable`);
+  await ok("GET", `${R}/git/commits/${closed.head.sha}`);
+  await ok("GET", `${R}/git/commits/${merged.head.sha}`);
+
+  // People with the admin role only: not writers, not agents.
+  await status(403, "POST", `${R}/diffinery/delete-closed-pulls`, undefined, T.rita);
+  await status(403, "POST", `${R}/diffinery/delete-closed-pulls`, undefined, T.bot);
+  const r = await ok("POST", `${R}/diffinery/delete-closed-pulls`);
+  assert.equal(r.pull_requests, 2, JSON.stringify(r));
+  assert.ok(r.objects >= 4 && r.bytes > 0, JSON.stringify(r)); // both heads with their trees and files, and the squash commit
+  for (const n of [merged.number, closed.number]) {
+    await status(404, "GET", `${R}/pulls/${n}`);
+    await status(404, "GET", `${R}/issues/${n}`);
+  }
+  await status(404, "GET", `${R}/issues/comments/${comment.id}`);
+  for (const sha of [closed.head.sha, merged.head.sha]) await status(404, "GET", `${R}/git/commits/${sha}`);
+  const authed = `${base.replace("://", `://x:${T.olive}@`)}/${OWNER}/fresh-start.git`;
+  const refs = execFileSync("git", ["ls-remote", authed], { stdio: "pipe" }).toString();
+  assert.ok(!refs.includes(`refs/pull/${closed.number}/`) && !refs.includes(`refs/pull/${merged.number}/`), refs);
+  assert.ok(refs.includes(`refs/pull/${open.number}/head`), refs);
+
+  // The open pull request, the issue and main stay, and numbers aren't reused.
+  assert.deepEqual((await ok("GET", `${R}/pulls?state=all`)).map((p) => p.number), [open.number]);
+  await ok("GET", `${R}/git/commits/${open.head.sha}`);
+  assert.equal((await ok("GET", `${R}/issues/${issue.number}`)).title, "Keep me");
+  assert.equal((await ok("GET", `${R}/branches/main`)).commit.sha, first);
+  const next = await ok("POST", `${R}/issues`, { title: "Next" });
+  assert.equal(next.number, issue.number + 1);
+  await until("the audit entry", async () => auditLog("repo.delete_closed_pulls").some((e) => e.target === `${OWNER}/fresh-start` && JSON.parse(e.detail).pull_requests === 2));
+  // Nothing left to delete the second time.
+  assert.equal((await ok("POST", `${R}/diffinery/delete-closed-pulls`)).pull_requests, 0);
+});
+
 test("security: webhooks reach only public hosts other than Diffinery, at most 20 per repository", async () => {
   const R = `/repos/${OWNER}/hooked`;
   await repoWithReadme("hooked");
