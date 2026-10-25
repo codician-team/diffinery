@@ -23,13 +23,24 @@ Diffinery is built for the way software gets written with agents. Give an agent 
 
 If Diffinery is useful to you, a star on GitHub helps other people find it.
 
+## Screenshots
+
+| Today: what needs you, agents at work and what merged since yesterday | An agent's pull request, reviewed by another agent with an inline finding and a Fix it button |
+| --- | --- |
+| [![The Today page on Diffinery: counts of what needs you, agent pull requests open, merged since yesterday and failed runs, then the Needs you, Agents at work, Your agent tasks and Since yesterday sections](docs/images/today.png)](docs/images/today.png) | [![A pull request opened by an agent on Diffinery, with its intent, a link to the task that wrote it, and an agent review with an inline finding, a suggested fix and a Fix it button](docs/images/agent-pull-request.png)](docs/images/agent-pull-request.png) |
+| **An agent task: Claude Code turns a goal into a pull request in a sandbox** | **Merge on green: auto-merge on, checks passed, waiting for a person's approval** |
+| [![An agent task on Diffinery: the goal, Claude Code running as the acme-coder agent, its transcript with file edits and test runs, and the pull request it opened](docs/images/agent-task.png)](docs/images/agent-task.png) | [![The merge box of an agent's pull request on Diffinery, with its required checks passed and auto-merge on, waiting for a person's approval](docs/images/merge-on-green.png)](docs/images/merge-on-green.png) |
+| **A repository, with the clone URL and one-click open in VS Code, Cursor, Windsurf and IntelliJ IDEA** | **A workflow run from `.github/workflows/ci.yml`, with a matrix and `needs`** |
+| [![A repository's code page on Diffinery](docs/images/repository.png)](docs/images/repository.png) | [![A GitHub Actions–compatible workflow run on Diffinery](docs/images/actions-run.png)](docs/images/actions-run.png) |
+
+[![A job's live log on Diffinery, in dark mode](docs/images/job-logs-dark.png)](docs/images/job-logs-dark.png)
+
 ## Contents
 
 - [Who Diffinery is for](#who-diffinery-is-for)
 - [Why Diffinery](#why-diffinery)
 - [Built for AI coding agents](#built-for-ai-coding-agents)
 - [Plugins and integrations](#plugins-and-integrations)
-- [Screenshots](#screenshots)
 - [Features](#features)
 - [How it compares](#how-it-compares)
 - [Self-host on your own Cloudflare account](#self-host-on-your-own-cloudflare-account)
@@ -60,7 +71,7 @@ If Diffinery is useful to you, a star on GitHub helps other people find it.
 
 ## Built for AI coding agents
 
-Every agent feature is opt-in and sits on top of the Git and CI platform, so a team that uses none of them just has a forge. People bring their own model keys or subscriptions; Diffinery doesn't sell or include model access. The screenshots below are the real pages, taken from a local Diffinery with sample data by [`scripts/agent-screenshots.mjs`](apps/diffinery/scripts/agent-screenshots.mjs), which runs a real agent task, agent review and CI run.
+Every agent feature is opt-in and sits on top of the Git and CI platform, so a team that uses none of them just has a forge. People bring their own model keys or subscriptions; Diffinery doesn't sell or include model access. The [screenshots](#screenshots) are the real pages, taken from a local Diffinery with sample data by [`scripts/agent-screenshots.mjs`](apps/diffinery/scripts/agent-screenshots.mjs), which runs a real agent task, agent review and CI run.
 
 ### Agent accounts with guardrails
 
@@ -83,15 +94,11 @@ Give one of your agents a goal. Diffinery starts a sandbox as that agent with th
 
 To use your **Claude or ChatGPT subscription** instead of an API key, open a [terminal](https://diffinery.com/docs/agents/terminal): a shell in your browser with the repository checked out, where you sign in to Claude Code or Codex with your own plan and can hand it tasks.
 
-[![An agent task on Diffinery: the goal, Claude Code running as the acme-coder agent, its transcript with file edits and test runs, and the pull request it opened](docs/images/agent-task.png)](docs/images/agent-task.png)
-
 See [Agent tasks](https://diffinery.com/docs/agents/tasks) and [Terminals](https://diffinery.com/docs/agents/terminal).
 
 ### Agent review on every pull request
 
 One of your agents reviews pull requests for bugs, security issues and logic errors, the way Cursor's Bugbot does. It runs Claude Code, Codex or your own command in a read-only sandbox with the base branch's `REVIEW.md` rules, posts inline findings with suggested fixes, and reports an **Agent review** check that fails on a blocking finding. **Fix it** hands a finding to an agent task, and autofix can push the fix to the pull request's branch. Pull requests from authors without write access are never reviewed automatically, and one person's key pays for a repository's reviews.
-
-[![A pull request opened by an agent on Diffinery, with its intent, a link to the task that wrote it, and an agent review with an inline finding, a suggested fix and a Fix it button](docs/images/agent-pull-request.png)](docs/images/agent-pull-request.png)
 
 See [Agent review](https://diffinery.com/docs/agents/review).
 
@@ -99,15 +106,11 @@ See [Agent review](https://diffinery.com/docs/agents/review).
 
 **Today** is the first page after you sign in. It shows what needs you (agent pull requests waiting for a person, reviews you were asked for, your own blocked pull requests), what your agents are working on, your agent tasks, and what merged, shipped or failed since yesterday, across every repository you can see. Agents read the same view with the `today` MCP tool, and it can come to you as a morning email.
 
-[![The Today page on Diffinery: counts of what needs you, agent pull requests open, merged since yesterday and failed runs, then the Needs you, Agents at work, Your agent tasks and Since yesterday sections](docs/images/today.png)](docs/images/today.png)
-
 See [Today](https://diffinery.com/docs/agents/today).
 
 ### Merge on green
 
 Pick the checks that must pass in **Settings → Merge on green**, name the agents whose pull requests should land by themselves, and choose whether they wait for a person's approval. From then on a pull request merges the moment its checks pass and its rules are met, with nobody clicking Merge. Nothing is skipped: an agent's change to a workflow file still needs a person to merge it.
-
-[![The merge box of an agent's pull request on Diffinery, with its required checks passed and auto-merge on, waiting for a person's approval](docs/images/merge-on-green.png)](docs/images/merge-on-green.png)
 
 See [Merge on green automatically](https://diffinery.com/docs/collaboration/merge-on-green).
 
@@ -134,14 +137,6 @@ Agents trained on GitHub already know how to use Diffinery, and these bring the 
 | **JetBrains IDEs** | **Get from Version Control** with a passkey sign-in, in IntelliJ IDEA, PyCharm, WebStorm and the rest (2024.3 or later) | Plugin repository `https://diffinery.com/-/jetbrains/updatePlugins.xml` |
 
 The plugins' sources are in [`plugins/`](plugins), the extensions' in [`apps/vscode`](apps/vscode) and [`apps/jetbrains`](apps/jetbrains), and the CLI's in [`apps/cli`](apps/cli). Step-by-step guides for Claude, Claude Code, Codex, Cursor, VS Code and other apps are in [Connect AI apps](https://diffinery.com/docs/connect).
-
-## Screenshots
-
-| A repository, with the clone URL and one-click open in VS Code, Cursor, Windsurf and IntelliJ IDEA | A workflow run from `.github/workflows/ci.yml`, with a matrix and `needs` |
-| --- | --- |
-| [![A repository's code page on Diffinery](docs/images/repository.png)](docs/images/repository.png) | [![A GitHub Actions–compatible workflow run on Diffinery](docs/images/actions-run.png)](docs/images/actions-run.png) |
-
-[![A job's live log on Diffinery, in dark mode](docs/images/job-logs-dark.png)](docs/images/job-logs-dark.png)
 
 ## Features
 
