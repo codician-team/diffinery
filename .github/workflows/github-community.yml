@@ -1,0 +1,29 @@
+name: GitHub community setup
+
+# Sets up the GitHub mirror's community side as the account that owns MIRROR_TOKEN, so it
+# shows Codician rather than a person: labels, Discussions with the welcome post, and the
+# pinned roadmap issue (scripts/github-community.mjs). Only creates what is missing, so
+# running it again changes nothing. Run it by hand from the Actions tab.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only report what would change
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    name: Labels, welcome discussion and roadmap issue
+    if: ${{ github.server_url != 'https://github.com' && github.repository == 'codician/diffinery' }}
+    runs-on: ubuntu-latest
+    environment: github-mirror
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: node scripts/github-community.mjs ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
