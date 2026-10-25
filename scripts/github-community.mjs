@@ -162,8 +162,20 @@ async function roadmap() {
     report("Roadmap issue", "failed", why(e, "Issues: Read and write"));
     return;
   }
-  if (issue) report("Roadmap issue", "already there", issue.html_url);
-  else if (DRY) {
+  if (issue) {
+    report("Roadmap issue", "already there", issue.html_url);
+    // GitHub drops labels from a new issue when the token may not label, so add them later.
+    const missing = ["roadmap", "help wanted"].filter((l) => !issue.labels.some((x) => (x.name ?? x) === l));
+    if (missing.length && DRY) report("Roadmap issue labels", "would add", missing.join(", "));
+    else if (missing.length) {
+      try {
+        await rest("POST", `/repos/${REPO}/issues/${issue.number}/labels`, { labels: missing });
+        report("Roadmap issue labels", "added", missing.join(", "));
+      } catch (e) {
+        report("Roadmap issue labels", "failed", why(e, "Issues: Read and write"));
+      }
+    }
+  } else if (DRY) {
     report("Roadmap issue", "would open");
     return;
   } else {

@@ -39,21 +39,6 @@ Diffinery is an open-source (Apache-2.0) git forge with GitHub Actions compatibl
 This pull request was opened by an automated agent for the Codician team, which builds Diffinery.`,
   },
   {
-    id: "appcypher-mcp-servers",
-    repo: "appcypher/awesome-mcp-servers",
-    file: "README.md",
-    section: '## 🔄 <a name="version-control"></a>Version Control',
-    item: /^- /,
-    place: "end",
-    line: `- <img src="https://diffinery.com/favicon.svg" height="14"/> [Diffinery](${REPO}) - MCP server built into Diffinery, an open-source git forge on Cloudflare: files and commits, pull requests and reviews, issues, CI runs and job logs, sandboxes and agent tasks`,
-    title: "Add Diffinery to Version Control",
-    body: `Adds [Diffinery](${REPO}) at the bottom of **Version Control**.
-
-Diffinery is an open-source (Apache-2.0) git forge with GitHub Actions compatible CI that you deploy to your own Cloudflare account. Every instance serves an MCP server at \`/mcp\` with tools for files and commits, pull requests and reviews, issues, workflow runs and job logs, sandboxes and agent tasks. Docs: https://diffinery.com/docs/agents/mcp
-
-Opened by an automated agent for the Codician team, which builds Diffinery.`,
-  },
-  {
     id: "awesome-git",
     repo: "dictcp/awesome-git",
     file: "README.md",

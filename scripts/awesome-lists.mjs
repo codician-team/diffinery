@@ -108,6 +108,10 @@ async function suggest(entry, me) {
     return;
   }
   const upstream = await rest("GET", `/repos/${entry.repo}`);
+  if (upstream.archived) {
+    report(entry.id, "archived", "the list is read-only now, so drop it from awesome-lists/lists.mjs");
+    return;
+  }
   const base = upstream.default_branch;
 
   // A pull request from our fork, in any state: open means done, closed means the maintainers said no.
