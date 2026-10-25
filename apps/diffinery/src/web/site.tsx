@@ -250,6 +250,8 @@ function entities(o: string): object[] {
       isAccessibleForFree: true,
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free, open-source software. Your instance's Cloudflare usage is billed by Cloudflare." },
       softwareHelp: { "@type": "CreativeWork", url: `${o}/docs/self-hosting/deploy` },
+      installUrl: `${o}/docs/self-hosting/deploy`,
+      downloadUrl: `${SOURCE.repo}/releases`,
       publisher: { "@id": id.org },
       sameAs: [`${o}/docs`, SOURCE.repo, SOURCE.github],
     },

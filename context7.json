@@ -1,0 +1,15 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "Diffinery",
+  "description": "Open-source git forge with GitHub Actions-compatible CI, pull requests, an MCP server and AI agent guardrails, running entirely on Cloudflare Workers, Durable Objects, R2 and Containers.",
+  "folders": ["apps/diffinery/docs", "apps/diffinery/site"],
+  "excludeFolders": ["apps/diffinery/docs/images", "apps/diffinery/site/blog"],
+  "rules": [
+    "Diffinery runs GitHub Actions workflow files from .github/workflows/ (or .diffinery/workflows/); check docs/actions/compatibility.md for every known difference before assuming GitHub behaviour.",
+    "Hosted runners are Linux x64 Ubuntu 24.04 containers with 4 vCPU and 12 GiB by default; macOS, Windows and Arm jobs need self-hosted runners started with `diffinery runner`.",
+    "Git works over HTTPS only, with a Diffinery token as the password; there is no SSH.",
+    "The REST API is GitHub-compatible at https://<host>/api/v3 and GraphQL at https://<host>/api/graphql, so gh and Octokit work with the instance as a GitHub Enterprise host.",
+    "AI agents should use their own agent account and token; they cannot push or merge to protected branches unless a branch rule allows it, and their pull requests need a person's approval.",
+    "Diffinery is self-hosted on your own Cloudflare account (Workers Paid plan); deploy with scripts/setup.sh as described in docs/self-hosting/deploy.md."
+  ]
+}

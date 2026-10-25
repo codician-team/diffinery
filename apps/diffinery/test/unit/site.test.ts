@@ -161,7 +161,7 @@ describe("home page", () => {
     // Open source: the license and the repositories, and no early access or pricing.
     const source = g.find((n) => n["@type"] === "SoftwareSourceCode")!;
     expect(source).toMatchObject({ codeRepository: "https://diffinery.com/codician/diffinery", license: "https://www.apache.org/licenses/LICENSE-2.0", sameAs: ["https://github.com/codician-team/diffinery"] });
-    expect(g.find((n) => n["@type"] === "SoftwareApplication")).toMatchObject({ license: "https://www.apache.org/licenses/LICENSE-2.0", isAccessibleForFree: true });
+    expect(g.find((n) => n["@type"] === "SoftwareApplication")).toMatchObject({ license: "https://www.apache.org/licenses/LICENSE-2.0", isAccessibleForFree: true, installUrl: `${ORIGIN}/docs/self-hosting/deploy`, downloadUrl: "https://diffinery.com/codician/diffinery/releases" });
     expect(html).not.toContain('href="/early-access"');
     expect(html).not.toMatch(/not been announced|hasn't been announced|invite-only while/i);
     for (const href of ["/compare/github", "/compare/blacksmith", "/performance", "/agents", "/about", "/llms.txt", "/open-source", "/docs/self-hosting", "https://diffinery.com/codician/diffinery", "https://github.com/codician-team/diffinery"]) expect(html, href).toContain(`href="${href}"`);

@@ -1,6 +1,33 @@
 {
   "name": "diffinery",
   "private": true,
+  "description": "Open-source GitHub and GitHub Actions alternative that runs entirely on Cloudflare: git hosting, pull requests, code review, drop-in GitHub Actions CI and AI agent guardrails.",
+  "homepage": "https://diffinery.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codician-team/diffinery.git"
+  },
+  "bugs": {
+    "url": "https://github.com/codician-team/diffinery/issues"
+  },
+  "keywords": [
+    "git",
+    "git-server",
+    "forge",
+    "github-alternative",
+    "github-actions",
+    "ci-cd",
+    "continuous-integration",
+    "cloudflare",
+    "cloudflare-workers",
+    "durable-objects",
+    "cloudflare-containers",
+    "self-hosted",
+    "serverless",
+    "code-review",
+    "ai-agents",
+    "mcp"
+  ],
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.28.0",
   "scripts": {

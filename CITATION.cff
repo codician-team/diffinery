@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: "If you use or refer to Diffinery, please cite it as below."
+type: software
+title: "Diffinery"
+abstract: >-
+  Diffinery is an open-source git forge with GitHub Actions-compatible CI that runs
+  entirely on Cloudflare (Workers, Durable Objects, D1, R2, Queues, Workflows and
+  Containers). It hosts Git repositories, pull requests with reviews and a merge queue,
+  issues, releases and a container registry, runs existing .github/workflows files on
+  per-job containers, and gives AI coding agents accounts of their own with
+  server-enforced guardrails and a built-in MCP server.
+authors:
+  - name: "The Diffinery Authors"
+version: "0.1.0"
+date-released: "2026-10-25"
+license: Apache-2.0
+url: "https://diffinery.com"
+repository-code: "https://github.com/codician-team/diffinery"
+repository: "https://diffinery.com/codician/diffinery"
+keywords:
+  - git
+  - git-forge
+  - github-alternative
+  - github-actions
+  - continuous-integration
+  - ci-cd
+  - cloudflare-workers
+  - durable-objects
+  - cloudflare-containers
+  - self-hosted
+  - serverless
+  - code-review
+  - ai-agents
+  - mcp

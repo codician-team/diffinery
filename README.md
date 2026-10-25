@@ -1,21 +1,32 @@
 # Diffinery
 
-**An open-source, self-hostable git forge with GitHub Actions–compatible CI, built for teams of people and AI agents, running entirely on Cloudflare.**
+**The open-source GitHub and GitHub Actions alternative that runs entirely on Cloudflare.** Git hosting, pull requests, code review and drop-in GitHub Actions CI, built for teams of people and AI agents. Deploy it to your own Cloudflare account: no servers, no runner machines, nothing to patch.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Docs](https://img.shields.io/badge/docs-diffinery.com%2Fdocs-f38020.svg)](https://diffinery.com/docs)
-[![Runs on Cloudflare](https://img.shields.io/badge/runs%20on-Cloudflare%20Workers-f38020.svg)](https://diffinery.com/built-on-cloudflare)
+[![GitHub Actions compatible](https://img.shields.io/badge/GitHub%20Actions-compatible-2088ff.svg)](https://diffinery.com/docs/actions/compatibility)
+[![Runs on Cloudflare Workers](https://img.shields.io/badge/runs%20on-Cloudflare%20Workers-f38020.svg)](https://diffinery.com/built-on-cloudflare)
+[![Built-in MCP server](https://img.shields.io/badge/MCP-server%20built%20in-8a2be2.svg)](https://diffinery.com/docs/agents/mcp)
+[![Documentation](https://img.shields.io/badge/docs-diffinery.com%2Fdocs-f38020.svg)](https://diffinery.com/docs)
+[![Pull requests welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Diffinery hosts Git repositories, pull requests with reviews and a merge queue, issues, releases and a container registry, and runs your existing `.github/workflows/*.yml` files as they are. AI agents get accounts of their own, with guardrails the server enforces, and work through MCP, the REST API, git or the CLI. Everything runs on Cloudflare: Workers, Durable Objects, D1, R2, Queues, Workflows and Containers. There are no servers to run, and you can deploy your own instance to your own Cloudflare account.
+[Website](https://diffinery.com) · [Docs](https://diffinery.com/docs) · [Deploy your own](https://diffinery.com/docs/self-hosting/deploy) · [Compare](https://diffinery.com/compare) · [Performance](https://diffinery.com/performance) · [Roadmap](ROADMAP.md) · [llms.txt](https://diffinery.com/llms.txt)
 
-- **Website and public instance:** [diffinery.com](https://diffinery.com)
-- **Documentation:** [diffinery.com/docs](https://diffinery.com/docs) ([llms.txt](https://diffinery.com/llms.txt) for AI assistants)
-- **Source:** [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery), where development happens. [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery) is a mirror of it.
+[![A pull request on Diffinery opened by an AI agent, with its intent, a person's approval and four passing GitHub Actions–compatible checks](docs/images/pull-request.png)](docs/images/pull-request.png)
+
+Diffinery hosts Git repositories, pull requests with reviews and a merge queue, issues, releases and a container registry, and runs your existing `.github/workflows/*.yml` files as they are, marketplace actions included. AI coding agents such as Claude Code, Codex and Cursor get accounts of their own, with guardrails the server enforces, and work through a built-in MCP server, the GitHub-compatible REST and GraphQL APIs, git or the CLI. Everything runs on Cloudflare: Workers, Durable Objects, D1, R2, Queues, Workflows and Containers. It is free, open-source software under the Apache License 2.0, and you deploy your own instance to your own Cloudflare account and domain.
+
+- **Source:** [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery), where development, CI and deploys happen, mirrored to [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery).
+- **Documentation:** [diffinery.com/docs](https://diffinery.com/docs), also as Markdown and in [llms.txt](https://diffinery.com/llms.txt) and [llms-full.txt](https://diffinery.com/llms-full.txt) for AI assistants.
+
+If Diffinery is useful to you, a star on GitHub helps other people find it.
 
 ## Contents
 
+- [Who Diffinery is for](#who-diffinery-is-for)
 - [Why Diffinery](#why-diffinery)
+- [Screenshots](#screenshots)
 - [Features](#features)
+- [How it compares](#how-it-compares)
 - [Self-host on your own Cloudflare account](#self-host-on-your-own-cloudflare-account)
 - [How it runs on Cloudflare](#how-it-runs-on-cloudflare)
 - [Develop locally](#develop-locally)
@@ -23,6 +34,14 @@ Diffinery hosts Git repositories, pull requests with reviews and a merge queue, 
 - [What Diffinery doesn't do (yet)](#what-diffinery-doesnt-do-yet)
 - [FAQ](#faq)
 - [Contributing, security and license](#contributing-security-and-license)
+
+## Who Diffinery is for
+
+- **Teams looking for a GitHub Actions alternative** that keeps their workflow YAML: Diffinery reads `.github/workflows/` with the same syntax and runs marketplace actions, on runners with 4 vCPUs and 12 GiB by default.
+- **Teams that want a self-hosted GitHub alternative without running servers.** Like Gitea, Forgejo or GitLab, you run your own instance, but it deploys to Cloudflare's serverless platform instead of a VM or a Kubernetes cluster.
+- **Teams that want faster CI runners** than GitHub's standard 2-vCPU runner for private repositories, without paying a separate runner service such as Blacksmith or Depot.
+- **Teams working with AI coding agents** (Claude Code, Codex, Cursor and others) that should open pull requests a person approves, rather than push to `main`.
+- **Cloudflare developers** looking for a large, real-world application built on Durable Objects with SQLite, Containers, Workflows, Queues and R2.
 
 ## Why Diffinery
 
@@ -32,6 +51,14 @@ Diffinery hosts Git repositories, pull requests with reviews and a merge queue, 
 - **Built for AI agents, with a human in the loop.** Agents are first-class accounts owned by a person or an organization, with their own tokens and limits. They can't push or merge to protected branches unless a rule allows it, their pull requests need a human approval, and every commit they make records who they act for. Agent tasks run Claude Code, Codex or your own command in a sandbox and open a pull request.
 - **Secure by default.** Passkey sign-in with no passwords, invite-only accounts, branch protection, push protection that blocks leaked credentials, envelope-encrypted secrets, kill switches and an append-only audit log.
 - **Moving from GitHub is one step.** A server-side importer brings a repository or a whole organization over with its history, issues, pull requests, reviews and releases, and `gh`, Octokit, VS Code and JetBrains IDEs work against Diffinery.
+
+## Screenshots
+
+| A repository, with the clone URL and one-click open in VS Code, Cursor, Windsurf and IntelliJ IDEA | A workflow run from `.github/workflows/ci.yml`, with a matrix and `needs` |
+| --- | --- |
+| [![A repository's code page on Diffinery](docs/images/repository.png)](docs/images/repository.png) | [![A GitHub Actions–compatible workflow run on Diffinery](docs/images/actions-run.png)](docs/images/actions-run.png) |
+
+[![A job's live log on Diffinery, in dark mode](docs/images/job-logs-dark.png)](docs/images/job-logs-dark.png)
 
 ## Features
 
@@ -46,6 +73,24 @@ Diffinery hosts Git repositories, pull requests with reviews and a merge queue, 
 | API and tools | GitHub-compatible REST (`/api/v3`) and GraphQL (`/api/graphql`) APIs, webhooks, the `diffinery` CLI, `gh` support, VS Code and JetBrains plugins, a Claude Code and Codex plugin (in [`plugins/`](plugins)) | [REST API](https://diffinery.com/docs/reference/rest-api) |
 | Security | Passkeys (WebAuthn), branch protection, push protection, encrypted secrets, audit log, moderation, rate limits, quotas and kill switches | [Security overview](https://diffinery.com/docs/security/overview) |
 | Migration | Import from GitHub with history, issues, pull requests, reviews and releases, from the web, CLI, API or MCP | [Migrate from GitHub](https://diffinery.com/docs/migrate-from-github) |
+
+## How it compares
+
+Diffinery is a forge: it hosts your code and runs your CI. Here is how it sits next to the tools people usually compare it with. Facts about other products come from their own websites and documentation, checked in October 2026; each linked comparison cites its sources.
+
+| | Diffinery | GitHub + GitHub Actions | GitLab | Gitea / Forgejo | Runner services (Blacksmith, Depot) |
+| --- | --- | --- | --- | --- | --- |
+| What it is | Open-source forge with built-in CI | Hosted forge with built-in CI | Forge with built-in CI | Open-source self-hosted forges with built-in CI | Faster runners for GitHub Actions; your code stays on GitHub |
+| Who runs it | You, on your own Cloudflare account | GitHub (Enterprise Server: your servers) | GitLab, or you (self-managed) | You, on your own servers (or Gitea Cloud, Codeberg) | The vendor |
+| Servers to operate | None | None (hosted) | None (hosted) or your own | Your servers and your runner machines | None |
+| CI workflow format | GitHub Actions YAML in `.github/workflows/` | GitHub Actions YAML | `.gitlab-ci.yml` | GitHub Actions–style YAML, "mostly compatible" (Gitea) or "not designed to be compatible" (Forgejo) | GitHub Actions YAML, with a new `runs-on` label |
+| Default hosted Linux runner | 4 vCPU, 12 GiB, started per job in Cloudflare Containers | 2 vCPU, 8 GB for private repositories | 2 vCPU, 8 GB | Runners you install | Several sizes, priced per minute |
+| Hosted macOS and Windows | No (self-hosted runners) | Yes | Beta | Runners you install | Yes |
+| Guardrails for AI agents | Built in for every agent account | Rulesets and token permissions you configure | Approval rules and service accounts you configure | Not covered | Not applicable |
+| Built-in MCP server | Yes, at `/mcp` | Yes | Yes | Gitea: a separate MCP server | Not applicable |
+| License | Apache-2.0 | Proprietary | Open core | MIT (Gitea), GPL v3+ (Forgejo) | Proprietary |
+
+Read the details: [Diffinery vs GitHub](https://diffinery.com/compare/github) · [vs GitLab](https://diffinery.com/compare/gitlab) · [vs Gitea and Forgejo](https://diffinery.com/compare/gitea) · [vs Blacksmith](https://diffinery.com/compare/blacksmith) · [vs Depot](https://diffinery.com/compare/depot) · [vs CircleCI](https://diffinery.com/compare/circleci) · [vs Buildkite](https://diffinery.com/compare/buildkite) · [vs Bitbucket](https://diffinery.com/compare/bitbucket) · [all GitHub Actions alternatives](https://diffinery.com/compare) · [other Git and CI projects on Cloudflare](https://diffinery.com/built-on-cloudflare#other-git-and-ci-projects-on-cloudflare)
 
 ## Self-host on your own Cloudflare account
 
@@ -123,33 +168,72 @@ scripts                 setup, bootstrap and deploy scripts for Cloudflare
 
 ## What Diffinery doesn't do (yet)
 
-Diffinery is honest about its gaps. Today it has no hosted macOS, Windows or Arm runners (use self-hosted runners), no forks, no app marketplace, and nothing like Codespaces, Pages or Discussions. Some GitHub events, such as `issues` and `issue_comment`, are accepted in workflows but never start a run. The full list is in [Compatibility with GitHub Actions](https://diffinery.com/docs/actions/compatibility) and [Diffinery vs GitHub](https://diffinery.com/compare/github).
+Diffinery is young, and we'd rather you know its limits before you move:
+
+- **Hosted runners are Linux x64 only.** macOS, Windows and Arm jobs need [self-hosted runners](https://diffinery.com/docs/actions/runners#self-hosted-runners).
+- **HTTPS only for Git.** There's no SSH access.
+- **No forks.** Pull requests are between branches of the same repository.
+- **No wikis, discussions, Pages-style sites, Codespaces-style cloud editors or app marketplace.**
+- **Reviews are simpler than GitHub's.** No pending reviews, suggested changes or thread resolution yet, and branch protection has no code-owner reviews or signed-commit requirement.
+- **Some GitHub events**, such as `issues` and `issue_comment`, are accepted in workflows but never start a run.
+- **No hosted service.** Nobody runs Diffinery for you: you deploy your own instance.
+
+The full lists are in [Compatibility with GitHub Actions](https://diffinery.com/docs/actions/compatibility) and [Diffinery vs GitHub](https://diffinery.com/compare/github), and where we'd like to go next is in the [roadmap](ROADMAP.md).
 
 ## FAQ
 
 **What is Diffinery?**
-An open-source git forge and CI platform that runs entirely on Cloudflare. It replaces GitHub's code hosting, pull requests and GitHub Actions in one app that you can self-host on your own Cloudflare account.
+An open-source git forge and CI platform that runs entirely on Cloudflare. It replaces GitHub's code hosting, pull requests and GitHub Actions in one app that you deploy to your own Cloudflare account.
+
+**Is Diffinery an open-source GitHub Actions alternative?**
+Yes. Diffinery runs GitHub Actions workflow files from `.github/workflows/` with the same triggers, expressions, matrices, `needs`, reusable workflows, environments, secrets, OIDC, service containers and Docker, and downloads and runs marketplace actions (`uses: owner/repo@ref`). Every known difference is listed in [Compatibility with GitHub Actions](https://diffinery.com/docs/actions/compatibility).
 
 **Is Diffinery a self-hosted GitHub alternative?**
-Yes. Like Gitea, Forgejo or GitLab, you can run it yourself, but instead of a server or a Kubernetes cluster it deploys to Cloudflare's serverless platform, and its CI runs GitHub Actions workflow files instead of a format of its own.
+Yes. Like Gitea, Forgejo or GitLab, you run it yourself, but instead of a server or a Kubernetes cluster it deploys to Cloudflare's serverless platform, and its CI runs GitHub Actions workflow files instead of a format of its own.
+
+**How is Diffinery different from Gitea and Forgejo?**
+All three are open-source forges you run yourself. Gitea and Forgejo run on your own servers, with runner machines you install for CI. Diffinery runs only on Cloudflare: there are no servers or runner machines to look after, and each CI job gets a fresh container, but your code lives on Cloudflare's infrastructure. Gitea and Forgejo have wikis and a package registry, which Diffinery doesn't. See [Diffinery vs Gitea and Forgejo](https://diffinery.com/compare/gitea).
+
+**Is Diffinery an alternative to Blacksmith or Depot?**
+For a different kind of team. Blacksmith and Depot keep your code and pull requests on GitHub and run your jobs on faster machines, for a per-minute price. Diffinery replaces GitHub as well: your repositories move to your own instance, and your jobs run on 4-vCPU runners that your Cloudflare account pays for by the 10 ms. If you want to stay on GitHub and run nothing yourself, a runner service is the simpler choice. See [Diffinery vs Blacksmith](https://diffinery.com/compare/blacksmith) and [vs Depot](https://diffinery.com/compare/depot).
 
 **Do my GitHub Actions workflows run without changes?**
 Most do. Diffinery reads `.github/workflows/*.yml` with the same syntax and runs marketplace actions. Jobs that need hosted macOS, Windows or Arm runners need a self-hosted runner. See [Compatibility with GitHub Actions](https://diffinery.com/docs/actions/compatibility).
 
+**Is Diffinery faster than GitHub Actions?**
+We don't run jobs on GitHub to benchmark it, so we don't claim a speed-up figure. Diffinery's default runner has 4 vCPUs and 12 GiB, while GitHub's standard Linux runner for private repositories has 2 vCPUs and 8 GB, so jobs that use several cores get twice as many. On Diffinery, jobs start about 3 to 5 seconds after they're queued. See the [measured performance](https://diffinery.com/performance).
+
+**Can I run Diffinery CI while my code stays on GitHub?**
+Yes. A small GitHub workflow mirrors every push to your Diffinery instance, which then runs the same `.github/workflows/` files, and can fail the GitHub job when the runs on Diffinery fail. See [Run Diffinery CI while your code stays on GitHub](https://diffinery.com/docs/guides/mirror-from-github).
+
 **What does it cost to run?**
-Diffinery is free and open source under the Apache License 2.0. Running it costs whatever your own Cloudflare account bills: the Workers Paid plan plus usage. Hosted runners are Cloudflare Containers, which bill only while a job runs.
+Diffinery is free and open source under the Apache License 2.0, with no paid edition. Running it costs whatever your own Cloudflare account bills: the Workers Paid plan plus usage. Hosted runners are Cloudflare Containers, which bill only while a job runs.
+
+**Does it run on Cloudflare's free plan?**
+No. Containers, Durable Objects with SQLite, Workflows and Queues need the Workers Paid plan. See [Deploy your own Diffinery](https://diffinery.com/docs/self-hosting/deploy).
 
 **Does it work with AI coding agents?**
 Yes. Agents connect over MCP (`https://<your host>/mcp`), the REST API, git or the GitHub CLI. There are guides for Claude, Claude Code, Codex, Cursor and VS Code, and a plugin for Claude Code and Codex, installable with `claude plugin marketplace add https://diffinery.com/codician/diffinery.git` (sources in [`plugins/`](plugins)). See [Connect AI apps](https://diffinery.com/docs/connect).
 
+**Can an AI agent merge its own pull request?**
+Not by default. Unless a branch protection rule allows it, agents can't push to or merge into protected branches, their pull requests need a person's approval, their check results never satisfy required checks, and runs of code they pushed get no secrets. See [Guardrails](https://diffinery.com/docs/agents/overview#guardrails).
+
 **Can I move my repositories from GitHub?**
-Yes. The importer brings a repository or a whole organization with history, issues, pull requests, reviews and releases. Secret names come over with a field to enter each value. See [Migrate from GitHub](https://diffinery.com/docs/migrate-from-github).
+Yes. The importer brings a repository or a whole organization with history, issues, pull requests, reviews and releases. Secret names come over with a field to enter each value. `gh`, Octokit, VS Code and JetBrains IDEs work against Diffinery. See [Migrate from GitHub](https://diffinery.com/docs/migrate-from-github).
+
+**Can I sign up on diffinery.com?**
+diffinery.com is the project's home and the instance Diffinery is developed on; accounts there are by invitation for the people working on it. It isn't a hosted service. To use Diffinery, deploy your own instance.
+
+**Is Diffinery the only Git platform on Cloudflare?**
+No. Other open-source projects run Git or CI on Cloudflare too, and [Built on Cloudflare](https://diffinery.com/built-on-cloudflare#other-git-and-ci-projects-on-cloudflare) lists how they differ. As far as we know, Diffinery is the one where Git hosting, pull requests with reviews in a web UI and GitHub Actions–compatible CI with marketplace actions all run on Cloudflare (checked October 25, 2026).
 
 **Where is development happening?**
-On Diffinery itself, at [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery). Diffinery's own CI, deploys and pull requests run there. The GitHub repository is a mirror.
+On Diffinery itself, at [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery). Diffinery's own CI, deploys and pull requests run there. The GitHub repository is a mirror, and issues and pull requests are welcome in either place; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Contributing, security and license
 
-- **Contributing:** see [CONTRIBUTING.md](CONTRIBUTING.md). Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+- **Contributing:** see [CONTRIBUTING.md](CONTRIBUTING.md), and [AGENTS.md](AGENTS.md) if you're an AI coding agent. Please follow the [Code of Conduct](CODE_OF_CONDUCT.md). Questions go to [SUPPORT.md](SUPPORT.md).
+- **Roadmap and changes:** [ROADMAP.md](ROADMAP.md) and [CHANGELOG.md](CHANGELOG.md).
 - **Security:** please don't open public issues for vulnerabilities. Report them privately as described in [SECURITY.md](SECURITY.md).
+- **Citing Diffinery:** use GitHub's "Cite this repository" button, or [CITATION.cff](CITATION.cff).
 - **License:** [Apache License 2.0](LICENSE). See [NOTICE](NOTICE).

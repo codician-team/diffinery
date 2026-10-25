@@ -6,3 +6,6 @@ contact_links:
   - name: Documentation
     url: https://diffinery.com/docs
     about: Guides for every feature, the REST API, CLI and MCP references, and self-hosting.
+  - name: Questions and help
+    url: https://diffinery.com/faq
+    about: Answers to common questions, with links to the guides. See SUPPORT.md for where to ask the rest.
