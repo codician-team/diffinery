@@ -3,7 +3,7 @@
 #
 # Every author and committer becomes codician-team and the attribution trailers
 # (Co-authored-by, Claude-Session, Signed-off-by) are dropped, so GitHub lists no
-# personal contributors; old personal addresses in wrangler.jsonc are replaced.
+# personal contributors.
 # The rewrite is deterministic: the same Diffinery history always gives the same
 # GitHub commits, so a sync is a fast-forward unless Diffinery's own history was
 # rewritten (then GitHub follows it). Only main is mirrored.
@@ -43,16 +43,10 @@ git "${auth[@]}" clone --quiet --bare --single-branch --branch main "$SRC" "$wor
 cd "$work/repo.git"
 src_head=$(git rev-parse main)
 
-# Old wrangler.jsonc versions listed the bootstrap admins' personal addresses.
-cat > "$work/replacements.txt" <<'RULES'
-regex:("BOOTSTRAP_ADMINS": ")[^"]*@[^"]*"==>\1admin@example.com"
-RULES
-
 export MIRROR_NAME="$NAME" MIRROR_EMAIL="$EMAIL"
 git filter-repo --force --quiet --refs main --replace-refs delete-no-add \
   --name-callback 'return os.environ["MIRROR_NAME"].encode()' \
   --email-callback 'return os.environ["MIRROR_EMAIL"].encode()' \
-  --replace-text "$work/replacements.txt" \
   --message-callback '
 import re
 drop = re.compile(r"^(co-authored-by|claude-session|signed-off-by):|^\U0001f916 generated with \[claude code\]|^https://claude\.ai/code/session_", re.I)
