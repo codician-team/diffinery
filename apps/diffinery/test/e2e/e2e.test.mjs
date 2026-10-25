@@ -2299,6 +2299,39 @@ test("GitHub REST compatibility: Octokit against releases, statuses, git data, i
   assert.ok((await gh.rest.repos.getAllEnvironments(R)).data.environments.some((e) => e.name === "staging"));
   await gh.rest.actions.createEnvironmentVariable({ ...R, environment_name: "staging", name: "REGION", value: "eu" });
   assert.equal((await gh.rest.actions.getEnvironmentVariable({ ...R, environment_name: "staging", name: "REGION" })).data.value, "eu");
+  // The environment page sets deployment branches, their patterns and the environment's secrets.
+  const envUrl = `${base}/${owner}/${repo}/settings/environments/staging`;
+  const envForm = async (path, fields) => {
+    const pageRes = await fetch(envUrl);
+    const html = await pageRes.text();
+    const r = await fetch(`${envUrl}${path}`, {
+      method: "POST",
+      body: new URLSearchParams({ _csrf: /name="_csrf" value="([^"]+)"/.exec(html)[1], ...fields }),
+      redirect: "manual",
+      headers: { cookie: `dfy_csrf=${/dfy_csrf=([^;]+)/.exec(pageRes.headers.get("set-cookie") ?? "")[1]}`, "sec-fetch-site": "same-origin" },
+    });
+    assert.equal(r.status, 303, await r.text());
+    return html;
+  };
+  const envState = async () => (await gh.request("GET /repos/{owner}/{repo}/environments/{environment_name}", { ...R, environment_name: "staging" })).data.deployment_branch_policy;
+  const envSecrets = async () => (await gh.request("GET /repos/{owner}/{repo}/environments/{environment_name}/secrets", { ...R, environment_name: "staging" })).data.secrets.map((x) => x.name);
+  assert.match(await envForm("/secrets", { name: "deploy_key", value: "env-s3cret" }), /<input type="hidden" name="branch_policy" value="all"\/>/);
+  assert.deepEqual(await envSecrets(), ["DEPLOY_KEY"]);
+  assert.deepEqual(await envState(), { protected_branches: true, custom_branch_policies: false }, "the first secret limits the environment to protected branches");
+  await envForm("", { reviewers: "", wait_timer: "0", branch_policy: "selected" });
+  assert.deepEqual(await envState(), { protected_branches: false, custom_branch_policies: true });
+  await envForm("/branch-policies", { name: "release/*", type: "tag" });
+  const patterns = (await gh.request("GET /repos/{owner}/{repo}/environments/{environment_name}/deployment-branch-policies", { ...R, environment_name: "staging" })).data.branch_policies;
+  assert.deepEqual(patterns.map((x) => [x.name, x.type]), [["release/*", "tag"]]);
+  const envHtml = await envForm("/branch-policies/delete", { id: String(patterns[0].id) });
+  assert.match(envHtml, /release\/\*/);
+  assert.match(envHtml, /DEPLOY_KEY/);
+  assert.doesNotMatch(envHtml, /env-s3cret/);
+  assert.equal((await gh.request("GET /repos/{owner}/{repo}/environments/{environment_name}/deployment-branch-policies", { ...R, environment_name: "staging" })).data.total_count, 0);
+  await envForm("", { reviewers: "", wait_timer: "0", branch_policy: "all" });
+  assert.equal(await envState(), null);
+  await envForm("/secrets/delete", { name: "DEPLOY_KEY" });
+  assert.deepEqual(await envSecrets(), []);
   await gh.rest.repos.deleteAnEnvironment({ ...R, environment_name: "staging" });
 
   // ------------------------------------------------------------ repository_dispatch and repository variables

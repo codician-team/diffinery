@@ -656,9 +656,19 @@ async function environmentsPage(c: AppContext, l: Loaded) {
   );
 }
 
+type BranchPolicyChoice = "all" | "protected" | "selected";
+
+const BRANCH_POLICY_ITEMS = [
+  { value: "all", label: "No restriction", description: "Any branch or tag can deploy." },
+  { value: "protected", label: "Protected branches only", description: "Branches a branch protection rule matches. The only setting under which runs whose code came from an agent receive this environment's secrets." },
+  { value: "selected", label: "Selected branches and tags", description: "Only branches and tags that match the patterns you add below, after saving." },
+];
+
+const branchPolicyOf = (e: Environment): BranchPolicyChoice => (!e.policy ? "all" : e.policy.protected_branches ? "protected" : "selected");
+
 async function environmentPage(c: AppContext, l: Loaded, name: string) {
   const t = csrfToken(c);
-  const e = await l.stub.environment(name);
+  const [e, secrets] = await Promise.all([l.stub.environment(name), l.stub.environmentSecretNames(name)]);
   const p = e.protection;
   return page(
     c,
@@ -692,14 +702,89 @@ async function environmentPage(c: AppContext, l: Loaded, name: string) {
             <KCheckbox name="prevent_self_review" checked={p.preventSelfReview} label="Prevent self-review" description="Whoever started a run (or re-ran it, or owns the agent that did) can't approve it." />
           </div>
           <div class="field">
-            <label>Deployment branches</label>
-            <div class="muted small">{e.policy ? (e.policy.protected_branches ? "Protected branches only." : `Only refs matching: ${e.policy.patterns.map((x) => `${x.type} ${x.name}`).join(", ") || "(none yet)"}.`) : "Any branch or tag."} Change it with the REST API (deployment branch policies).</div>
+            <KRadio name="branch_policy" label="Deployment branches" value={branchPolicyOf(e)} items={BRANCH_POLICY_ITEMS} />
           </div>
           <div class="factions">
             <button class="btn primary">Save protection rules</button>
           </div>
         </div>
       </Form>
+      {e.policy?.custom_branch_policies ? (
+        <div class="box">
+          <div class="head">
+            <h2>Branch and tag patterns</h2>
+          </div>
+          {e.policy.patterns.length ? (
+            <ul class="list">
+              {e.policy.patterns.map((x) => (
+                <li style="align-items:center">
+                  <span class="mono grow">
+                    <b>{x.name}</b>
+                  </span>
+                  <span class="muted small">{x.type}</span>
+                  <Form action={`${envPath(l, e.name)}/branch-policies/delete`} t={t} class="inline" confirm={`Remove the ${x.type} pattern ${x.name}?`}>
+                    <input type="hidden" name="id" value={String(x.id)} />
+                    <button class="btn sm danger">Remove</button>
+                  </Form>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div class="empty">No patterns yet, so no branch or tag can deploy here.</div>
+          )}
+          <Form action={`${envPath(l, e.name)}/branch-policies`} t={t} class="body row" style="align-items:flex-end;border-top:1px solid var(--border2)">
+            <div class="field m0" style="min-width:240px">
+              <label for="env-pattern">Pattern</label>
+              <input id="env-pattern" name="name" type="text" required maxlength={255} class="mono" placeholder="release/*" autocomplete="off" />
+            </div>
+            <div class="field m0">
+              <KSelect name="type" label="Matches" value="branch" options={[{ value: "branch", label: "Branches" }, { value: "tag", label: "Tags" }]} />
+            </div>
+            <button class="btn">Add pattern</button>
+          </Form>
+        </div>
+      ) : null}
+      <div class="box">
+        <div class="head">
+          <h2>{raw(ICONS.key)} Environment secrets</h2>
+        </div>
+        {secrets.length ? (
+          <ul class="list">
+            {secrets.map((s) => (
+              <li style="align-items:center">
+                <span class="mono grow">
+                  <b>{s.name}</b>
+                </span>
+                <span class="muted small">updated {ago(s.updatedAt)}</span>
+                <Form action={`${envPath(l, e.name)}/secrets/delete`} t={t} class="inline" confirm={`Delete secret ${s.name}?`}>
+                  <input type="hidden" name="name" value={s.name} />
+                  <button class="btn sm danger">Delete</button>
+                </Form>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div class="empty">No environment secrets yet.</div>
+        )}
+        <Form action={`${envPath(l, e.name)}/secrets`} t={t} class="body fbody" style="border-top:1px solid var(--border2)">
+          <div class="fgrid">
+            <div class="field">
+              <label for="env-secret-name">Name</label>
+              <input id="env-secret-name" name="name" type="text" required pattern="[A-Za-z_][A-Za-z0-9_]*" class="mono" placeholder="DEPLOY_TOKEN" autocomplete="off" />
+            </div>
+            <div class="field full">
+              <label for="env-secret-value">Value</label>
+              <textarea id="env-secret-value" name="value" required class="mono" rows={4} autocomplete="off" spellcheck={false}></textarea>
+              <div class="hint">
+                Only jobs with <code>environment: {e.name}</code> receive it, as <code>{"${{ secrets.NAME }}"}</code>. Setting an existing name replaces its value.{e.policy ? "" : " Adding the first secret limits deployment branches to protected branches only."}
+              </div>
+            </div>
+          </div>
+          <div class="factions">
+            <button class="btn primary">Save secret</button>
+          </div>
+        </Form>
+      </div>
       <Form action={`${envPath(l, e.name)}/delete`} t={t} class="box" confirm={`Delete the ${e.name} environment, its secrets and its variables?`}>
         <div class="body drow">
           <div>
@@ -930,11 +1015,75 @@ export function registerRepoSettings(web: WebApp): void {
         const reviewers = await resolveReviewers(c, l.repo, logins.map((login) => ({ type: "User", login })));
         const raw = f.s("wait_timer").trim();
         const waitTimer = raw === "" ? 0 : Number(raw);
-        const e = await l.stub.upsertEnvironment(name, { reviewers, wait_timer: waitTimer, prevent_self_review: f.s("prevent_self_review") === "1" }, l.caller);
-        audit(c, l, "environment.update", { environment: e.name, reviewers: e.protection.reviewers.map((r) => r.login), wait_timer: e.protection.waitTimer, prevent_self_review: e.protection.preventSelfReview });
+        const choice = f.keys().includes("branch_policy") ? f.s("branch_policy") : undefined;
+        if (choice !== undefined && !["all", "protected", "selected"].includes(choice)) throw new HttpError(422, "choose which branches can deploy");
+        const deployment_branch_policy = choice === undefined ? undefined : choice === "all" ? null : { protected_branches: choice === "protected", custom_branch_policies: choice === "selected" };
+        const e = await l.stub.upsertEnvironment(name, { reviewers, wait_timer: waitTimer, prevent_self_review: f.s("prevent_self_review") === "1", deployment_branch_policy }, l.caller);
+        audit(c, l, "environment.update", {
+          environment: e.name,
+          reviewers: e.protection.reviewers.map((r) => r.login),
+          wait_timer: e.protection.waitTimer,
+          prevent_self_review: e.protection.preventSelfReview,
+          deployment_branch_policy: e.policy ? { protected_branches: e.policy.protected_branches, custom_branch_policies: e.policy.custom_branch_policies } : null,
+        });
       },
       "Protection rules saved.",
     );
+  });
+
+  post(web, "/:owner/:repo/settings/environments/:env/branch-policies", async (c, f) => {
+    const l = await load(c, WHILE_IMPORTING);
+    const name = prm(c, "env");
+    return act(
+      c,
+      envPath(l, name),
+      async () => {
+        const p = await l.stub.addEnvironmentBranchPattern(name, { name: f.s("name"), type: f.s("type") }, l.caller);
+        audit(c, l, "environment.branch_policy.create", { environment: name, pattern: p.name, type: p.type });
+      },
+      "Pattern added.",
+    );
+  });
+
+  post(web, "/:owner/:repo/settings/environments/:env/branch-policies/delete", async (c, f) => {
+    const l = await load(c, WHILE_IMPORTING);
+    const name = prm(c, "env");
+    return act(c, envPath(l, name), async () => {
+      const id = Number(f.s("id"));
+      if (!Number.isInteger(id)) throw new HttpError(422, "invalid pattern");
+      await l.stub.removeEnvironmentBranchPattern(name, id, l.caller);
+      audit(c, l, "environment.branch_policy.delete", { environment: name, id });
+    });
+  });
+
+  post(web, "/:owner/:repo/settings/environments/:env/secrets", async (c, f) => {
+    const l = await load(c, WHILE_IMPORTING);
+    const env = prm(c, "env");
+    return act(
+      c,
+      envPath(l, env),
+      async () => {
+        const name = f.s("name").trim();
+        try {
+          await l.stub.setEnvironmentSecret(env, name, f.s("value"), l.caller);
+        } catch (e) {
+          const s = statusOf(e);
+          if (s.status < 500) throw e;
+          throw new HttpError(422, `could not store the secret: ${(e as Error).message || "encryption unavailable"} (is MASTER_KEY configured?)`);
+        }
+        audit(c, l, "environment.secret.set", { environment: env, name: name.toUpperCase() });
+      },
+      "Secret saved.",
+    );
+  });
+
+  post(web, "/:owner/:repo/settings/environments/:env/secrets/delete", async (c, f) => {
+    const l = await load(c, WHILE_IMPORTING);
+    const env = prm(c, "env");
+    return act(c, envPath(l, env), async () => {
+      await l.stub.deleteEnvironmentSecret(env, f.s("name"), l.caller);
+      audit(c, l, "environment.secret.delete", { environment: env, name: f.s("name").toUpperCase() });
+    });
   });
 
   post(web, "/:owner/:repo/settings/environments/:env/delete", async (c) => {

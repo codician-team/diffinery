@@ -25,7 +25,7 @@ A typical setup:
 3. When the job starts on `main` (a protected branch), Diffinery records a deployment with an `in_progress` status, and the job gets the `production` secrets and variables.
 4. When the job finishes, the deployment gets a final status (`success`, `failure` or `inactive`). Webhooks receive a `deployment` event when the deployment is created and `deployment_status` events for each status.
 
-Repository admins manage environments under **Settings → Environments** (protection rules) and with the REST API, which follows GitHub's paths and JSON shapes, so `gh api`, Octokit and existing scripts work after you point them at `https://diffinery.com/api/v3`. Branch patterns, environment secrets and variables are managed with the API.
+Repository admins manage environments under **Settings → Environments** (protection rules, deployment branches and their patterns, and environment secrets) and with the REST API, which follows GitHub's paths and JSON shapes, so `gh api`, Octokit and existing scripts work after you point them at `https://diffinery.com/api/v3`. Environment variables are managed with the API.
 
 ## Create an environment
 
@@ -128,6 +128,8 @@ The policy has three settings:
 | Selected branches and tags | `{"protected_branches": false, "custom_branch_policies": true}` | Branches and tags that match one of the environment's patterns. Pull request refs never. |
 
 Setting both values to `true`, or both to `false`, fails with `422 set exactly one of protected_branches and custom_branch_policies`.
+
+In the web UI, open **Settings → Environments → (environment)**, choose **No restriction**, **Protected branches only** or **Selected branches and tags** under **Deployment branches**, and select **Save protection rules**. With **Selected branches and tags** saved, a **Branch and tag patterns** box appears below, where you add a pattern (choose whether it matches branches or tags) and remove one.
 
 The branch policy only applies to workflow jobs. A deployment created directly with the REST API isn't checked against it.
 
@@ -280,11 +282,13 @@ Each approval and rejection is in the audit log as `deployment.approve` or `depl
 
 ## Environment secrets and variables
 
-Environment secrets and variables work like repository ones, but only jobs that use the environment receive them. They are managed with the REST API. Secret values are encrypted at rest with a key specific to the repository and the environment.
+Environment secrets and variables work like repository ones, but only jobs that use the environment receive them. Secrets are managed under **Settings → Environments → (environment) → Environment secrets** or with the REST API; variables with the REST API. Secret values are encrypted at rest with a key specific to the repository and the environment.
 
 ### Environment secrets
 
-Setting and deleting environment secrets needs a person (not an agent) with the admin role on the repository, and a token with the `admin` scope. The environment must exist.
+Setting and deleting environment secrets needs a person (not an agent) with the admin role on the repository, and with the API a token with the `admin` scope. The environment must exist.
+
+In the web UI, the **Environment secrets** box on the environment's page lists the secret names with when each was last updated. Enter a name and a value and select **Save secret** to add one or replace its value, or select **Delete** next to a name. Values are never shown again after you save them.
 
 ```sh
 # Create or replace a secret: 201 Created when new, 204 No Content when replaced
@@ -872,7 +876,7 @@ Environment variable changes aren't recorded. See [Audit log](/docs/security/aud
 
 | Area | GitHub | Diffinery |
 |---|---|---|
-| Managing environments | Web UI and API | Protection rules in Settings → Environments and the API; patterns, secrets and variables with the API |
+| Managing environments | Web UI and API | Protection rules, deployment branches, patterns and secrets in Settings → Environments and the API; variables with the API |
 | Required reviewers | People and teams | People only, never agents; an agent or a job token can't approve |
 | Prevent self-review | Covers whoever triggered the run | Also covers earlier attempts' starters and the owner of an agent that started it |
 | Admin bypass | Admins can bypass protection rules | Nobody bypasses them; `can_admins_bypass` is `false` |

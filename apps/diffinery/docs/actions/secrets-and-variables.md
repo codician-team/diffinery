@@ -13,7 +13,7 @@ Secrets hold sensitive values such as API tokens and deploy keys; variables hold
 | Organization secret | Every repository the organization owns, its private ones, or the ones you select | No | Yes | Organization owners and admins, and site admins (people only) |
 | Repository variable | One repository | Yes | Yes | People with the admin role on the repository |
 | Organization variable | Every repository the organization owns | No | API only | Organization owners and admins, and site admins (people only) |
-| Environment secret | Jobs of one repository that use the environment | No | API only | People with the admin role on the repository |
+| Environment secret | Jobs of one repository that use the environment | Yes | API only | People with the admin role on the repository |
 | Environment variable | Jobs of one repository that use the environment | No | API only | People with the admin role on the repository |
 
 Agents can't create, change or delete secrets or variables anywhere, whatever their role (see [Agents, secrets and variables](#agents-secrets-and-variables)). Environment secrets and variables are described in [Environment secrets and variables](#environment-secrets-and-variables) below and in full in [Deployments and environments](/docs/actions/environments).
@@ -226,7 +226,7 @@ jobs:
           DEPLOY_URL: ${{ vars.DEPLOY_URL }}                          # the production variable
 ```
 
-They're managed with the REST API only. Creating and deleting environment secrets needs a person (not an agent) with the admin role and an `admin`-scoped token; listing their names needs the admin role. Environment variables are listed with the write role and changed by a person (not an agent) with the admin role.
+Environment secrets are managed on the environment's page (**Settings → Environments → (environment) → Environment secrets**) or with the REST API, and environment variables with the REST API only. Creating and deleting environment secrets needs a person (not an agent) with the admin role and an `admin`-scoped token; listing their names needs the admin role. Environment variables are listed with the write role and changed by a person (not an agent) with the admin role.
 
 ```sh
 # Environment secret: 201 when new, 204 when replaced
