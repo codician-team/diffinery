@@ -10,7 +10,7 @@
 # are mirrored.
 #
 # Reads Diffinery with DIFFINERY_TOKEN when set (not needed once the repo is public);
-# MIRROR_SRC can also be a local clone that has main. Pushes with GITHUB_MIRROR_TOKEN
+# MIRROR_SRC can also be a local clone that has main. Pushes with MIRROR_TOKEN
 # when set, otherwise with whatever credentials git already has for github.com.
 # Needs git-filter-repo 2.47.0 (pip install git-filter-repo==2.47.0); another
 # version could write different commits.
@@ -37,8 +37,8 @@ if [ -n "${DIFFINERY_TOKEN:-}" ]; then
   # The helper reads the token from the environment, so it never lands on a command line.
   auth=(-c 'credential.https://diffinery.com.helper=!f() { [ "$1" = get ] && printf "username=x-token\npassword=%s\n" "$DIFFINERY_TOKEN"; }; f')
 fi
-if [ -n "${GITHUB_MIRROR_TOKEN:-}" ]; then
-  auth+=(-c 'credential.https://github.com.helper=!f() { [ "$1" = get ] && printf "username=x-access-token\npassword=%s\n" "$GITHUB_MIRROR_TOKEN"; }; f')
+if [ -n "${MIRROR_TOKEN:-}" ]; then
+  auth+=(-c 'credential.https://github.com.helper=!f() { [ "$1" = get ] && printf "username=x-access-token\npassword=%s\n" "$MIRROR_TOKEN"; }; f')
 fi
 git "${auth[@]}" clone --quiet --bare --single-branch --branch main "$SRC" "$work/repo.git"
 cd "$work/repo.git"
@@ -84,8 +84,8 @@ for tag in $(git tag); do
 done
 
 # Releases on the mirrored tags get the same name, notes and flags on GitHub (assets aren't copied).
-# Needs GITHUB_MIRROR_TOKEN for GitHub's API.
-if [ -n "${GITHUB_MIRROR_TOKEN:-}" ] && [ ${#mirrored[@]} -gt 0 ]; then
+# Needs MIRROR_TOKEN for GitHub's API.
+if [ -n "${MIRROR_TOKEN:-}" ] && [ ${#mirrored[@]} -gt 0 ]; then
   MIRROR_TAGS="${mirrored[*]}" python3 - <<'PY'
 import json, os, urllib.error, urllib.request
 
@@ -107,7 +107,7 @@ def call(method, url, body=None, token=None):
     except urllib.error.HTTPError as e:
         return e.code, None
 
-token = os.environ["GITHUB_MIRROR_TOKEN"]
+token = os.environ["MIRROR_TOKEN"]
 status, me = call("GET", f"{dst.split('/repos/')[0]}/user", token=token)
 me = me.get("login") if status == 200 else None
 status, releases = call("GET", f"{src}/releases?per_page=100", token=os.environ.get("DIFFINERY_TOKEN"))

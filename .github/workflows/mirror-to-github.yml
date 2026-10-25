@@ -2,7 +2,7 @@ name: Mirror to GitHub
 
 # Keeps the public copy at github.com/codician-team/diffinery in step with main,
 # through the deterministic rewrite in scripts/mirror-to-github.sh. Runs on Diffinery
-# only. Uses GITHUB_MIRROR_TOKEN (a fine-grained GitHub token with Contents and
+# only. Uses MIRROR_TOKEN (a fine-grained GitHub token with Contents and
 # Workflows write on that one repository), a secret of the github-mirror environment.
 # That environment is limited to protected branches, so the token also reaches runs
 # after an agent's merge. Without the token the job says so and does nothing.
@@ -28,13 +28,13 @@ jobs:
     environment: github-mirror
     timeout-minutes: 10
     env:
-      GITHUB_MIRROR_TOKEN: ${{ secrets.GITHUB_MIRROR_TOKEN }}
+      MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
     steps:
       - name: Check the GitHub token
         id: token
         run: |
-          if [ -z "$GITHUB_MIRROR_TOKEN" ]; then
-            echo "::notice::GITHUB_MIRROR_TOKEN is not set, so GitHub is not updated."
+          if [ -z "$MIRROR_TOKEN" ]; then
+            echo "::notice::MIRROR_TOKEN is not set, so GitHub is not updated."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/checkout@v4
