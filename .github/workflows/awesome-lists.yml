@@ -1,0 +1,37 @@
+name: Suggest Diffinery to awesome lists
+
+# Opens one pull request per curated list in scripts/awesome-lists/lists.mjs, as the account
+# that owns OUTREACH_TOKEN, so they show Codician rather than a person. Lists where Diffinery is
+# already listed or suggested are left alone, and lists whose rules don't allow it yet are
+# skipped until their day, so running it again is safe. Run it by hand from the Actions tab.
+#
+# OUTREACH_TOKEN: a classic personal access token of the Codician GitHub account with only the
+# public_repo scope (fine-grained tokens can't open pull requests on other people's repositories).
+on:
+  workflow_dispatch:
+    inputs:
+      lists:
+        description: "List ids, comma-separated, or 'due' for every list whose rules allow it today"
+        type: string
+        default: due
+      dry_run:
+        description: Only report what would change
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  suggest:
+    name: Open the list pull requests
+    if: ${{ github.server_url != 'https://github.com' && github.repository == 'codician/diffinery' }}
+    runs-on: ubuntu-latest
+    environment: github-mirror
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: node scripts/awesome-lists.mjs --lists="$LISTS" ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          LISTS: ${{ inputs.lists }}
+          OUTREACH_TOKEN: ${{ secrets.OUTREACH_TOKEN }}
