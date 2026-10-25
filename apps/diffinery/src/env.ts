@@ -91,6 +91,11 @@ export interface Env {
    * separated by commas.
    */
   SECURITY_CONTACT?: string;
+  /**
+   * The proof record served at /.well-known/mcp-registry-auth (`v=MCPv1; k=ed25519; p=...`), so the
+   * instance's MCP server can be published to the official MCP registry under its own domain.
+   */
+  MCP_REGISTRY_AUTH?: string;
   /** Comma-separated emails that become site admins on first sign-in (logins are ignored). Deployed by scripts/bootstrap-admins.sh. */
   BOOTSTRAP_ADMINS: string;
   /** e.g. example.cloudflareaccess.com — empty disables Access verification. */

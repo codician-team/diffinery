@@ -269,6 +269,7 @@ export const OTHER_ENDPOINTS: Array<[string, string]> = [
   ["GET /.well-known/openid-configuration", "OIDC discovery for workflow ID tokens. See [OIDC](/docs/actions/oidc)."],
   ["GET /.well-known/jwks", "Public keys that sign workflow ID tokens."],
   ["GET /.well-known/security.txt", "Where to report a vulnerability (RFC 9116): this instance's report form first, then any `SECURITY_CONTACT` entries. See [Reporting a vulnerability](/docs/security/disclosure)."],
+  ["GET /.well-known/mcp-registry-auth", "The proof record that lets this instance's MCP server be published to the official MCP registry under its domain; 404 until `MCP_REGISTRY_AUTH` is set. See [MCP](/docs/agents/mcp#list-your-instance-in-the-mcp-registry)."],
   ["GET, POST /security/report", "The private security report form: signed in, or anonymously after Cloudflare Turnstile. Only site administrators can read reports. See [Reporting a vulnerability](/docs/security/disclosure)."],
   ["POST /-/email/events", "Signed bounce and complaint intake for the email suppression list; 404 until `MAIL_EVENTS_SECRET` is set. See [Site administration](/docs/admin/site-administration#bounces-complaints-and-the-suppression-list)."],
   ["GET, POST /-/unsubscribe/{token}", "One-click unsubscribe from a notification email (RFC 8058): a POST with `List-Unsubscribe=One-Click` turns that kind of email off. See [Notifications](/docs/accounts/notifications)."],

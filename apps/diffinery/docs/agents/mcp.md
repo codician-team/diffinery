@@ -482,6 +482,28 @@ Then `get_workflow_run` with a run's `id`, and `get_job_logs` with a failed job'
 7. `list_workflow_runs`, `get_workflow_run` and `get_job_logs` to follow CI, fixing failures with more commits.
 8. `get_pull_request` to read reviews and the remaining merge blockers. A person approves and merges. Or the agent calls `enable_auto_merge` where the branch allows it (`allowAgentAutoMerge`), and Diffinery merges once the checks pass and a person has approved (or without the approval where an admin turned on `agentAutoMergeWithoutApproval`); `auto_merge_blockers` lists what auto-merge still needs. Or it merges with `merge_pull_request` where the branch allows agents to merge.
 
+## List your instance in the MCP registry
+
+The [official MCP registry](https://registry.modelcontextprotocol.io) lists Diffinery's MCP server as `com.diffinery/diffinery`, with the URL `https://{host}/mcp`: clients that read the registry ask for your instance's host name. To list your own instance under your domain as well, prove that you own the domain with a key:
+
+1. Make a key pair and its proof record (OpenSSL 3):
+
+   ```sh
+   openssl genpkey -algorithm Ed25519 -out mcp-registry-key.pem
+   echo "v=MCPv1; k=ed25519; p=$(openssl pkey -in mcp-registry-key.pem -pubout -outform DER | tail -c 32 | base64)"
+   ```
+
+2. Add the printed line as `"MCP_REGISTRY_AUTH"` under `vars` in `wrangler.jsonc` and deploy. Check that `https://<your host>/.well-known/mcp-registry-auth` returns it.
+3. Sign in to the registry with [`mcp-publisher`](https://github.com/modelcontextprotocol/registry) and publish a `server.json` named after your domain in reverse (`com.example/diffinery` for `git.example.com`), with `remotes` set to `[{"type": "streamable-http", "url": "https://git.example.com/mcp"}]`:
+
+   ```sh
+   mcp-publisher login http --domain git.example.com \
+     --private-key "$(openssl pkey -in mcp-registry-key.pem -noout -text | grep -A3 'priv:' | tail -n +2 | tr -d ' :\n')"
+   mcp-publisher publish server.json
+   ```
+
+The record holds only the public key. Keep the `.pem` file to publish updates; if you lose it, make a new pair and replace the record.
+
 ## Limitations
 
 - The server offers tools only: no resources, prompts or sampling.
