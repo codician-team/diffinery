@@ -97,8 +97,26 @@ const HOME = {
     { icon: "pr", title: "Pull requests with intent", text: "Reviews, required approvals and checks, auto-merge and a merge queue. Each pull request says what it's meant to do, so reviewers check the right thing.", href: "/features#pull-requests-reviews-and-issues" },
     { icon: "play", title: "GitHub Actions–compatible CI", text: "The same triggers, expressions, matrices, reusable workflows, secrets, OIDC and Docker. Actions from GitHub run as they do there.", href: "/features#actions-ci-that-runs-your-github-workflows" },
     { icon: "zap", title: "Fast, right-sized runners", text: "4 vCPUs and 12 GiB per job by default, started in seconds. Jobs that only wait move to smaller runners on their own, never at the cost of speed.", href: "/performance" },
-    { icon: "bot", title: "AI agents with guardrails", text: "Agents get their own accounts and tokens, an MCP server, sandboxes, tasks and reviews. They can't push to protected branches or reach your secrets.", href: "/agents" },
+    { icon: "bot", title: "AI agents with guardrails", text: "Agents get their own accounts and tokens, run tasks with Claude Code or Codex, review pull requests and merge on green. They can't push to protected branches or reach your secrets.", href: "/agents" },
     { icon: "shield", title: "Secure by default", text: "Passkeys instead of passwords, invite-only sign-up, encrypted secrets, scoped job tokens and an append-only audit log.", href: "/security" },
+  ],
+  /** What agents do on Diffinery: the home page's "Built for AI coding agents" cards, its Markdown and the structured data. */
+  agents: [
+    { icon: "shield", title: "Agent accounts with guardrails", text: "Each agent has its own login and tokens, owned by a person or an organization. It can't push to protected branches, a person approves its pull requests, and runs of its code get no secrets.", href: "/docs/agents/overview#guardrails" },
+    { icon: "bot", title: "Agent tasks", text: "Give an agent a goal: Claude Code or Codex works in a sandbox with your own model key and opens a pull request. Plan first, best of N attempts, and fixes for its own failing checks.", href: "/docs/agents/tasks" },
+    { icon: "eye", title: "Agent review", text: "An agent reviews every pull request for bugs, security issues and logic errors, posts inline findings with suggested fixes and reports an Agent review check.", href: "/docs/agents/review" },
+    { icon: "history", title: "Today and Needs you", text: "One page each morning: what needs you, what your agents are working on, and what merged or failed since yesterday, across every repository.", href: "/docs/agents/today" },
+    { icon: "prMerged", title: "Merge on green", text: "Pull requests merge by themselves once their checks pass, with or without a person's approval, as you choose. An agent's change to a workflow file still needs a person to merge it.", href: "/docs/collaboration/merge-on-green" },
+    { icon: "key", title: "Your own subscription", text: "Open a terminal in the browser, sign in to Claude Code or Codex with your own Claude or ChatGPT plan, and give it tasks that open pull requests.", href: "/docs/agents/terminal" },
+  ],
+  /** The tools Diffinery plugs into: the home page's integrations, its Markdown and the structured data. */
+  integrations: [
+    { icon: "bot", title: "Claude Code plugin", text: "The MCP server, a skill for the branch → pull request → CI → merge loop, /diffinery:pr-status, and a live band of the pull request's CI checks above the prompt.", install: "claude plugin marketplace add codician-team/diffinery", href: "/docs/connect/claude-code" },
+    { icon: "code", title: "Codex plugin", text: "The same MCP server, skills and session hook for OpenAI's Codex CLI.", install: "codex plugin marketplace add https://diffinery.com/codician/diffinery.git", href: "/docs/connect/codex" },
+    { icon: "link", title: "MCP server, in the official registry", text: "52 tools for code, pull requests, CI logs, sandboxes, Today and the docs, with a browser sign-in, for Claude, Claude Code, Codex, Cursor and any MCP client. Listed as com.diffinery/diffinery.", install: "https://<your host>/mcp", href: "/docs/agents/mcp" },
+    { icon: "play", title: "The diffinery CLI and gh", text: "Pull requests with intent, auto-merge, runs and logs, runners and migrations. gh works as it does with GitHub Enterprise, so agents use the commands they know.", install: "curl -fsSL https://diffinery.com/install | bash", href: "/docs/agents/github-cli" },
+    { icon: "repo", title: "VS Code, Cursor and Windsurf", text: "Clone from Diffinery with a passkey sign-in, and push and pull with it.", install: "https://diffinery.com/install-editor", href: "/docs/repositories/clone-in-your-editor" },
+    { icon: "package", title: "JetBrains IDEs", text: "Get from Version Control with a passkey sign-in, in IntelliJ IDEA, PyCharm, WebStorm and the rest (2024.3 or later).", install: "https://diffinery.com/-/jetbrains/updatePlugins.xml", href: "/docs/repositories/clone-in-jetbrains-ides" },
   ],
   workflow: `name: CI
 on: [push, pull_request]
@@ -187,6 +205,16 @@ export function homeMarkdown(o: string): string {
     "",
     ...HOME.features.map((f) => `- **[${f.title}](${f.href})**: ${f.text}`),
     "",
+    "## Built for AI coding agents",
+    "",
+    AGENTS_LEAD,
+    "",
+    ...HOME.agents.map((f) => `- **[${f.title}](${f.href})**: ${f.text}`),
+    "",
+    "## Works where you and your agents already work",
+    "",
+    ...HOME.integrations.map((f) => `- **[${f.title}](${f.href})**: ${f.text} \`${f.install}\``),
+    "",
     "## Your workflows, as they are",
     "",
     "```yaml",
@@ -211,6 +239,9 @@ export function homeMarkdown(o: string): string {
   ];
   return absolute(lines.join("\n"), o);
 }
+
+const AGENTS_LEAD =
+  "Claude Code, Codex and other agents work through Git, the GitHub CLI, the REST API or the built-in MCP server, as accounts of their own, and Diffinery can run them for you. Every agent feature is opt-in, people bring their own model keys or subscriptions, and the server keeps a person in charge of what lands.";
 
 /** Everything the home page says, for IndexNow (web/indexnow.ts): its Markdown and the landing page's own copy. */
 export async function homeContent(o: string): Promise<string> {
@@ -252,7 +283,12 @@ function entities(o: string): object[] {
       applicationSubCategory: "Git hosting and continuous integration",
       operatingSystem: "Web",
       description: HOME.lead,
-      featureList: [...HOME.features.map((f) => `${f.title}: ${f.text}`), `Runs entirely on Cloudflare: ${CLOUDFLARE_CLAIM}`, `Open source under the Apache License 2.0, deployed to your own Cloudflare account`],
+      featureList: [
+        ...HOME.features.map((f) => `${f.title}: ${f.text}`),
+        ...HOME.agents.map((f) => `${f.title}: ${f.text}`),
+        ...HOME.integrations.map((f) => `${f.title}: ${f.text}`),
+        `Runs entirely on Cloudflare: ${CLOUDFLARE_CLAIM}`, `Open source under the Apache License 2.0, deployed to your own Cloudflare account`,
+      ],
       license: SOURCE.license,
       isAccessibleForFree: true,
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free, open-source software. Your instance's Cloudflare usage is billed by Cloudflare." },
@@ -389,25 +425,45 @@ export const Landing: FC = () => (
       {/* One line: whitespace inside <pre> shows. */}
       {raw(`<pre class="mk-code" aria-label="A GitHub Actions workflow that runs on Diffinery unchanged"><code>${escapeHtml(HOME.workflow)}</code></pre>`)}
     </section>
-    <section class="mk-sec">
+    <section class="mk-sec" id="agents">
       <h2>Built for AI coding agents</h2>
-      <p class="mk-wide">Claude Code, Codex and other agents work through Git, the GitHub CLI, the REST API or the built-in MCP server, as accounts of their own. The server keeps a person in charge of what lands.</p>
+      <p class="mk-wide">{AGENTS_LEAD}</p>
       <div class="features">
-        <div class="box mk-card">
-          <h3>{raw(ICONS.bot)} Agent accounts</h3>
-          <p class="muted m0">Their own logins and tokens, owned by a person or organization, with every commit stamped with who they act for.</p>
-        </div>
-        <div class="box mk-card">
-          <h3>{raw(ICONS.shield)} Guardrails</h3>
-          <p class="muted m0">No pushes to protected branches, a person's approval on every agent pull request, and no secrets for agent-written code.</p>
-        </div>
-        <div class="box mk-card">
-          <h3>{raw(ICONS.code)} MCP, sandboxes and tasks</h3>
-          <p class="muted m0">One URL connects any MCP app. Agents get sandboxes to build and test in, and tasks turn a goal into a pull request.</p>
-        </div>
+        {HOME.agents.map((f) => (
+          <a class="box mk-card" href={f.href}>
+            <h3>
+              {raw(ICONS[f.icon as keyof typeof ICONS])} {f.title}
+            </h3>
+            <p class="muted m0">{f.text}</p>
+          </a>
+        ))}
       </div>
+      <figure class="mk-shot">
+        <a href="/docs/agents/today">
+          <img src="/docs/images/today.webp" width="1280" height="1000" loading="lazy" alt="The Today page on Diffinery: what needs you, the agent pull requests at work, your agent tasks and what changed since yesterday" />
+        </a>
+        <figcaption class="muted small">Today, the first page after you sign in: an agent pull request waiting for a person, the agents at work and the task that opened it.</figcaption>
+      </figure>
       <p>
         <a href="/agents">Diffinery for AI agents</a> · <a href="/docs/connect">Connect Claude, Claude Code or Codex</a>
+      </p>
+    </section>
+    <section class="mk-sec" id="integrations">
+      <h2>Works where you and your agents already work</h2>
+      <p class="mk-wide">Plugins and extensions for the tools you use, all with a browser sign-in, for diffinery.com or your own instance.</p>
+      <div class="features">
+        {HOME.integrations.map((f) => (
+          <a class="box mk-card" href={f.href}>
+            <h3>
+              {raw(ICONS[f.icon as keyof typeof ICONS])} {f.title}
+            </h3>
+            <p class="muted">{f.text}</p>
+            <code class="mk-install">{f.install}</code>
+          </a>
+        ))}
+      </div>
+      <p>
+        <a href="/docs/connect">Connect AI apps</a> · <a href="/features#works-with-the-tools-you-already-use">Every integration</a>
       </p>
     </section>
     <section class="mk-sec">
@@ -609,6 +665,8 @@ export function siteLlmsLines(o: string): string[] {
     `- Runs entirely on Cloudflare (Workers, Durable Objects, R2, D1, Queues, Workflows, Containers): code, pull requests, CI runners and the agent features alike. It is ${CLOUDFLARE_CLAIM} See ${o}/built-on-cloudflare.md, which compares the other Git and CI projects on Cloudflare.`,
     "- Hosted CI runners: Ubuntu 24.04 x64 containers, 4 vCPU and 12 GiB of memory by default, with smaller sizes chosen per job from its measured runs. No hosted macOS, Windows or Arm runners; self-hosted runners cover them.",
     "- Runs GitHub Actions workflow files from `.github/workflows/` as they are; differences are listed at " + `${o}/docs/actions/compatibility.md`,
+    `- Built for AI coding agents (${o}/agents.md): agent accounts with server-enforced guardrails (${o}/docs/agents/overview.md); agent tasks that run Claude Code or Codex in a sandbox with the person's own model key and open a pull request (${o}/docs/agents/tasks.md); agent review with inline findings and an Agent review check (${o}/docs/agents/review.md); a Today page of what needs you (${o}/docs/agents/today.md); merge on green (${o}/docs/collaboration/merge-on-green.md); browser terminals where Claude Code or Codex runs on the person's own Claude or ChatGPT plan (${o}/docs/agents/terminal.md). All opt-in; Diffinery doesn't sell or include model access.`,
+    `- Plugins and integrations: Claude Code and Codex plugins (marketplace codician-team/diffinery on GitHub, or ${SOURCE.repo}.git), an MCP server listed in the official MCP Registry as com.diffinery/diffinery (https://{diffinery_host}/mcp), the diffinery CLI, gh through the GitHub-compatible REST and GraphQL APIs, and extensions for VS Code, Cursor, Windsurf and JetBrains IDEs. Guides: ${o}/docs/connect.md`,
     "",
   ];
   for (const s of SITE_NAV) {
@@ -659,6 +717,9 @@ export const MARKETING_CSS = `
 .mk-table thead th{font-weight:600;border-bottom:1px solid var(--border)}.mk-table thead th:nth-child(2){color:var(--accent)}
 .mk-table tbody th{font-weight:500;color:var(--fg2)}
 .mk-faq .mk-q{border-top:1px solid var(--border2);padding:14px 0}.mk-faq h3{font-size:16px;margin:0 0 6px}.mk-faq p{margin:0;color:var(--fg2);line-height:1.65;max-width:860px}
+.mk-install{display:block;font-size:12px;overflow-wrap:anywhere;margin-top:auto}
+.mk-card:has(.mk-install){display:flex;flex-direction:column}
+.mk-shot{margin:20px 0 12px}.mk-shot img{display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:var(--r)}.mk-shot figcaption{margin-top:8px}
 .mk-band{margin:56px 0 0;padding:36px 20px;text-align:center;border:1px solid var(--border);border-radius:var(--r);background:var(--bg2)}
 .mk-band p{margin:0 auto 14px;max-width:620px}
 .mk-page{max-width:880px;margin:0 auto}

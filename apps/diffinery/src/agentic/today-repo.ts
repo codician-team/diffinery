@@ -37,6 +37,11 @@ export interface TodayPull {
   checks: ChecksState;
   failingChecks: string[];
   autoMerge: boolean;
+  /**
+   * An agent's pull request with auto-merge on that still needs a person to approve its latest commit (merge on
+   * green with approvals kept): it isn't landing until someone does, so Today asks them.
+   */
+  awaitingApproval?: boolean;
   queued: boolean;
   /**
    * What the last mergeability check found, while the base branch and the head are still the commits it saw:
@@ -56,7 +61,7 @@ export const MERGE_CHECKS_PER_SUMMARY = 5;
  * current base and head: Today checks it after answering, so a later Today knows whether it conflicts.
  */
 export const needsMergeCheck = (p: TodayPull): boolean =>
-  p.author.kind === "agent" && p.mergeState === null && !p.draft && !p.autoMerge && !p.queued && p.checks !== "failure" && !p.changesRequestedBy.length && !p.approvedHead;
+  p.author.kind === "agent" && p.mergeState === null && !p.draft && (!p.autoMerge || !!p.awaitingApproval) && !p.queued && p.checks !== "failure" && !p.changesRequestedBy.length && !p.approvedHead;
 
 export interface TodayMerged {
   number: number;
@@ -150,7 +155,11 @@ type PullJoin = {
 
 type ReviewRow = { number: number; author_id: string; author_login: string; author_kind: string; state: string; commit_id: string; imported: string | null };
 
-export function repoToday(sql: SqlStorage, checksFor: (sha: string) => Check[], since: string): RepoToday {
+/**
+ * `agentApprovalWaived(base)`: whether what Diffinery lands for agents into `base` needs no approving review
+ * (its rule's "as soon as the checks pass"); otherwise an agent's pull request waits for a person even with auto-merge on.
+ */
+export function repoToday(sql: SqlStorage, checksFor: (sha: string) => Check[], since: string, agentApprovalWaived: (base: string) => boolean = () => false): RepoToday {
   const rows = sql
     .exec<PullJoin>(
       `SELECT i.number, i.title, i.author_id, i.author_login, i.author_kind, i.created_at, i.updated_at,
@@ -181,6 +190,7 @@ export function repoToday(sql: SqlStorage, checksFor: (sha: string) => Check[], 
     const votes = [...latest.values()];
     const approvals = votes.filter((v) => v.state === "APPROVED" && v.author_kind === "user");
     const checks = checksState(checksFor(r.head_sha));
+    const approvedHead = approvals.some((v) => v.commit_id === r.head_sha);
     return {
       number: r.number,
       title: r.title,
@@ -193,12 +203,13 @@ export function repoToday(sql: SqlStorage, checksFor: (sha: string) => Check[], 
       createdAt: r.created_at,
       updatedAt: r.updated_at,
       approvedBy: approvals.map((v) => v.author_login),
-      approvedHead: approvals.some((v) => v.commit_id === r.head_sha),
+      approvedHead,
       changesRequestedBy: votes.filter((v) => v.state === "CHANGES_REQUESTED").map((v) => v.author_login),
       reviewerIds: votes.filter((v) => v.state === "APPROVED" || v.state === "CHANGES_REQUESTED").map((v) => v.author_id),
       checks: checks.state,
       failingChecks: checks.failing,
       autoMerge: !!r.auto_merge,
+      awaitingApproval: r.author_kind === "agent" && !!r.auto_merge && !approvedHead && !agentApprovalWaived(r.base_ref),
       queued: !!r.queued,
       mergeState: r.merge_state,
     };

@@ -7,6 +7,8 @@ description: Your morning view of agent work across every repository you can see
 
 The same view is available to scripts and agents from the REST API and the `today` MCP tool, so your own coding agent can read your morning too. It can also come to you by email as a [morning digest](#the-morning-digest), and it fits a phone's screen.
 
+![The Today page: counts of what needs you, agent pull requests open, merged since yesterday and failed runs, then the Needs you, Agents at work, Your agent tasks and Since yesterday sections](/docs/images/today.webp)
+
 ## What it shows
 
 At the top, four numbers link to the sections below them: how many items need you, how many agent pull requests are open, how many pull requests merged since yesterday (and how many of them were by agents), and how many workflow runs failed.

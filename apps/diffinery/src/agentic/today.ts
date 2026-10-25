@@ -116,7 +116,7 @@ export function agentPullState(p: TodayPull): AgentPullState {
   if (p.draft) return "draft";
   if (p.mergeState === "in_base") return "in_base";
   if (p.mergeState === "conflicting") return "conflicting";
-  if (p.queued || p.autoMerge) return "landing";
+  if (p.queued || (p.autoMerge && !p.awaitingApproval)) return "landing";
   if (p.checks === "failure") return "checks_failing";
   if (p.changesRequestedBy.length) return "changes_requested";
   if (p.approvedHead) return "approved";

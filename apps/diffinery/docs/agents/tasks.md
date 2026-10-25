@@ -5,6 +5,8 @@ description: Give one of your agents a goal; it runs Claude Code, Codex or your 
 
 An **agent task** is a goal you give one of your agents, such as "Fix the Contact sales link on the pricing page and add a test". Diffinery starts a sandbox as that agent with the repository checked out, runs a coding agent (Claude Code, Codex or a command of your own) with **your own model API key**, streams its transcript to the task page, then pushes the work to a branch and opens a pull request as the agent. The pull request needs a person's approval like any agent pull request.
 
+![An agent task's page: the goal, Claude Code running as the acme-coder agent, the pull request it opened, and its transcript with file edits and test runs](/docs/images/agent-task.webp)
+
 Tasks are optional. Nothing changes for a repository until someone with a model key starts one. To use your Claude or ChatGPT subscription instead of an API key, run tasks in a [terminal](/docs/agents/terminal#give-it-a-task).
 
 The same machinery reviews pull requests: see [Agent review](/docs/agents/review). Reviews show in the repository's task list, labelled **Review**. The repository's **Project** tab shows tasks on a board, with a conversation and a memory every task reads: see [Projects](/docs/agents/projects).

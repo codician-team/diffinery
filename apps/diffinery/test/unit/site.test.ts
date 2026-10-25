@@ -9,6 +9,7 @@ import { app } from "../../src/app.js";
 import { web } from "../../src/web/routes.js";
 import { slugify } from "../../src/web/markdown.js";
 import type { Env } from "../../src/env.js";
+import { DOCS_IMAGES } from "../../src/docs/content.generated.js";
 import { getPage, llmsFullTxt, llmsTxt } from "../../src/docs/pages.js";
 import { CLOUDFLARE_CLAIM, faqs, homeMarkdown, sitePage, sitePages } from "../../src/web/site.js";
 import { RESERVED_LOGINS } from "../../src/lib/util.js";
@@ -53,6 +54,11 @@ function linkProblems(md: string): string[] {
       continue;
     }
     const [path, frag] = href.split("#") as [string, string | undefined];
+    // Screenshots, served from docs/images (scripts/build-docs.mjs checks them).
+    if (path.startsWith("/docs/images/")) {
+      if (!(path.slice("/docs/images/".length) in DOCS_IMAGES)) problems.push(`no image ${path}`);
+      continue;
+    }
     if (path === "/docs" || path.startsWith("/docs/")) {
       if (OTHER_PATHS.some((re) => re.test(path))) continue;
       const doc = getPage(path === "/docs" ? "index" : path.slice(6), ORIGIN);

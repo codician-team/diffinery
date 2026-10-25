@@ -1,7 +1,7 @@
 {
   "$schema": "https://context7.com/schema/context7.json",
   "projectTitle": "Diffinery",
-  "description": "Open-source git forge with GitHub Actions-compatible CI, pull requests, an MCP server and AI agent guardrails, running entirely on Cloudflare Workers, Durable Objects, R2 and Containers.",
+  "description": "Open-source git forge with GitHub Actions-compatible CI, pull requests, AI agent guardrails, agent tasks and agent review with Claude Code or Codex, an MCP server and Claude Code and Codex plugins, running entirely on Cloudflare Workers, Durable Objects, R2 and Containers.",
   "folders": ["apps/diffinery/docs", "apps/diffinery/site"],
   "excludeFolders": ["apps/diffinery/docs/images", "apps/diffinery/site/blog"],
   "rules": [

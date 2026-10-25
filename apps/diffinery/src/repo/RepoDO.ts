@@ -1720,7 +1720,12 @@ export class RepoDO extends DurableObject<Env> {
   private todayMergeChecks = new Set<number>();
 
   todaySummary(since: string) {
-    const summary = repoToday(this.sql, (sha) => this.checksAndStatuses(sha), since);
+    // Agents' auto-merges wait for a person's approval unless the base branch's rule waives it (repo/collab.ts mergeability).
+    const waived = (base: string) => {
+      const rules = this.protectionFor(base);
+      return !!rules?.agentAutoMergeWithoutApproval && !rules.agentsMayMerge;
+    };
+    const summary = repoToday(this.sql, (sha) => this.checksAndStatuses(sha), since, waived);
     // After answering, find out whether agents' pull requests that may be waiting for a person conflict
     // or are already in their base, so the next Today leaves those out of "needs you".
     const unchecked = summary.pulls.filter((p) => needsMergeCheck(p) && !this.todayMergeChecks.has(p.number)).slice(0, MERGE_CHECKS_PER_SUMMARY);

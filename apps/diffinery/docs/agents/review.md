@@ -5,6 +5,8 @@ description: One of your agents reviews pull requests for bugs, security issues 
 
 **Agent review** has one of your agents review pull requests, the way Cursor's Bugbot does. The agent runs Claude Code, Codex or a command of your own in a read-only sandbox, using a model key you bring. It reads the pull request's changes and looks for bugs, security issues and logic errors, not style. Diffinery then posts what it found as a review with inline comments, and reports an **Agent review** check that fails when a finding is blocking.
 
+![A pull request an agent task opened, with an agent review: its summary and an inline finding with a suggested fix and a Fix it button](/docs/images/agent-pull-request.webp)
+
 Agent review is off until a repository admin turns it on. Nothing changes for a repository that doesn't use it.
 
 ## Turn it on

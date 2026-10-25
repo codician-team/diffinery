@@ -1,7 +1,7 @@
 {
   "name": "diffinery",
   "private": true,
-  "description": "Open-source GitHub and GitHub Actions alternative that runs entirely on Cloudflare: git hosting, pull requests, code review, drop-in GitHub Actions CI and AI agent guardrails.",
+  "description": "Open-source GitHub and GitHub Actions alternative that runs entirely on Cloudflare: git hosting, pull requests, code review, drop-in GitHub Actions CI, AI agent guardrails, agent tasks and reviews with Claude Code or Codex, and plugins for Claude Code and Codex.",
   "homepage": "https://diffinery.com",
   "repository": {
     "type": "git",
@@ -26,7 +26,11 @@
     "serverless",
     "code-review",
     "ai-agents",
-    "mcp"
+    "ai-code-review",
+    "claude-code",
+    "codex",
+    "mcp",
+    "mcp-server"
   ],
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.28.0",

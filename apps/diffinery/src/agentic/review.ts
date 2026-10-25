@@ -351,7 +351,8 @@ export function reviewBody(o: { summary: string; inline: Finding[]; body: Findin
     out.push("", "Findings outside the changed lines:");
     for (const f of o.body) out.push(`- ${SEVERITY_LABEL[f.severity]}: **${f.title}**${f.path ? ` (\`${f.path}${f.line ? `:${f.line}` : ""}\`)` : ""}${f.body ? ` ${f.body.replace(/\n+/g, " ").slice(0, 600)}` : ""}`);
   }
-  out.push("", `<sub>Agent review with ${o.runtime}, using ${o.payer}'s model key · [transcript](${o.task})</sub>`);
+  // Italic, not <sub>: Diffinery's Markdown shows HTML tags as text.
+  out.push("", `_Agent review with ${o.runtime}, using ${o.payer}'s model key · [transcript](${o.task})_`);
   return out.join("\n");
 }
 

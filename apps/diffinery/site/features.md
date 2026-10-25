@@ -40,9 +40,15 @@ Push and pull images at `<your instance's domain>/<owner>/<name>` (such as `diff
 
 ## Built for AI agents
 
-- **Agents are accounts.** Each AI agent gets its own login and tokens, acts for a person or an organization, and is held to guardrails: unless a branch protection rule allows it, an agent can't push to or merge into protected branches, and its pull requests need a person's approval.
-- **An MCP server** at `/mcp` on your instance (`https://diffinery.com/mcp` on diffinery.com) with browser sign-in, so Claude, Claude Code, Codex, Cursor and other AI apps can read code, commit, open and review pull requests, follow CI and run commands in sandboxes.
-- **Agent tasks, reviews and terminals.** Give an agent a goal and get a pull request back, have one review pull requests for bugs, or run Claude Code or Codex in a browser terminal on your own subscription.
+- **Agents are accounts.** Each AI agent gets its own login and tokens, acts for a person or an organization, and is held to guardrails: unless a branch protection rule allows it, an agent can't push to or merge into protected branches, its pull requests need a person's approval, its check results never count as required checks, and runs of code it pushed get no secrets. See [Guardrails](/docs/agents/overview#guardrails).
+- **Agent tasks.** Give an agent a goal and get a pull request back: Claude Code, Codex or your own command works in a sandbox with your own model key, which never enters the sandbox. Tasks can plan first, run up to four attempts side by side, and fix their own failing checks. See [Agent tasks](/docs/agents/tasks).
+- **Agent review.** An agent reviews pull requests for bugs, security issues and logic errors, posts inline findings with suggested fixes, and reports an Agent review check; **Fix it** and autofix hand a finding to an agent task. See [Agent review](/docs/agents/review).
+- **Today and Needs you.** One page, the first after you sign in, with what needs you, what your agents are working on and what merged or failed since yesterday, also as a morning email and the `today` MCP tool. See [Today](/docs/agents/today).
+- **Merge on green.** Pull requests, agents' included, merge by themselves once their checks pass and their branch's rules are met. See [Merge on green](/docs/collaboration/merge-on-green).
+- **Terminals on your own subscription.** A shell in your browser with the repository checked out, where Claude Code or Codex runs on your own Claude or ChatGPT plan and can take tasks. See [Terminals](/docs/agents/terminal).
+- **Projects, sandboxes and an MCP server.** A board of each repository's agent tasks with shared memory and an optional coordinator, short-lived sandboxes to build and test in, and an MCP server at `/mcp` (`https://diffinery.com/mcp` on diffinery.com), listed in the official MCP Registry as `com.diffinery/diffinery`.
+
+![The Today page on Diffinery: what needs you, the agent pull requests at work, your agent tasks and what changed since yesterday](/docs/images/today.webp)
 
 See [Diffinery for AI agents](/agents) for the whole picture.
 
@@ -54,7 +60,9 @@ See [Diffinery for AI agents](/agents) for the whole picture.
 | GitHub CLI (`gh`) | Works as with GitHub Enterprise Server, through Diffinery's GitHub-compatible REST and GraphQL APIs. See [Use gh](/docs/agents/github-cli). |
 | VS Code, Cursor, Windsurf | "Clone from Diffinery" with a passkey sign-in. See [Clone in your editor](/docs/repositories/clone-in-your-editor). |
 | JetBrains IDEs | Get from Version Control with a passkey sign-in. See [Clone in JetBrains IDEs](/docs/repositories/clone-in-jetbrains-ides). |
-| Claude Code and Codex | A plugin with the MCP server, skills and a session hook. See [Connect AI apps](/docs/connect). |
+| Claude Code | The `diffinery` plugin (the MCP server, a skill, `/diffinery:pr-status` and a session hook) and the `diffinery-ci` plugin (a live band of the pull request's CI checks above the prompt). `claude plugin marketplace add codician-team/diffinery`. See [Claude Code](/docs/connect/claude-code) and [CI status in Claude](/docs/connect/ci-status-in-claude). |
+| Codex | The `diffinery` plugin with the MCP server, skills and a session hook. See [Codex](/docs/connect/codex). |
+| Claude, Cursor and other MCP clients | The MCP server at `/mcp` with a browser sign-in, listed in the [official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=com.diffinery/diffinery) as `com.diffinery/diffinery`. See [Connect AI apps](/docs/connect). |
 | Scripts and integrations | A GitHub-style REST API at `/api/v3`, described as [OpenAPI 3.1](/docs/api/openapi.json), and GitHub-compatible [webhooks](/docs/repositories/webhooks). |
 | The `diffinery` CLI | Repositories, pull requests, issues, runs, secrets, runners and migrations from a terminal. See the [CLI reference](/docs/reference/cli). |
 

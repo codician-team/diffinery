@@ -47,6 +47,9 @@ describe("agentPullState", () => {
   it("orders what a person acts on", () => {
     expect(agentPullState(pull({ number: 1, draft: true, checks: "failure" }))).toBe("draft");
     expect(agentPullState(pull({ number: 1, autoMerge: true, checks: "failure" }))).toBe("landing");
+    // Merge on green that keeps approvals: auto-merge is on, but it lands only once a person approves.
+    expect(agentPullState(pull({ number: 1, autoMerge: true, awaitingApproval: true }))).toBe("waiting_for_approval");
+    expect(agentPullState(pull({ number: 1, autoMerge: true, awaitingApproval: true, checks: "pending" }))).toBe("checks_running");
     expect(agentPullState(pull({ number: 1, checks: "failure", changesRequestedBy: ["bob"] }))).toBe("checks_failing");
     expect(agentPullState(pull({ number: 1, changesRequestedBy: ["bob"], approvedHead: true }))).toBe("changes_requested");
     expect(agentPullState(pull({ number: 1, approvedHead: true }))).toBe("approved");
@@ -68,6 +71,7 @@ describe("needsMergeCheck", () => {
     const agent = (p: Partial<TodayPull>) => pull({ number: 1, author: OTHER_BOT, mergeState: null, ...p });
     expect(needsMergeCheck(agent({}))).toBe(true);
     expect(needsMergeCheck(agent({ checks: "pending" }))).toBe(true);
+    expect(needsMergeCheck(agent({ autoMerge: true, awaitingApproval: true }))).toBe(true);
     for (const p of [{ mergeState: "clean" as const }, { draft: true }, { autoMerge: true }, { queued: true }, { checks: "failure" as const }, { changesRequestedBy: ["bob"] }, { approvedHead: true }, { author: BOB }]) expect(needsMergeCheck(agent(p))).toBe(false);
   });
 });
@@ -82,6 +86,12 @@ describe("classify", () => {
     const pulls = [pull({ number: 1, author: OTHER_BOT }), pull({ number: 2, author: OTHER_BOT, checks: "pending" }), pull({ number: 3, author: OTHER_BOT, approvedHead: true }), pull({ number: 4, author: OTHER_BOT, checks: "failure" }), pull({ number: 5, author: OTHER_BOT, changesRequestedBy: ["bob"] })];
     const t = classify(input([{ repo: repo("web"), data: data({ pulls }) }, { repo: repo("api"), data: data({ pulls: [pull({ number: 9, author: OTHER_BOT })] }) }], ["web"]));
     expect(t.needsYou.map((x) => `${x.repo.id}#${x.pull.number}:${x.kind}`).sort()).toEqual(["web#1:agent_approval", "web#2:agent_approval"]);
+  });
+
+  it("asks for an approval that an agent's auto-merge still waits for, but not for one that lands by itself", () => {
+    const pulls = [pull({ number: 1, author: OTHER_BOT, autoMerge: true, awaitingApproval: true }), pull({ number: 2, author: OTHER_BOT, autoMerge: true })];
+    const t = classify(input([{ repo: repo("web"), data: data({ pulls }) }]));
+    expect(t.needsYou.map((x) => `${x.pull.number}:${x.kind}`)).toEqual(["1:agent_approval"]);
   });
 
   it("only role-checks repositories with agent work waiting for a person", () => {

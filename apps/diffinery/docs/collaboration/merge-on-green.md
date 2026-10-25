@@ -10,6 +10,8 @@ description: Have pull requests merge by themselves once their checks pass, for 
 
 After that, every new pull request merges on green. Nothing is skipped: auto-merge waits for every rule of the branch, a person's pull request still needs the approvals the branch asks for, and a change an agent makes to a workflow file still needs a person to merge it.
 
+![The merge box of an agent's pull request: the required check passed, and auto-merge is on, waiting for a person's approval](/docs/images/merge-on-green.webp)
+
 ## The quickest path (a repository you work on alone)
 
 1. Push a workflow that runs on pull requests (for example `on: pull_request`; see [Actions](/docs/actions/overview)), open one pull request, and let its checks run once.

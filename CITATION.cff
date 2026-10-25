@@ -8,9 +8,10 @@ abstract: >-
   Containers). It hosts Git repositories, pull requests with reviews and a merge queue,
   issues, releases and a container registry, runs existing .github/workflows files on
   per-job containers, and gives AI coding agents accounts of their own with
-  server-enforced guardrails and a built-in MCP server.
+  server-enforced guardrails, agent tasks and agent code review that run Claude Code
+  or Codex in sandboxes, a built-in MCP server and plugins for Claude Code and Codex.
 authors:
-  - name: "The Diffinery Authors"
+  - name: "Codician Team"
 version: "0.1.0"
 date-released: "2026-10-25"
 license: Apache-2.0
@@ -31,4 +32,7 @@ keywords:
   - serverless
   - code-review
   - ai-agents
+  - ai-code-review
+  - claude-code
+  - codex
   - mcp
