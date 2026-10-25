@@ -6,7 +6,8 @@
 # personal contributors.
 # The rewrite is deterministic: the same Diffinery history always gives the same
 # GitHub commits, so a sync is a fast-forward unless Diffinery's own history was
-# rewritten (then GitHub follows it). Only main is mirrored.
+# rewritten (then GitHub follows it). Only main, the tags on it and their releases
+# are mirrored.
 #
 # Reads Diffinery with DIFFINERY_TOKEN when set (not needed once the repo is public);
 # MIRROR_SRC can also be a local clone that has main. Pushes with GITHUB_MIRROR_TOKEN
@@ -22,7 +23,7 @@ set -euo pipefail
 SRC=${MIRROR_SRC:-https://diffinery.com/codician/diffinery.git}
 DST=${MIRROR_DST:-https://github.com/codician-team/diffinery.git}
 NAME=${MIRROR_NAME:-codician-team}
-EMAIL=${MIRROR_EMAIL:-codician-team@users.noreply.diffinery.com}
+EMAIL=${MIRROR_EMAIL:-hi@codician.com}
 dry_run=${1:-}
 
 work=${MIRROR_WORKDIR:-}
@@ -62,7 +63,65 @@ if [ "$dry_run" = "--dry-run" ]; then
 fi
 remote=$(git "${auth[@]}" ls-remote "$DST" refs/heads/main | cut -f1)
 if [ "$remote" = "$dst_head" ]; then
-  echo "GitHub is up to date."
-  exit 0
+  echo "GitHub main is up to date."
+else
+  git "${auth[@]}" push --force "$DST" main:main
 fi
-git "${auth[@]}" push --force "$DST" main:main
+
+# Tags on main follow their commits, as lightweight tags (so no tagger identity).
+declare -A rewritten
+while read -r old new; do rewritten[$old]=$new; done < <(tail -n +2 filter-repo/commit-map)
+remote_tags=$(git "${auth[@]}" ls-remote --tags "$DST")
+mirrored=()
+for tag in $(git tag); do
+  target=${rewritten[$(git rev-parse "$tag^{commit}")]:-}
+  [ -n "$target" ] && [ "$target" != 0000000000000000000000000000000000000000 ] || continue
+  if grep -qx "$target"$'\t'"refs/tags/$tag" <<<"$remote_tags" || git "${auth[@]}" push --force "$DST" "$target:refs/tags/$tag"; then
+    mirrored+=("$tag")
+  else
+    echo "warning: could not push tag $tag" >&2
+  fi
+done
+
+# Releases on the mirrored tags get the same name, notes and flags on GitHub (assets aren't copied).
+# Needs GITHUB_MIRROR_TOKEN for GitHub's API.
+if [ -n "${GITHUB_MIRROR_TOKEN:-}" ] && [ ${#mirrored[@]} -gt 0 ]; then
+  MIRROR_TAGS="${mirrored[*]}" python3 - <<'PY'
+import json, os, urllib.error, urllib.request
+
+src = os.environ.get("MIRROR_SRC_API", "https://diffinery.com/api/v3/repos/codician/diffinery")
+dst = os.environ.get("MIRROR_DST_API", "https://api.github.com/repos/codician-team/diffinery")
+tags = set(os.environ["MIRROR_TAGS"].split())
+
+def call(method, url, body=None, token=None):
+    req = urllib.request.Request(url, method=method, data=None if body is None else json.dumps(body).encode())
+    req.add_header("Accept", "application/vnd.github+json")
+    req.add_header("User-Agent", "diffinery-mirror")
+    req.add_header("Content-Type", "application/json")
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, json.load(r)
+    except urllib.error.HTTPError as e:
+        return e.code, None
+
+token = os.environ["GITHUB_MIRROR_TOKEN"]
+status, releases = call("GET", f"{src}/releases?per_page=100", token=os.environ.get("DIFFINERY_TOKEN"))
+if status != 200:
+    raise SystemExit(f"could not list Diffinery releases ({status})")
+for r in releases:
+    if r["draft"] or r["tag_name"] not in tags:
+        continue
+    want = {"name": r["name"], "body": r["body"] or "", "prerelease": r["prerelease"]}
+    status, have = call("GET", f"{dst}/releases/tags/{r['tag_name']}", token=token)
+    if status == 404:
+        status, _ = call("POST", f"{dst}/releases", {"tag_name": r["tag_name"], **want}, token)
+        print(f"release {r['tag_name']}: created ({status})")
+    elif status == 200 and any(have.get(k) != v for k, v in want.items()):
+        status, _ = call("PATCH", f"{dst}/releases/{have['id']}", want, token)
+        print(f"release {r['tag_name']}: updated ({status})")
+    elif status != 200:
+        print(f"warning: could not read GitHub release {r['tag_name']} ({status})")
+PY
+fi
