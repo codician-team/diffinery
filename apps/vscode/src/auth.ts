@@ -2,6 +2,7 @@ import * as http from "node:http";
 import { randomUUID } from "node:crypto";
 import * as vscode from "vscode";
 import { Api } from "./api";
+import { chooseServer } from "./servers";
 import { authorizeUrl, clientId, editorRedirect, normalizeServer, pkce, readCallback } from "./util";
 
 export const AUTH_ID = "diffinery";
@@ -184,6 +185,10 @@ export class DiffineryAuth implements vscode.AuthenticationProvider, vscode.Disp
   }
 
   async createSession(): Promise<vscode.AuthenticationSession> {
+    // Every way in (the Accounts menu, the clone picker, Publish, the commands) first asks which Diffinery, until
+    // someone has chosen, so a self-hosted one needs no trip to the settings. It may change diffinery.serverUrl, and
+    // with it this.key().
+    await chooseServer(this.ctx.globalState);
     const s = this.withToken ? await this.askForToken() : await this.signInWithBrowser();
     // Signing in again replaces the old sign-in, and ends its connection on the server.
     const old = await this.load();
@@ -318,6 +323,11 @@ export class DiffineryAuth implements vscode.AuthenticationProvider, vscode.Disp
     if (!token) throw new vscode.CancellationError();
     const user = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "Checking the token with Diffinery…" }, () => new Api(server, token, this.version).user());
     return { id: randomUUID(), server, login: user.login, accountId: String(user.id), kind: "token", accessToken: token };
+  }
+
+  /** Who is signed in to the server in the settings, if anyone. */
+  async login(): Promise<string | undefined> {
+    return (await this.load())?.login;
   }
 
   async signOut(): Promise<void> {

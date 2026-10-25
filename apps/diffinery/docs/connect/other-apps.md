@@ -9,6 +9,8 @@ Any app that supports remote MCP servers over HTTP can connect to Diffinery. App
 https://diffinery.com/mcp
 ```
 
+On a [self-hosted Diffinery](/docs/self-hosting), use your instance's address instead, such as `https://git.example.com/mcp`. Use it in place of `https://diffinery.com/mcp` in the examples below.
+
 ## Cursor
 
 Add Diffinery to `~/.cursor/mcp.json`, or to `.cursor/mcp.json` in a project to share it with everyone who opens the project:

@@ -1,6 +1,6 @@
 ---
 name: pr-status
-description: Show the Diffinery pull request for the current branch (or a given PR number), its CI checks, and the log tail of any failing job. Use when the user asks for PR status, CI status, or why checks failed in a repository hosted on diffinery.com. Codex counterpart of the Claude Code /pr-status command.
+description: Show the Diffinery pull request for the current branch (or a given PR number), its CI checks, and the log tail of any failing job. Use when the user asks for PR status, CI status, or why checks failed in a repository hosted on Diffinery (diffinery.com or a self-hosted instance). Codex counterpart of the Claude Code /pr-status command.
 ---
 
 # PR status
@@ -11,9 +11,10 @@ request number the user gave (call it N; leave it out when none was given). Use 
 comments.
 
 1. Run `git remote -v` and `git branch --show-current`. If no remote is on
-   diffinery.com, say this repository is not hosted on Diffinery and stop. If
-   `diffinery` is not installed, say how to install it
-   (`curl -fsSL https://diffinery.com/install | bash`) and stop.
+   diffinery.com or another Diffinery instance (the one `diffinery whoami` names, or one
+   the session's Diffinery note names), say this repository is not hosted on Diffinery
+   and stop. If `diffinery` is not installed, say how to install it
+   (`curl -fsSL https://HOST/install | bash`, with the repository's Diffinery host) and stop.
 2. Run `diffinery pr view [N]`. If there is no open pull request for the branch, say so
    (suggest `diffinery pr create ... --intent ...`) and stop.
 3. Run `diffinery pr checks [N]` (exit status 0 = passed, 1 = failed, 8 = pending; a

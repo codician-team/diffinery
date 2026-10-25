@@ -50,7 +50,7 @@ The `diffinery` server shows **OAuth** under **Auth** (before you sign in it say
 
 | Part | What it does |
 | --- | --- |
-| MCP server | `https://diffinery.com/mcp` with browser sign-in: every [Diffinery tool](/docs/reference/mcp-tools). |
+| MCP server | `https://diffinery.com/mcp` (see [Self-hosted Diffinery](#self-hosted-diffinery) for your own instance) with browser sign-in: every [Diffinery tool](/docs/reference/mcp-tools). |
 | `diffinery` skill | The loop on Diffinery: branch, `diffinery pr create --intent`, `diffinery pr checks --watch`, `diffinery run logs`, auto-merge, and the agent rules. |
 | `pr-status` skill | This branch's pull request, its checks, and the log tail of failing jobs. (Codex plugins have no slash commands, so this is a skill.) |
 | Session hook | In a Diffinery clone, tells Codex the repository is hosted on Diffinery and whether the CLI is installed and signed in. Codex runs plugin hooks only after you trust them: open `/hooks` in Codex and trust it. The skills work without it. |
@@ -91,6 +91,18 @@ codex -c 'mcp_servers.diffinery.url="https://diffinery.com/mcp"' \
 ```
 
 `codex mcp list` then shows **Bearer token** under **Auth**. More in [Headless use](/docs/connect/how-sign-in-works#headless-use).
+
+## Self-hosted Diffinery
+
+The plugin's skills and session hook work with any Diffinery instance, such as one you [deploy on your own Cloudflare account](/docs/self-hosting). The hook recognises a clone of your instance when its URL is in `DIFFINERY_URL` or saved by `diffinery login`. Codex plugins have no settings, so the plugin's MCP server stays `https://diffinery.com/mcp`; a server of your own named `diffinery` takes its place. `diffinery setup` adds it for you when Codex is installed:
+
+```sh
+curl -fsSL https://git.example.com/install | bash
+diffinery setup --url https://git.example.com     # ✓ Codex: the diffinery MCP server is now https://git.example.com/mcp
+codex mcp login diffinery
+```
+
+Or add it yourself: `codex mcp add diffinery --url https://git.example.com/mcp`. `codex mcp list` then shows your instance's URL for `diffinery`. For headless use, add `--bearer-token-env-var DIFFINERY_TOKEN` and set `DIFFINERY_URL=https://git.example.com` for the CLI.
 
 ## Troubleshooting
 

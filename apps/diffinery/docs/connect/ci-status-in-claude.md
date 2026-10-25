@@ -27,7 +27,7 @@ Claude Code shows the pull request of the branch you're on, with its CI. On Diff
    ```text
    ✓ git will use diffinery for https://diffinery.com
    ✓ gh is signed in to diffinery.com
-   ✓ Claude Code plugins: diffinery 0.1.3 and diffinery-ci 0.2.3 load in new Claude Code sessions (named in ~/.claude/settings.json)
+   ✓ Claude Code plugins: diffinery 0.1.4 and diffinery-ci 0.2.4 load in new Claude Code sessions (named in ~/.claude/settings.json)
    ```
 
 3. Start a new Claude Code session in a clone of a Diffinery repository (or run `/reload-plugins` in an open one). On a branch with a pull request, the band appears above the prompt.
@@ -36,6 +36,9 @@ That's all. `gh` signed in to Diffinery also gives Claude Code's own footer badg
 
 > [!NOTE]
 > `diffinery setup` saves the plugins in `~/.claude/diffinery-plugins/` and names them in `CLAUDE_CODE_PLUGIN_DIRS`, in the `env` block of `~/.claude/settings.json`, which Claude Code reads at the start of every session in the terminal, the desktop app and the editors. It keeps everything else in that file. To skip it, run `diffinery setup --no-claude-plugins`. A plugin you already installed from the Diffinery marketplace (`claude plugin install diffinery-ci@diffinery`) is left as it is.
+
+> [!NOTE]
+> On a [self-hosted Diffinery](/docs/self-hosting), install the CLI from your instance and give `diffinery setup` its URL: `curl -fsSL https://git.example.com/install | bash`, then `diffinery setup --url https://git.example.com`. The band then reads that instance: it follows `DIFFINERY_URL`, else the plugin's **Diffinery URL** setting (which `diffinery setup` sets, and `/config` changes), else the URL `diffinery login` saved. It sends a token only to the instance the token belongs to. See [Claude Code: Self-hosted Diffinery](/docs/connect/claude-code#self-hosted-diffinery).
 
 ## In cloud sessions and project threads
 
@@ -94,7 +97,7 @@ So a Diffinery pull request gets no card there today, and nothing a repository o
 | Problem | What to do |
 | --- | --- |
 | The band says `not signed in to Diffinery` | Set `DIFFINERY_TOKEN`, run `diffinery login`, or `diffinery auth setup-gh`. The plugin reads the token again on its next look. |
-| No band, although the branch has a pull request | The folder's remote isn't on diffinery.com (`git remote -v`), the band is hidden (run `/diffinery-ci`), or mods are off: `/plugin` lists the mods a session loaded. |
+| No band, although the branch has a pull request | The folder's remote isn't on the Diffinery the band reads (`git remote -v`; for your own instance, see the note under [On your computer](#on-your-computer)), the band is hidden (run `/diffinery-ci`), or mods are off: `/plugin` lists the mods a session loaded. |
 | `/diffinery-ci` says there's no pull request | The current branch has none yet. Open one with `diffinery pr create` or `gh pr create`. |
 | Claude wasn't told when CI failed | Notes follow commits the session itself pushed, and stop after `/diffinery-ci off`. A push from outside the session shows in the band only. |
 | `diffinery setup` says `~/.claude/settings.json isn't valid JSON` | Claude Code's settings file has a typo. Fix it (or move it away), then run `diffinery setup` again. |

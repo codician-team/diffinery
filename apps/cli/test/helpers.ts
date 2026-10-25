@@ -129,8 +129,9 @@ export function isolatedEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
     GIT_AUTHOR_EMAIL: "test@example.com",
     GIT_COMMITTER_NAME: "Test",
     GIT_COMMITTER_EMAIL: "test@example.com",
-    // This machine's Claude Code stays out of it; the tests that want it turn it back on.
+    // This machine's Claude Code and Codex stay out of it; the tests that want them turn them back on.
     DIFFINERY_NO_CLAUDE_PLUGINS: "1",
+    DIFFINERY_NO_CODEX: "1",
     ...extra,
   };
 }

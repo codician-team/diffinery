@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "diffinery": {
+      "type": "http",
+      "url": "https://diffinery.com/mcp"
+    }
+  }
+}

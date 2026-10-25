@@ -9,9 +9,10 @@ request $ARGUMENTS, if a number was given). Use the `diffinery` CLI rather than 
 change anything: no pushes, merges, re-runs or comments.
 
 1. Run `git remote -v` and `git branch --show-current`. If no remote is on
-   diffinery.com, say this repository is not hosted on Diffinery and stop. If
-   `diffinery` is not installed, say how to install it
-   (`curl -fsSL https://diffinery.com/install | bash`) and stop.
+   diffinery.com or another Diffinery instance (the one `diffinery whoami` names, or one
+   the session's Diffinery note names), say this repository is not hosted on Diffinery
+   and stop. If `diffinery` is not installed, say how to install it
+   (`curl -fsSL https://HOST/install | bash`, with the repository's Diffinery host) and stop.
 2. Run `diffinery pr view $ARGUMENTS`. If there is no open pull request for the branch,
    say so (suggest `diffinery pr create ... --intent ...`) and stop.
 3. Run `diffinery pr checks $ARGUMENTS` (exit status 0 = passed, 1 = failed,

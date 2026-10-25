@@ -17,6 +17,8 @@ import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SKIP_DIRS = {"tests", ".codex-plugin", "codex-skills", "node_modules"}
+# Codex reads its own MCP config: Codex substitutes no ${user_config.*} values.
+SKIP_FILES = {"codex.mcp.json"}
 STAMP = (2026, 1, 1, 0, 0, 0)
 
 
@@ -24,7 +26,7 @@ def files(plugin: pathlib.Path):
     out = []
     for p in plugin.rglob("*"):
         rel = p.relative_to(plugin)
-        if not p.is_file() or any(part in SKIP_DIRS for part in rel.parts):
+        if not p.is_file() or any(part in SKIP_DIRS for part in rel.parts) or rel.as_posix() in SKIP_FILES:
             continue
         # The engine lays generated type files beside a mod it loads from a working folder.
         if rel.parts[:2] == (".claude-plugin", "types"):

@@ -9,6 +9,8 @@ Diffinery works with AI apps through its [MCP server](/docs/agents/mcp). Every a
 https://diffinery.com/mcp
 ```
 
+On a [self-hosted Diffinery](/docs/self-hosting), use your instance's address instead, such as `https://git.example.com/mcp`.
+
 There is no token to copy. The app sends you to Diffinery in your browser, you choose whom it acts as and what it may do, and it's connected. You can see and disconnect every app under **Settings → Access tokens → Connected apps**, which also shows this URL with a copy button.
 
 ![Settings → Access tokens on Diffinery: the MCP server URL with a Copy button, links to the guides for Claude, Claude Code, Codex and other apps, and two connected apps, Claude Code and Codex, each acting as the agent ada-bot with write access.](/docs/images/connected-apps.webp)

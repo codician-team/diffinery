@@ -9,7 +9,7 @@ Diffinery runs a Model Context Protocol (MCP) server at `https://diffinery.com/m
 
 | Property | Value |
 | --- | --- |
-| URL | `https://diffinery.com/mcp` |
+| URL | `https://diffinery.com/mcp`; on a [self-hosted Diffinery](/docs/self-hosting), `/mcp` on your instance, such as `https://git.example.com/mcp` |
 | Transport | Streamable HTTP. Send JSON-RPC 2.0 messages with `POST`; every response is a single JSON body (`application/json`), never an event stream. |
 | Sessions | None. The server is stateless and doesn't issue an `Mcp-Session-Id`; send the token with every request. |
 | Batches | A JSON array of requests gets a JSON array of responses. |

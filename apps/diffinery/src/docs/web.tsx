@@ -22,6 +22,7 @@ import { fenceLangs, renderMarkdown } from "../web/markdown.js";
 import { fenceHighlighter } from "../web/highlight.js";
 import { ICONS } from "../web/assets.js";
 import { render, type WebApp } from "../web/ui.js";
+import { pluginZipFor } from "./claude-plugins.js";
 import { AGENT_SETUP_SH, CLAUDE_PLUGINS, CLI_BUNDLE, CLI_INSTALL_PS1, CLI_INSTALL_SH, CLI_SHA256, CLI_VERSION, DOCS_IMAGES, EDITOR_EXTENSION_SHA256, EDITOR_EXTENSION_VERSION, EDITOR_EXTENSION_VSIX_B64, EDITOR_INSTALL_PS1, EDITOR_INSTALL_SH, JETBRAINS_PLUGIN_DESCRIPTION, JETBRAINS_PLUGIN_SHA256, JETBRAINS_PLUGIN_SINCE_BUILD, JETBRAINS_PLUGIN_VERSION, JETBRAINS_PLUGIN_ZIP_B64 } from "./content.generated.js";
 import { allPages, getPage, headings, llmsFullTxt, llmsSmallTxt, llmsTxt, markdownUrl, nav, pageMarkdown, pageUrl, searchIndex, sectionLlmsFullTxt, sectionLlmsTxt, SLUGS, type Page } from "./pages.js";
 import { docsJsonLd } from "../web/site.js";
@@ -296,20 +297,26 @@ export function registerDocs(web: WebApp): void {
 
   // The Claude Code plugins, for `diffinery setup` (which checks the SHA-256 header) and claude.ai's Upload
   // plugin, neither of which can read the plugin repository. /-/claude/<name>.zip is always the current version; the versioned name stays the same bytes.
-  const claudeZips = new Map<string, Uint8Array<ArrayBuffer>>();
-  web.get("/-/claude/:file", (c) => {
+  // A self-hosted instance's copies point the plugins at itself (claude-plugins.ts).
+  const claudeZips = new Map<string, Promise<{ bytes: Uint8Array; sha256: string }>>();
+  web.get("/-/claude/:file", async (c) => {
     const file = c.req.param("file");
     const m = /^([a-z][a-z0-9-]*?)(?:-(\d+\.\d+\.\d+))?\.zip$/.exec(file);
     const plugin = m && Object.hasOwn(CLAUDE_PLUGINS, m[1]!) ? CLAUDE_PLUGINS[m[1]!]! : null;
     if (!m || !plugin || (m[2] !== undefined && m[2] !== plugin.version)) return c.text("Not found", 404);
-    let bytes = claudeZips.get(m[1]!);
-    if (!bytes) claudeZips.set(m[1]!, (bytes = Uint8Array.from(atob(plugin.zip), (ch) => ch.charCodeAt(0))));
-    return c.body(bytes, 200, {
+    const key = `${origin(c)} ${m[1]}`;
+    let built = claudeZips.get(key);
+    if (!built) {
+      claudeZips.set(key, (built = pluginZipFor(origin(c), Uint8Array.from(atob(plugin.zip), (ch) => ch.charCodeAt(0)), plugin.sha256)));
+      built.catch(() => claudeZips.delete(key));
+    }
+    const { bytes, sha256 } = await built;
+    return c.body(bytes as Uint8Array<ArrayBuffer>, 200, {
       ...PUBLIC,
       "content-type": "application/zip",
       "content-disposition": `attachment; filename="${m[1]}-${plugin.version}.zip"`,
       "x-diffinery-plugin-version": plugin.version,
-      "x-diffinery-plugin-sha256": plugin.sha256,
+      "x-diffinery-plugin-sha256": sha256,
     });
   });
 

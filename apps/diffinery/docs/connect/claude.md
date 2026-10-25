@@ -17,7 +17,7 @@ You need a Diffinery account and a Claude plan that allows custom connectors. Fo
    | Name | `Diffinery` |
    | Remote MCP server URL | `https://diffinery.com/mcp` |
 
-   Leave **Advanced settings** (OAuth client ID and secret) empty: Claude registers itself with Diffinery.
+   Leave **Advanced settings** (OAuth client ID and secret) empty: Claude registers itself with Diffinery. On a [self-hosted Diffinery](/docs/self-hosting), use your instance's address instead, such as `https://git.example.com/mcp`.
 3. Choose **Connect** next to Diffinery. A Diffinery tab opens. Sign in with your passkey if you aren't signed in.
 4. On the consent page, choose whom Claude acts as and its access, then choose **Connect**. The tab returns to Claude and the connector shows as connected.
 

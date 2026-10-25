@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { AUTH_ID, DiffineryAuth, SCOPES } from "./auth";
 import { GitCredentials, Publisher, syncCredentialStore } from "./git";
 import { RemoteSources } from "./remoteSources";
+import { offerInstallerServer, switchServer } from "./servers";
 import type { GitAPI, GitBaseAPI, GitBaseExtension, GitExtension } from "./typings/git";
 import { checkForUpdates } from "./updates";
 
@@ -26,6 +27,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
   command("diffinery.signIn", async () => vscode.authentication.getSession(AUTH_ID, SCOPES, { createIfNone: true }), "Signing in to Diffinery failed");
   command("diffinery.signInWithToken", () => auth.signInWithToken(), "Signing in to Diffinery failed");
   command("diffinery.signOut", () => auth.signOut(), "Signing out of Diffinery failed");
+  command("diffinery.useServer", () => switchServer(ctx.globalState, () => auth.login()), "Changing the Diffinery server failed");
   command("diffinery.checkForUpdates", () => checkForUpdates(ctx, auth.server(), version, log, true), "Checking for updates failed");
 
   // ---------------------------------------------------------------- the built-in Git extensions
@@ -86,6 +88,7 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     "Cloning from Diffinery failed",
   );
 
+  void offerInstallerServer(ctx.globalState, () => auth.login(), log).catch(report("Changing the Diffinery server failed"));
   void checkForUpdates(ctx, auth.server(), version, log, false).catch((e) => log.warn("update check failed", e));
 }
 

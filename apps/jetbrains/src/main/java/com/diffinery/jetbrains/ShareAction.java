@@ -62,7 +62,7 @@ public final class ShareAction extends DumbAwareAction {
       Messages.showInfoMessage(project, "Commit your files on a branch first, then share the project.", "Share Project on Diffinery");
       return;
     }
-    if (Accounts.get().account() == null) SignInDialogs.signInWithBrowser(project, a -> chooseAndShare(project, repo));
+    if (Accounts.get().account() == null) SignInDialogs.signIn(project, a -> chooseAndShare(project, repo));
     else chooseAndShare(project, repo);
   }
 

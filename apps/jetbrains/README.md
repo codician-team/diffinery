@@ -9,6 +9,15 @@ the server, and **Git → Share Project on Diffinery…** publishes a local repo
 It's plain Java (no Kotlin), against the platform's stable API only: `./gradlew verifyPlugin` runs JetBrains' Plugin
 Verifier against IntelliJ IDEA 2024.3, 2025.2 and the version the plugin builds with, and fails on internal API use.
 
+## Self-hosted Diffinery
+
+The server is `server` in the IDE's `diffinery.xml` (`Accounts.setServer`), `https://diffinery.com` by default. People
+change it from the Diffinery page of **Get from Version Control**: **Use another server…** under the sign-in button
+(`SignInDialogs.chooseServer`, which checks that `/-/jetbrains/updatePlugins.xml` answers there first), or one click on
+**Use git.example.com** when the IDE's plugin repositories include a Diffinery's `updatePlugins.xml`
+(`Util.pluginRepositoryServers`). **Share Project on Diffinery…** offers the same choice before signing in, and
+**Settings → Version Control → Diffinery → Server** remains. Changing the server signs out of the old one.
+
 ## Build
 
 Gradle 9 through the wrapper, with a JDK 21 or later (the IDE's own JetBrains Runtime works):

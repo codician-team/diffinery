@@ -8,8 +8,10 @@
 // where the band shows the rest, passes too where nothing draws, so a cloud thread hears either
 // way. /diffinery-ci answers in text where nothing draws. Nothing to set up.
 //
-// It reads Diffinery's GraphQL API with the token of the diffinery CLI (DIFFINERY_TOKEN or
-// `diffinery login`) or of gh signed in to the Diffinery host, and sends it only there.
+// It reads the GraphQL API of the Diffinery instance the session uses (DIFFINERY_URL, the
+// plugin's Diffinery URL setting, the CLI's saved URL, else diffinery.com) with the token of
+// the diffinery CLI (DIFFINERY_TOKEN or `diffinery login`) or of gh signed in to that host,
+// and sends a token only to the instance it belongs to.
 
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
@@ -19,9 +21,9 @@ import {
   QUERY,
   SYMBOL,
   checksLine,
+  chooseAuth,
   duration,
   factsLine,
-  hostOf,
   ordered,
   parsePr,
   parseRemotes,
@@ -39,7 +41,6 @@ import {
 
 const PLUGIN = 'diffinery-ci'
 const PANE = 'diffinery-ci'
-const DEFAULT_URL = 'https://diffinery.com'
 
 // Change a tag when the stored value's fields change: it declines what an earlier version
 // stored, which outlives a reload.
@@ -60,7 +61,7 @@ const NOTES: Record<WakeChoice, string> = {
   off: 'never',
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
   // What the person chose with `/diffinery-ci notes`, kept across sessions.
   let choice: WakeChoice = 'auto'
 
@@ -86,28 +87,29 @@ export const register: Register = on => {
     const seen = new Map<string, string>()
 
     const readAuth = async (): Promise<Auth> => {
-      let url = (await $.env.get('DIFFINERY_URL')) ?? null
-      let token = (await $.env.get('DIFFINERY_TOKEN')) ?? null
-      let source = token ? 'DIFFINERY_TOKEN' : ''
-      if (!url || !token) {
-        const xdg = await $.env.get('XDG_CONFIG_HOME')
-        const home = await $.env.get('HOME')
-        const base = xdg && xdg.startsWith('/') ? xdg : home ? `${home}/.config` : null
-        if (base) {
-          try {
-            const cfg = JSON.parse(await $.fs.read(`${base}/diffinery/config.json`)) as Record<string, unknown>
-            if (!url && typeof cfg.url === 'string') url = cfg.url
-            if (!token && typeof cfg.token === 'string' && cfg.token) {
-              token = cfg.token
-              source = 'diffinery login'
-            }
-          } catch {
-            // No config file, or not JSON: the CLI isn't signed in here.
-          }
+      let savedUrl: string | null = null
+      let savedToken: string | null = null
+      const xdg = await $.env.get('XDG_CONFIG_HOME')
+      const home = await $.env.get('HOME')
+      const base = xdg && xdg.startsWith('/') ? xdg : home ? `${home}/.config` : null
+      if (base) {
+        try {
+          const cfg = JSON.parse(await $.fs.read(`${base}/diffinery/config.json`)) as Record<string, unknown>
+          if (typeof cfg.url === 'string') savedUrl = cfg.url
+          if (typeof cfg.token === 'string' && cfg.token) savedToken = cfg.token
+        } catch {
+          // No config file, or not JSON: the CLI isn't signed in here.
         }
       }
-      url = (url ?? DEFAULT_URL).replace(/\/+$/, '')
-      const host = hostOf(url) ?? 'diffinery.com'
+      const picked = chooseAuth({
+        envUrl: (await $.env.get('DIFFINERY_URL')) ?? null,
+        envToken: (await $.env.get('DIFFINERY_TOKEN')) ?? null,
+        option: typeof options?.url === 'string' ? options.url : null,
+        savedUrl,
+        savedToken,
+      })
+      const { url, host } = picked
+      let { token, source } = picked
       if (!token) {
         try {
           const gh = await $.process.run(['gh', 'auth', 'token', '--hostname', host], { timeoutMs: 5000 })

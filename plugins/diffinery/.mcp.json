@@ -2,7 +2,7 @@
   "mcpServers": {
     "diffinery": {
       "type": "http",
-      "url": "https://diffinery.com/mcp"
+      "url": "${user_config.url}/mcp"
     }
   }
 }

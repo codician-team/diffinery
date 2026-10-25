@@ -13,6 +13,7 @@
       <li><b>Push and pull without passwords.</b> When Git asks for a password for Diffinery, the plugin answers with
       your signed-in account, and renews its token before it runs out.</li>
       <li><b>Share Project on Diffinery.</b> Publish a local Git repository as a new Diffinery repository.</li>
+      <li><b>Any Diffinery.</b> diffinery.com or your own: choose <b>Use another server…</b> under the sign-in button.</li>
     </ul>
     <p>Guide: <a href="https://diffinery.com/docs/repositories/clone-in-jetbrains-ides">Clone in JetBrains IDEs</a>.</p>
   ]]></description>

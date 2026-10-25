@@ -47,7 +47,7 @@ public final class SettingsPage implements Configurable {
     buttons.add(signIn);
     buttons.add(useToken);
     buttons.add(signOut);
-    JBLabel serverHelp = new JBLabel("Change it only for a self-hosted Diffinery. Changing it signs you out.");
+    JBLabel serverHelp = new JBLabel("https://diffinery.com, or the address of your own Diffinery. Changing it signs you out.");
     serverHelp.setForeground(UIUtil.getContextHelpForeground());
     JBLabel gitHelp = new JBLabel("<html>When you're signed in, Git uses this account for the server: clone, pull and push need no password.</html>");
     gitHelp.setForeground(UIUtil.getContextHelpForeground());

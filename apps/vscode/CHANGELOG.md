@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Works with any Diffinery, not only diffinery.com: the first sign-in asks which Diffinery you use, with **Use another Diffinery server…** for a self-hosted one.
+- New command **Diffinery: Use Another Server…**. Each server keeps its own sign-in.
+- Installed with a self-hosted Diffinery's `install-editor` script, the extension asks on its next start whether to use that server.
+
 ## 0.1.1
 
 - "Sign In with an Access Token" goes through the editor's own sign-in, so the first clone afterwards no longer asks to allow the extension to sign in.

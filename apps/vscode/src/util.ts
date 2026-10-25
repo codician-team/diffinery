@@ -1,23 +1,63 @@
 // Pure helpers, without the vscode module, so the unit tests can run them under Node.
 import { createHash, randomBytes } from "node:crypto";
+import * as path from "node:path";
 
 export const EXTENSION_ID = "codician.diffinery";
 /** Editors whose URL scheme the Diffinery server accepts as a redirect back to this extension (src/auth/oauth.ts there). */
 export const EDITOR_SCHEMES = ["vscode", "vscode-insiders", "cursor", "windsurf", "vscodium", "positron", "kiro"];
 export const DEFAULT_SERVER = "https://diffinery.com";
 
-/** The server's base URL from the setting: https (or http on this computer), no trailing slash, no path. */
-export function normalizeServer(raw: string | undefined): string {
-  const s = (raw ?? "").trim() || DEFAULT_SERVER;
+function checkServer(s: string): { server: string } | { invalid: "url" | "https" } {
   let u: URL;
   try {
     u = new URL(s.includes("://") ? s : `https://${s}`);
   } catch {
-    throw new Error(`The Diffinery server URL "${s}" isn't a valid URL. Fix diffinery.serverUrl in your settings.`);
+    return { invalid: "url" };
   }
   const loopback = /^(localhost|127(\.\d{1,3}){3}|\[::1\])$/.test(u.hostname);
-  if (u.protocol !== "https:" && !(u.protocol === "http:" && loopback)) throw new Error(`The Diffinery server URL must use https (diffinery.serverUrl is ${s}).`);
-  return `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, "")}`;
+  if (u.protocol !== "https:" && !(u.protocol === "http:" && loopback)) return { invalid: "https" };
+  return { server: `${u.protocol}//${u.host}${u.pathname.replace(/\/+$/, "")}` };
+}
+
+/** The server's base URL from the setting: https (or http on this computer), no trailing slash, no path. */
+export function normalizeServer(raw: string | undefined): string {
+  const s = (raw ?? "").trim() || DEFAULT_SERVER;
+  const r = checkServer(s);
+  if ("server" in r) return r.server;
+  throw new Error(r.invalid === "url" ? `The Diffinery server URL "${s}" isn't a valid URL. Fix diffinery.serverUrl in your settings.` : `The Diffinery server URL must use https (diffinery.serverUrl is ${s}).`);
+}
+
+/** Why what someone typed as a server address can't be used, for the input box; null when it can. */
+export function serverInputError(raw: string): string | null {
+  const s = raw.trim();
+  if (!s) return "Enter your Diffinery's address, such as git.example.com.";
+  if (/\s/.test(s)) return "An address has no spaces.";
+  const r = checkServer(s);
+  return "server" in r ? null : r.invalid === "url" ? `"${s}" isn't a valid address.` : "The address must use https (http only for a server on this computer).";
+}
+
+/** A server as people read it: diffinery.com, git.example.com:8443. */
+export function serverLabel(server: string): string {
+  const u = new URL(server);
+  return `${u.host}${u.pathname.replace(/\/+$/, "")}`;
+}
+
+/**
+ * Where the editor installer (install/install.sh, install.ps1) leaves the address of the self-hosted Diffinery that
+ * served it, for the extension to offer on its next start: the CLI's config folder (~/.config/diffinery, or under
+ * XDG_CONFIG_HOME), on every system.
+ */
+export function installHintPath(env: NodeJS.ProcessEnv, home: string): string {
+  const xdg = env.XDG_CONFIG_HOME;
+  const base = xdg && path.isAbsolute(xdg) ? xdg : path.join(env.HOME || home, ".config");
+  return path.join(base, "diffinery", "editor-server");
+}
+
+/** The server named in the installer's hint file, or null when the file holds anything else. */
+export function readInstallHint(text: string): string | null {
+  const line = text.split(/\r?\n/, 1)[0]!.trim();
+  if (!line || line.length > 2000 || serverInputError(line)) return null;
+  return normalizeServer(line);
 }
 
 /** The OAuth client_id of this extension on a server: the URL of the metadata document the server publishes about it. */

@@ -5,7 +5,6 @@ import com.intellij.ide.impl.ProjectUtil;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
-import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.TextBrowseFolderListener;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
@@ -21,6 +20,7 @@ import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.ScrollPaneFactory;
 import com.intellij.ui.SearchTextField;
 import com.intellij.ui.SimpleTextAttributes;
+import com.intellij.ui.components.ActionLink;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBList;
 import com.intellij.util.ui.JBUI;
@@ -29,6 +29,7 @@ import git4idea.checkout.GitCheckoutProvider;
 import git4idea.commands.Git;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
+import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.event.KeyAdapter;
@@ -72,6 +73,8 @@ final class CloneComponent extends VcsCloneDialogExtensionComponent {
   private final TextFieldWithBrowseButton directory = new TextFieldWithBrowseButton();
   private final JBLabel serverLabel = new JBLabel();
   private final JButton signInButton = new JButton("Sign In with Browser…");
+  private final ActionLink suggestedLink = Plugin.link("", this::useSuggested);
+  private String suggested;
 
   private List<Repo> mine = List.of();
   private List<Repo> found = List.of();
@@ -117,8 +120,13 @@ final class CloneComponent extends VcsCloneDialogExtensionComponent {
     serverLabel.setForeground(UIUtil.getContextHelpForeground());
     c.insets = JBUI.insetsTop(16);
     p.add(serverLabel, c);
+    // A self-hosted Diffinery is one click away: the one this plugin was installed from, when the IDE's plugin
+    // repositories name it, or any other by its address.
+    JPanel servers = new JPanel(new FlowLayout(FlowLayout.CENTER, JBUI.scale(12), 0));
+    servers.add(suggestedLink);
+    servers.add(Plugin.link("Use another server…", () -> SignInDialogs.chooseServer(project, this::refresh)));
     c.insets = JBUI.emptyInsets();
-    p.add(Plugin.link("Change server…", () -> ShowSettingsUtil.getInstance().showSettingsDialog(project, SettingsPage.class)), c);
+    p.add(servers, c);
     return p;
   }
 
@@ -213,6 +221,11 @@ final class CloneComponent extends VcsCloneDialogExtensionComponent {
     getDialogStateListener().onListItemChanged();
     if (a == null) {
       serverLabel.setText("Server: " + Util.host(Accounts.get().server()));
+      List<String> others = SignInDialogs.pluginRepositoryServers();
+      suggested = others.isEmpty() ? null : others.get(0);
+      suggestedLink.setText(suggested == null ? "" : "Use " + Util.host(suggested));
+      suggestedLink.setToolTipText(suggested == null ? null : "This IDE installs the Diffinery plugin from " + suggested);
+      suggestedLink.setVisible(suggested != null);
       cards.show(root, SIGNED_OUT);
       getDialogStateListener().onOkActionEnabled(false);
       return;
@@ -220,6 +233,12 @@ final class CloneComponent extends VcsCloneDialogExtensionComponent {
     account.setText("<html>Signed in to " + Util.host(a.server()) + " as <b>" + a.login() + "</b></html>");
     cards.show(root, SIGNED_IN);
     load();
+  }
+
+  /** Switches to the Diffinery this plugin came from: it served the plugin, so there's nothing to check. */
+  private void useSuggested() {
+    String s = suggested;
+    if (s != null) ApplicationManager.getApplication().executeOnPooledThread(() -> Accounts.get().setServer(s));
   }
 
   private void load() {

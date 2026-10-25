@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,6 +42,45 @@ final class Util {
       throw new IllegalArgumentException("The Diffinery server URL must use https (it is " + s + ").");
     String path = u.getRawPath() == null ? "" : u.getRawPath().replaceAll("/+$", "");
     return scheme + "://" + u.getRawAuthority() + path;
+  }
+
+  /** Why what someone typed as a server address can't be used, for the dialog; null when it can. */
+  static String serverInputError(String raw) {
+    String s = raw == null ? "" : raw.trim();
+    if (s.isEmpty()) return "Enter your Diffinery's address, such as git.example.com.";
+    if (s.chars().anyMatch(Character::isWhitespace)) return "An address has no spaces.";
+    try {
+      normalizeServer(s);
+      return null;
+    } catch (IllegalArgumentException e) {
+      return e.getMessage();
+    }
+  }
+
+  /** The Diffinery that serves a plugin repository (https://git.example.com/-/jetbrains/updatePlugins.xml), or null. */
+  static String serverOfPluginRepository(String url) {
+    if (url == null) return null;
+    String u = url.trim().replaceAll("[?#].*$", "");
+    String suffix = "/-/jetbrains/updatePlugins.xml";
+    if (!u.endsWith(suffix) || !SCHEME.matcher(u).find()) return null;
+    try {
+      return normalizeServer(u.substring(0, u.length() - suffix.length()));
+    } catch (IllegalArgumentException e) {
+      return null;
+    }
+  }
+
+  /**
+   * The Diffinery servers among the IDE's plugin repositories, other than `current`, in order: someone who installed
+   * this plugin from their own Diffinery has its updatePlugins.xml there, so it's the server they most likely mean.
+   */
+  static List<String> pluginRepositoryServers(List<String> repositories, String current) {
+    List<String> out = new ArrayList<>();
+    for (String r : repositories) {
+      String s = serverOfPluginRepository(r);
+      if (s != null && !s.equals(current) && !out.contains(s)) out.add(s);
+    }
+    return out;
   }
 
   /** The OAuth client_id of this plugin on a server: the URL of the metadata document the server publishes about it. */

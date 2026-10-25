@@ -2,7 +2,7 @@
   "name": "@diffinery/vscode",
   "displayName": "Diffinery",
   "description": "Clone, publish and push Diffinery repositories from VS Code, Cursor, Windsurf and other editors built on VS Code.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "codician",
   "private": true,
   "license": "Apache-2.0",
@@ -86,6 +86,11 @@
         "category": "Diffinery"
       },
       {
+        "command": "diffinery.useServer",
+        "title": "Use Another Server…",
+        "category": "Diffinery"
+      },
+      {
         "command": "diffinery.signOut",
         "title": "Sign Out",
         "category": "Diffinery"
@@ -103,7 +108,7 @@
           "type": "string",
           "default": "https://diffinery.com",
           "scope": "application",
-          "markdownDescription": "The Diffinery server to sign in to. Change it only for a self-hosted Diffinery."
+          "markdownDescription": "The Diffinery server to sign in to: `https://diffinery.com`, or the address of a self-hosted Diffinery. The first sign-in asks which one, and **Diffinery: Use Another Server…** changes it."
         },
         "diffinery.gitAuthentication": {
           "type": "boolean",

@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { authorizeUrl, clientId, editorRedirect, normalizeServer, pkce, readCallback } from "../src/util";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { authorizeUrl, clientId, editorRedirect, installHintPath, normalizeServer, pkce, readCallback, readInstallHint, serverInputError, serverLabel } from "../src/util";
 
 const S = "https://diffinery.com";
 
@@ -12,6 +14,39 @@ describe("server and OAuth", () => {
     expect(normalizeServer("http://localhost:8787")).toBe("http://localhost:8787");
     expect(() => normalizeServer("http://diffinery.com")).toThrow(/https/);
     expect(() => normalizeServer("https://")).toThrow(/valid URL/);
+  });
+
+  it("checks a server address someone types, and shows it by its host", () => {
+    expect(serverInputError("git.example.com")).toBeNull();
+    expect(serverInputError(" https://git.example.com/ ")).toBeNull();
+    expect(serverInputError("http://localhost:8787")).toBeNull();
+    expect(serverInputError("")).toMatch(/Enter/);
+    expect(serverInputError("git example")).toMatch(/spaces/);
+    expect(serverInputError("http://git.example.com")).toMatch(/https/);
+    expect(serverInputError("https://")).toMatch(/valid/);
+    expect(serverLabel(S)).toBe("diffinery.com");
+    expect(serverLabel("https://git.example.com:8443")).toBe("git.example.com:8443");
+  });
+
+  it("reads the server the installer left, where the installers write it", () => {
+    expect(installHintPath({ HOME: "/home/ada" }, "/ignored")).toBe(path.join("/home/ada", ".config", "diffinery", "editor-server"));
+    expect(installHintPath({ HOME: "/home/ada", XDG_CONFIG_HOME: "/cfg" }, "/ignored")).toBe(path.join("/cfg", "diffinery", "editor-server"));
+    expect(installHintPath({ XDG_CONFIG_HOME: "relative" }, "/home/bo")).toBe(path.join("/home/bo", ".config", "diffinery", "editor-server"));
+    expect(readInstallHint("https://git.example.com/\n")).toBe("https://git.example.com");
+    expect(readInstallHint("git.example.com\r\n")).toBe("https://git.example.com");
+    expect(readInstallHint("http://git.example.com\n")).toBeNull();
+    expect(readInstallHint("")).toBeNull();
+    expect(readInstallHint("{\"server\": 1}")).toBeNull();
+    const sh = readFileSync(path.join(__dirname, "../install/install.sh"), "utf8");
+    const ps1 = readFileSync(path.join(__dirname, "../install/install.ps1"), "utf8");
+    expect(sh).toContain('"$conf/diffinery/editor-server"');
+    expect(ps1).toContain('"diffinery\\editor-server"');
+  });
+
+  it("registers every command it contributes", () => {
+    const pkg = JSON.parse(readFileSync(path.join(__dirname, "../package.json"), "utf8"));
+    const src = readFileSync(path.join(__dirname, "../src/extension.ts"), "utf8");
+    for (const c of pkg.contributes.commands as { command: string }[]) expect(src).toContain(`"${c.command}"`);
   });
 
   it("returns to the editor by its own scheme when the server knows it", () => {

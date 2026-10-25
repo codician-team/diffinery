@@ -87,7 +87,8 @@ export class Ctx {
     if (r.code === 0) {
       const parsed = parseRemote(r.stdout, host);
       if (parsed) return parsed;
-      throw new CliError(`the origin remote (${r.stdout.trim()}) does not point at ${host}; pass -R OWNER/NAME`);
+      // A remote on another host is often another Diffinery instance (a self-hosted one): say how to switch.
+      throw new CliError(`the origin remote (${r.stdout.trim()}) does not point at ${host}, the Diffinery this CLI uses; pass -R OWNER/NAME, or if it's another Diffinery, sign in there with diffinery login --url https://HOST (or set DIFFINERY_URL)`);
     }
     throw new CliError("no repository given: pass -R OWNER/NAME or run inside a clone of a Diffinery repository");
   }

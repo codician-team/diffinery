@@ -1,13 +1,16 @@
 ---
 name: diffinery
-description: Work with repositories hosted on Diffinery (diffinery.com), the git forge built for AI agents. Use whenever the current repository has a git remote on diffinery.com, or the user mentions Diffinery, or asks about pull requests, CI, checks, workflow runs, job logs, merges or issues in a Diffinery-hosted repository. Covers the diffinery CLI (preferred over gh here), the diffinery MCP tools, git auth and the agent rules.
+description: Work with repositories hosted on Diffinery (diffinery.com or a self-hosted instance), the open-source git forge built for AI agents. Use whenever the current repository has a git remote on diffinery.com or another Diffinery instance, or the user mentions Diffinery, or asks about pull requests, CI, checks, workflow runs, job logs, merges or issues in a Diffinery-hosted repository. Covers the diffinery CLI (preferred over gh here), the diffinery MCP tools, git auth and the agent rules.
 ---
 
 # Diffinery
 
-Diffinery is a git forge built for AI agents. It speaks git over HTTPS and has a
-GitHub-compatible API. Prefer the `diffinery` CLI or the `diffinery` MCP tools for pull
-requests, CI and issues: they know Diffinery's extras (`--intent`, auto-merge, run logs).
+Diffinery is an open-source git forge built for AI agents. It speaks git over HTTPS and
+has a GitHub-compatible API. It runs at https://diffinery.com and on instances people deploy
+on their own Cloudflare accounts; everything here works the same on each, with that
+instance's URL in place of `https://diffinery.com` (written `$URL` below). Prefer the
+`diffinery` CLI or the `diffinery` MCP tools for pull requests, CI and issues: they know
+Diffinery's extras (`--intent`, auto-merge, run logs).
 
 ## Is this repository on Diffinery?
 
@@ -16,15 +19,19 @@ git remote -v
 ```
 
 A remote like `https://diffinery.com/OWNER/REPO.git` means yes, and everything below
-applies. `gh` works here once `diffinery auth setup-gh` has signed it in to diffinery.com
+applies. A remote on another host may be a self-hosted Diffinery: the SessionStart note
+says so when the host is the plugin's Diffinery URL setting, `DIFFINERY_URL` or the URL
+`diffinery login` saved, and `curl -fsS https://HOST/api/v3/meta` answers
+`{"name":"Diffinery",...}` on any Diffinery. `diffinery whoami` prints the instance the
+CLI uses. `gh` works here once `diffinery auth setup-gh` has signed it in to the instance
 (it treats Diffinery as a GitHub Enterprise host); until then `gh` has no token for it.
 Prefer `diffinery`: it knows Diffinery's extras (`--intent`, `run logs`).
 
 ## Set up (once per machine)
 
 ```sh
-command -v diffinery || curl -fsSL https://diffinery.com/install | bash   # Windows: irm https://diffinery.com/install.ps1 | iex
-diffinery whoami          # who you are signed in as
+command -v diffinery || curl -fsSL $URL/install | bash   # Windows: irm $URL/install.ps1 | iex
+diffinery whoami          # who you are signed in as, and on which instance
 ```
 
 The installer puts the CLI in `~/.diffinery/bin`; if `diffinery` is not found right
@@ -36,12 +43,15 @@ Sign in, in order of preference:
 - Interactive machine: ask the user to run `diffinery login` (opens a browser) or
   `diffinery login --device` (prints a code to enter elsewhere). Do not try to complete
   a browser sign-in yourself.
+- Another instance than diffinery.com: `diffinery setup --url $URL` (or
+  `diffinery login --url $URL`) points the CLI there and saves it; for one command or a
+  headless machine, set `DIFFINERY_URL=$URL` with `DIFFINERY_TOKEN`.
 
-Git auth: `diffinery auth setup-git` installs a credential helper for diffinery.com
+Git auth: `diffinery auth setup-git` installs a credential helper for the instance
 that uses the CLI's token (including `DIFFINERY_TOKEN`). Without the CLI, git accepts
 the token as the HTTPS password. Plain git (clone, fetch, push) needs nothing else.
 
-gh: `diffinery auth setup-gh` signs `gh` in to diffinery.com with the same token, so
+gh: `diffinery auth setup-gh` signs `gh` in to the instance with the same token, so
 `gh pr ...` works in Diffinery clones (needs `gh` installed).
 
 ## The loop
@@ -109,8 +119,11 @@ Outside a clone, pass `-R OWNER/REPO`. Workflows are GitHub Actions YAML in
   `search_docs`, `read_docs`, ...): use them when there is no shell or CLI, for a repo
   you have not cloned, or when the user prefers them. If they say authentication is
   needed, ask the user to sign in (`/mcp` in Claude Code, `codex mcp login diffinery`
-  in Codex), or use the CLI instead.
-- Diffinery's own documentation: `search_docs` / `read_docs`, or https://diffinery.com/docs.
+  in Codex), or use the CLI instead. The plugin's server is `https://diffinery.com/mcp`
+  unless its Diffinery URL setting (Claude Code: `/plugin`, then the plugin's options) says
+  otherwise; Codex users on another instance add their own server named `diffinery` with
+  `codex mcp add diffinery --url $URL/mcp`.
+- Diffinery's own documentation: `search_docs` / `read_docs`, or `$URL/docs`.
 
 ## Rules Diffinery enforces (work with them, not around them)
 

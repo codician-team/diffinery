@@ -1,6 +1,7 @@
 /**
  * Minimal tar and zip writers for source archives (zipball/tarball) and run
- * log bundles. Entries are buffered, which is fine for the size limits used.
+ * log bundles, and a zip reader for the small zips the server ships itself.
+ * Entries are buffered, which is fine for the size limits used.
  */
 
 export type ArchiveEntry = { path: string; mode: string; content: Uint8Array } | { path: string; dir: true };
@@ -206,6 +207,52 @@ export async function zip(entries: ArchiveEntry[], mtime: number, comment = ""):
   for (const e of entries) parts.push(...(await w.entry(e)));
   parts.push(...w.end(comment));
   return concat(parts);
+}
+
+async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
+  const stream = new Blob([data as Uint8Array<ArrayBuffer>]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/**
+ * The files of a classic zip (stored or deflated entries, read through the central directory), with
+ * their unix modes as git modes. For zips the server ships itself, such as the Claude Code plugins:
+ * it checks each entry's CRC and refuses anything else rather than guess.
+ */
+export async function unzip(data: Uint8Array): Promise<ArchiveEntry[]> {
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  let end = data.length - 22;
+  while (end >= 0 && view.getUint32(end, true) !== 0x06054b50) end--;
+  if (end < 0) throw new Error("not a zip archive");
+  const count = view.getUint16(end + 10, true);
+  let at = view.getUint32(end + 16, true);
+  const out: ArchiveEntry[] = [];
+  for (let i = 0; i < count; i++) {
+    if (view.getUint32(at, true) !== 0x02014b50) throw new Error("corrupt zip central directory");
+    const method = view.getUint16(at + 10, true);
+    const crc = view.getUint32(at + 16, true);
+    const size = view.getUint32(at + 20, true);
+    const nameLen = view.getUint16(at + 28, true);
+    const extraLen = view.getUint16(at + 30, true);
+    const commentLen = view.getUint16(at + 32, true);
+    const unixMode = view.getUint32(at + 38, true) >>> 16;
+    const local = view.getUint32(at + 42, true);
+    const path = new TextDecoder().decode(data.subarray(at + 46, at + 46 + nameLen));
+    at += 46 + nameLen + extraLen + commentLen;
+    if (path.endsWith("/")) {
+      out.push({ path, dir: true });
+      continue;
+    }
+    if (view.getUint32(local, true) !== 0x04034b50) throw new Error(`corrupt zip entry ${path}`);
+    const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+    const raw = data.subarray(start, start + size);
+    if (method !== 0 && method !== 8) throw new Error(`zip entry ${path} uses compression method ${method}`);
+    const content = method === 8 ? await inflateRaw(raw) : raw.slice();
+    if (crc32(content) !== crc) throw new Error(`zip entry ${path} fails its CRC check`);
+    const kind = unixMode >> 12;
+    out.push({ path, mode: kind === 0o12 ? "120000" : unixMode & 0o111 ? "100755" : "100644", content });
+  }
+  return out;
 }
 
 export function concat(parts: Uint8Array[]): Uint8Array {

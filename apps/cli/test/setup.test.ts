@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { withUrlOption } from "../src/commands/claude-plugins.js";
 import { configPath, writeConfig } from "../src/config.js";
 import { fakeServer, gitRepo, isolatedEnv, run, tempDir, type FakeServer } from "./helpers.js";
 
@@ -303,6 +304,22 @@ describe("Claude Code plugins in diffinery setup", () => {
     expect(dirsOf(market)).toEqual([path.join(market.HOME!, ".claude", "diffinery-plugins", "diffinery.zip")]);
   });
 
+  it("points the plugins' Diffinery URL setting at the server, for its own copies and marketplace ones", async () => {
+    const env = await withClaude({ enabledPlugins: { "diffinery-ci@diffinery": true }, pluginConfigs: { "diffinery-ci@diffinery": { options: { notes: "all", url: "https://old.example" } }, "other@x": { options: { a: 1 } } } });
+    const r = await run(["setup"], { env });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain(`their Diffinery URL is ${srv.url}`);
+    expect(settingsOf(env).pluginConfigs).toEqual({
+      "diffinery@inline": { options: { url: srv.url } },
+      "diffinery-ci@diffinery": { options: { notes: "all", url: srv.url } },
+      "other@x": { options: { a: 1 } },
+    });
+    // diffinery.com is the setting's default: nothing to write unless a URL was saved before.
+    expect(withUrlOption(undefined, ["diffinery@inline"], "https://diffinery.com")).toBe(null);
+    expect(withUrlOption({ "diffinery@inline": { options: { url: srv.url } } }, ["diffinery@inline"], "https://diffinery.com")).toEqual({ "diffinery@inline": { options: { url: "https://diffinery.com" } } });
+    expect(withUrlOption({ "diffinery@inline": { options: { url: srv.url } } }, ["diffinery@inline"], srv.url)).toBe(null);
+  });
+
   it("leaves settings it can't read alone, and refuses a download that doesn't match its checksum", async () => {
     const broken = await withClaude("{ not json");
     const r = await run(["setup"], { env: broken });
@@ -316,5 +333,80 @@ describe("Claude Code plugins in diffinery setup", () => {
     expect(r2.code).toBe(1);
     expect(r2.stderr).toContain("didn't match its checksum");
     expect(existsSync(path.join(bad.HOME!, ".claude", "settings.json"))).toBe(false);
+  });
+});
+
+describe("Codex in diffinery setup", () => {
+  let srv: FakeServer;
+  beforeEach(async () => {
+    srv = await fakeServer();
+    srv.on("GET", "/api/v3/user", { body: { login: "alice", type: "User" } });
+  });
+  afterEach(() => srv.close());
+
+  /**
+   * A codex that records its calls. `mcp get` answers `server` (none: exit status 1, as codex does) until
+   * config.toml names a URL, then that URL; `mcp remove` drops the config's diffinery table.
+   */
+  function fakeCodex(server: unknown): { dir: string; calls: () => string[] } {
+    const dir = tempDir("diffinery-fake-codex-");
+    const log = path.join(dir, "calls");
+    writeFileSync(path.join(dir, "answer.json"), JSON.stringify(server ?? null));
+    writeFileSync(
+      path.join(dir, "codex"),
+      [
+        "#!/bin/sh",
+        `printf '%s\\n' "$*" >> "${log}"`,
+        'cfg="$CODEX_HOME/config.toml"',
+        'if [ "$1 $2" = "mcp remove" ]; then sed -i.bak "/mcp_servers.diffinery/,\\$d" "$cfg"; exit 0; fi',
+        'if [ "$1 $2" = "mcp get" ]; then',
+        '  u=$(sed -n \'s/^url = "\\(.*\\)"$/\\1/p\' "$cfg" 2>/dev/null | tail -n 1)',
+        '  b=$(sed -n \'s/^bearer_token_env_var = "\\(.*\\)"$/\\1/p\' "$cfg" 2>/dev/null | tail -n 1)',
+        '  if [ -n "$u" ]; then printf \'{"transport":{"url":"%s","bearer_token_env_var":"%s"}}\' "$u" "$b"; exit 0; fi',
+        server ? `  cat "${dir}/answer.json"` : "  echo 'Error: No MCP server named' >&2; exit 1",
+        "fi",
+        "exit 0",
+        "",
+      ].join("\n"),
+    );
+    chmodSync(path.join(dir, "codex"), 0o755);
+    return { dir, calls: () => (existsSync(log) ? readFileSync(log, "utf8").trim().split("\n") : []) };
+  }
+  const machine = async (codexDir: string, config?: string) => {
+    const env = isolatedEnv({ DIFFINERY_NO_CODEX: "", PATH: `${codexDir}${path.delimiter}${process.env.PATH}` });
+    env.CODEX_HOME = path.join(env.HOME!, ".codex");
+    if (config !== undefined) {
+      mkdirSync(env.CODEX_HOME);
+      writeFileSync(path.join(env.CODEX_HOME, "config.toml"), config);
+    }
+    await writeConfig(env, { url: srv.url, token: "dfy_good" });
+    return env;
+  };
+  const tomlOf = (env: NodeJS.ProcessEnv) => readFileSync(path.join(env.CODEX_HOME!, "config.toml"), "utf8");
+
+  it("points Codex's diffinery MCP server at a self-hosted server, keeping a headless token setting", async () => {
+    const plugin = fakeCodex({ name: "diffinery", transport: { type: "streamable_http", url: "https://diffinery.com/mcp", bearer_token_env_var: null } });
+    const env = await machine(plugin.dir, 'model = "o3"');
+    const r = await run(["setup", "--no-auto-merge"], { env });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain(`✓ Codex: the diffinery MCP server is now ${srv.url}/mcp`);
+    expect(plugin.calls()).toEqual(["mcp get diffinery --json", "mcp get diffinery --json"]);
+    expect(tomlOf(env)).toBe(`model = "o3"\n\n[mcp_servers.diffinery]\nurl = "${srv.url}/mcp"\n`);
+    // Again: nothing to change.
+    expect((await run(["setup", "--no-auto-merge"], { env })).stdout).toContain(`✓ Codex: the diffinery MCP server is ${srv.url}/mcp`);
+
+    // A server of the user's own, sending DIFFINERY_TOKEN: replaced, and still sending it.
+    const headless = fakeCodex({ name: "diffinery", transport: { url: "https://old.example/mcp", bearer_token_env_var: "DIFFINERY_TOKEN" } });
+    const henv = await machine(headless.dir, '[mcp_servers.diffinery]\nurl = "https://old.example/mcp"\nbearer_token_env_var = "DIFFINERY_TOKEN"\n');
+    await run(["setup", "--no-auto-merge"], { env: henv });
+    expect(headless.calls()).toContain("mcp remove diffinery");
+    expect(tomlOf(henv)).toBe(`[mcp_servers.diffinery]\nurl = "${srv.url}/mcp"\nbearer_token_env_var = "DIFFINERY_TOKEN"\n`);
+  });
+
+  it("leaves Codex alone for diffinery.com", async () => {
+    const codex = fakeCodex(null);
+    const { setupCodexMcp } = await import("../src/commands/codex.js");
+    expect(await setupCodexMcp({ ...(await machine(codex.dir)) }, "https://diffinery.com")).toBe(null);
+    expect(codex.calls()).toEqual([]);
   });
 });

@@ -3,6 +3,7 @@ import type { On } from 'claude-code'
 
 import {
   checksLine,
+  chooseAuth,
   parsePr,
   pollDelay,
   publishes,
@@ -48,6 +49,28 @@ const answer = (sha: string, contexts: unknown[], extra: Record<string, unknown>
       },
     },
   },
+})
+
+test('the instance comes from DIFFINERY_URL, the setting, then the CLI, and tokens stay with theirs', async () => {
+  const none = { envUrl: null, envToken: null, option: null, savedUrl: null, savedToken: null }
+  expect(chooseAuth(none)).toEqual({ url: 'https://diffinery.com', host: 'diffinery.com', token: null, source: '' })
+  expect(chooseAuth({ ...none, option: 'https://diffinery.com', savedUrl: 'https://git.example.com/', savedToken: 't' })).toEqual({
+    url: 'https://git.example.com',
+    host: 'git.example.com',
+    token: 't',
+    source: 'diffinery login',
+  })
+  // The setting picks the instance, but the CLI's diffinery.com token doesn't go there.
+  expect(chooseAuth({ ...none, option: 'https://git.example.com', savedToken: 't', envToken: 'e' })).toEqual({
+    url: 'https://git.example.com',
+    host: 'git.example.com',
+    token: null,
+    source: '',
+  })
+  expect(chooseAuth({ ...none, envUrl: 'http://localhost:8787', envToken: 'e', option: 'https://git.example.com' }).token).toBe('e')
+  expect(chooseAuth({ ...none, envUrl: 'http://localhost:8787', envToken: 'e' }).host).toBe('localhost:8787')
+  expect(chooseAuth({ ...none, option: 'not a url', savedToken: 't' })).toEqual({ url: 'https://diffinery.com', host: 'diffinery.com', token: 't', source: 'diffinery login' })
+  expect(remoteRepo('http://localhost:8787/dev/repo.git', 'localhost:8787')).toBe('dev/repo')
 })
 
 test('remotes on the Diffinery host are read, lookalikes are not', async () => {

@@ -1,11 +1,22 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "diffinery",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Work with repositories hosted on Diffinery: pull requests, CI checks, workflow logs and issues through the diffinery CLI and the Diffinery MCP server.",
-  "author": { "name": "Codician" },
+  "author": { "name": "Codician Team" },
   "homepage": "https://diffinery.com/docs/connect/claude-code",
   "repository": "https://diffinery.com/codician/diffinery",
   "license": "Apache-2.0",
-  "keywords": ["diffinery", "git", "pull-requests", "ci", "code-review", "mcp"]
+  "icon": "./.claude-plugin/icon.png",
+  "documentationUrl": "https://diffinery.com/docs/connect/claude-code",
+  "supportUrl": "https://diffinery.com/codician/diffinery/issues",
+  "keywords": ["diffinery", "git", "pull-requests", "ci", "code-review", "mcp"],
+  "userConfig": {
+    "url": {
+      "type": "string",
+      "title": "Diffinery URL",
+      "description": "The Diffinery instance your repositories are on: https://diffinery.com, or your own, such as https://git.example.com.",
+      "default": "https://diffinery.com"
+    }
+  }
 }

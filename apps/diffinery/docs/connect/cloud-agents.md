@@ -15,6 +15,8 @@ Then the agent can clone, push branches, open pull requests and use `gh` against
 
 ## Before you start
 
+- On a [self-hosted Diffinery](/docs/self-hosting), everything below works the same with your instance's domain in place of `diffinery.com`: its **Agent setup** page shows the setup script and environment variables with its own URLs, and the network setting must allow its domain.
+
 - You need write access to the repository. Admins find **Agent setup** among the repository's settings; people with write access get a **Settings** tab that opens it.
 - Generating a token needs a passkey sign-in from the last 2 hours, as for any token. If yours is older, Diffinery asks you to confirm with your passkey first.
 

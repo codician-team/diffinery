@@ -31,6 +31,34 @@ public class UtilTest {
   }
 
   @Test
+  public void serverInput() {
+    assertNull(Util.serverInputError("git.example.com"));
+    assertNull(Util.serverInputError(" https://git.example.com/ "));
+    assertNull(Util.serverInputError("http://localhost:8787"));
+    assertTrue(Util.serverInputError("").startsWith("Enter"));
+    assertTrue(Util.serverInputError("git example").contains("spaces"));
+    assertTrue(Util.serverInputError("http://git.example.com").contains("https"));
+    assertTrue(Util.serverInputError("https://").contains("URL"));
+  }
+
+  @Test
+  public void pluginRepositoryServers() {
+    assertEquals("https://git.example.com", Util.serverOfPluginRepository("https://git.example.com/-/jetbrains/updatePlugins.xml"));
+    assertEquals("https://git.example.com:8443/forge", Util.serverOfPluginRepository(" https://git.example.com:8443/forge/-/jetbrains/updatePlugins.xml?build=IU-262 "));
+    assertNull(Util.serverOfPluginRepository("https://plugins.example.com/updatePlugins.xml"));
+    assertNull(Util.serverOfPluginRepository("/-/jetbrains/updatePlugins.xml"));
+    assertNull(Util.serverOfPluginRepository("http://git.example.com/-/jetbrains/updatePlugins.xml"));
+    assertNull(Util.serverOfPluginRepository(null));
+    List<String> hosts = List.of(
+        "https://diffinery.com/-/jetbrains/updatePlugins.xml",
+        "https://plugins.example.com/updatePlugins.xml",
+        "https://git.example.com/-/jetbrains/updatePlugins.xml",
+        "https://git.example.com/-/jetbrains/updatePlugins.xml");
+    assertEquals(List.of("https://git.example.com"), Util.pluginRepositoryServers(hosts, S));
+    assertEquals(List.of(S), Util.pluginRepositoryServers(hosts, "https://git.example.com"));
+  }
+
+  @Test
   public void authorizeUrl() {
     String url = Util.authorizeUrl(S, "http://127.0.0.1:5000/callback", "ch", "st");
     assertTrue(url.startsWith(S + "/oauth/authorize?"));

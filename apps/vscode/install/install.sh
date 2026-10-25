@@ -65,6 +65,18 @@ curl -fsSL "$server/-/vscode/diffinery-$version.vsix" -o "$vsix" || die "downloa
 if command -v sha256sum >/dev/null; then got=$(sha256sum "$vsix" | cut -d' ' -f1); else got=$(shasum -a 256 "$vsix" | cut -d' ' -f1); fi
 [ "$got" = "$sha" ] || die "the download didn't match the published SHA-256; nothing was installed"
 
+# A self-hosted Diffinery: leave its address where the extension looks when it starts (src/servers.ts), and it asks
+# whether to use it. Editors' command-line tools can't change a setting, and their settings files are JSON with
+# comments, so this doesn't edit them. Written before installing, since a running editor starts a new extension at once.
+conf=${XDG_CONFIG_HOME:-}
+case $conf in /*) ;; *) conf=$HOME/.config ;; esac
+hint=""
+if [ "$server" != "https://diffinery.com" ]; then
+  if mkdir -p "$conf/diffinery" 2>/dev/null && printf '%s\n' "$server" >"$conf/diffinery/editor-server" 2>/dev/null; then hint=1; fi
+else
+  rm -f "$conf/diffinery/editor-server" 2>/dev/null || true
+fi
+
 installed=0
 while IFS='|' read -r name label app; do
   if [ "$wanted" != "  " ] && [[ $wanted != *" $name "* ]]; then continue; fi
@@ -86,4 +98,12 @@ if [ "$installed" = 0 ]; then
   exit 1
 fi
 say ""
+if [ "$server" != "https://diffinery.com" ]; then
+  if [ -n "$hint" ]; then
+    say "This Diffinery is ${bold}$server${reset}. When the editor starts, the extension asks to use it: choose ${bold}Use ${server#*://}${reset}."
+    say "If it doesn't ask, run ${bold}Diffinery: Use Another Server…${reset} from the Command Palette and enter $server."
+  else
+    say "This Diffinery is ${bold}$server${reset}: in the editor, run ${bold}Diffinery: Use Another Server…${reset} from the Command Palette and enter it."
+  fi
+fi
 say "Next: in the editor, run ${bold}Git: Clone${reset} and pick ${bold}Clone from Diffinery${reset}. ${dim}($server/docs/repositories/clone-in-your-editor)${reset}"

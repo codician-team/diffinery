@@ -10,14 +10,16 @@ export class GitCredentials implements CredentialsProvider {
   constructor(private readonly auth: DiffineryAuth) {}
 
   async getCredentials(host: vscode.Uri): Promise<Credentials | undefined> {
-    let server: URL;
+    let server: string;
     try {
-      server = new URL(this.auth.server());
+      server = this.auth.server();
     } catch {
       return undefined;
     }
-    if (host.authority.toLowerCase() !== server.host.toLowerCase()) return undefined;
+    if (host.authority.toLowerCase() !== new URL(server).host.toLowerCase()) return undefined;
     const session = await vscode.authentication.getSession(AUTH_ID, SCOPES, { createIfNone: true });
+    // Signing in starts by choosing the server: if another one was chosen, its token isn't for this host.
+    if (this.auth.server() !== server) return undefined;
     return { username: session.account.label, password: session.accessToken };
   }
 }

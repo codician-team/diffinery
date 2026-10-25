@@ -53,7 +53,7 @@ In a clone of a Diffinery repository, `/diffinery:pr-status` shows the current b
 
 | Part | What it does |
 | --- | --- |
-| MCP server | `https://diffinery.com/mcp` with browser sign-in: every [Diffinery tool](/docs/reference/mcp-tools). |
+| MCP server | `https://diffinery.com/mcp` (or your [own instance's](#self-hosted-diffinery)) with browser sign-in: every [Diffinery tool](/docs/reference/mcp-tools). |
 | `diffinery` skill | Teaches Claude the loop on Diffinery: branch, `diffinery pr create --intent`, `diffinery pr checks --watch`, read failing logs with `diffinery run logs`, auto-merge, and what agents can and can't do. |
 | `/diffinery:pr-status` | This branch's pull request, its checks, and the log tail of failing jobs. Changes nothing. |
 | Session hook | In a Diffinery clone, tells Claude the repository is hosted on Diffinery and whether the CLI is installed and signed in. Elsewhere it stays silent. It never uses the network. |
@@ -109,12 +109,30 @@ claude mcp add --scope user --transport http diffinery https://diffinery.com/mcp
 
 Keep the single quotes: Claude Code reads `${DIFFINERY_TOKEN}` from the environment each time it connects, so the token is never written to its settings. This entry takes the place of the plugin's own server. The CLI and `diffinery auth setup-git` read `DIFFINERY_TOKEN` too. For Claude Code on the web, set up the environment from the repository's [Agent setup](/docs/connect/cloud-agents), which also brings the CLI and both plugins. More in [Headless use](/docs/connect/how-sign-in-works#headless-use).
 
+## Self-hosted Diffinery
+
+The plugins work with any Diffinery instance, such as one you [deploy on your own Cloudflare account](/docs/self-hosting). Their **Diffinery URL** setting, `https://diffinery.com` unless you change it, decides the MCP server's address (`<URL>/mcp`), the instance the session hook recognises in a clone, and the instance the [CI band](/docs/connect/ci-status-in-claude) reads. Set it in one of these ways:
+
+- **With the CLI.** Install the CLI from your instance and run `diffinery setup` with its URL:
+
+  ```sh
+  curl -fsSL https://git.example.com/install | bash
+  diffinery setup --url https://git.example.com
+  ```
+
+  It signs you in there, adds both plugins, and sets their Diffinery URL in `~/.claude/settings.json` (under `pluginConfigs`), for plugins installed from the marketplace too. It ends with `✓ Claude Code plugins: … their Diffinery URL is https://git.example.com`.
+- **From the marketplace.** `claude plugin install diffinery@diffinery` asks for the Diffinery URL when it enables the plugin. Change it later in `/config`, where each plugin option has its own row.
+- **As files.** The plugin zips your instance serves at `https://git.example.com/-/claude/diffinery.zip` and `https://git.example.com/-/claude/diffinery-ci.zip` already default to that instance, for claude.ai's **Upload plugin** too.
+
+`DIFFINERY_URL` in the environment takes precedence for the session hook and the CI band, as it does for the CLI. The MCP server always follows the setting. For a server without the plugin, use your instance's address: `claude mcp add --transport http diffinery https://git.example.com/mcp`.
+
 ## Troubleshooting
 
 | Problem | What to do |
 | --- | --- |
 | `/plugin` doesn't list `diffinery` | Run `diffinery setup` (step 1) and start a new session. Its `Claude Code plugins` line says what went wrong, if anything. |
 | `claude plugin marketplace add` fails with an authentication error | Git can't read codician/diffinery with your sign-in. Run `diffinery auth setup-git`, or use `diffinery setup` instead (step 1). |
+| `/mcp` shows `https://diffinery.com/mcp` but your repositories are on your own instance | Set the plugin's Diffinery URL: run `diffinery setup --url https://<your instance>`, or change it in `/config`. See [Self-hosted Diffinery](#self-hosted-diffinery). |
 | `/mcp` shows the server as needing authentication | Choose **Authenticate**, or run `claude mcp login plugin:diffinery:diffinery`. |
 | The browser says "Can't connect this app" | Remove the server and add it again, then sign in. |
 | A tool says it needs the write scope | You connected with **Read**. Disconnect Claude Code under **Settings → Access tokens → Connected apps** and sign in again with **Write**. |

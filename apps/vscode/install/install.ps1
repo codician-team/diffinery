@@ -27,6 +27,22 @@ try {
   $vsix = Join-Path $tmp "diffinery-$($meta.version).vsix"
   Invoke-WebRequest "$server/-/vscode/diffinery-$($meta.version).vsix" -OutFile $vsix -UseBasicParsing
   if ((Get-FileHash $vsix -Algorithm SHA256).Hash.ToLower() -ne $meta.sha256) { throw "The download didn't match the published SHA-256; nothing was installed." }
+  # A self-hosted Diffinery: leave its address where the extension looks when it starts (src/servers.ts), and it asks
+  # whether to use it. Editors' command-line tools can't change a setting, and their settings files are JSON with
+  # comments, so this doesn't edit them. Written before installing, since a running editor starts a new extension at once.
+  $conf = if ($env:XDG_CONFIG_HOME -and [IO.Path]::IsPathRooted($env:XDG_CONFIG_HOME)) { $env:XDG_CONFIG_HOME } else { Join-Path $(if ($env:HOME) { $env:HOME } else { $env:USERPROFILE }) ".config" }
+  $hintFile = Join-Path $conf "diffinery\editor-server"
+  $hint = $false
+  if ($server -ne "https://diffinery.com") {
+    try {
+      New-Item -ItemType Directory -Force (Split-Path $hintFile) | Out-Null
+      [IO.File]::WriteAllText($hintFile, "$server`n")
+      $hint = $true
+    } catch {}
+  } else {
+    Remove-Item -Force $hintFile -ErrorAction SilentlyContinue
+  }
+
   $installed = 0
   foreach ($e in $known) {
     if ($wanted.Count -gt 0 -and $wanted -notcontains $e.Name) { continue }
@@ -46,6 +62,14 @@ try {
     exit 1
   }
   Write-Host ""
+  if ($server -ne "https://diffinery.com") {
+    if ($hint) {
+      Write-Host "This Diffinery is $server. When the editor starts, the extension asks to use it: choose Use $($server -replace '^[a-z]+://', '')."
+      Write-Host "If it doesn't ask, run Diffinery: Use Another Server... from the Command Palette and enter $server."
+    } else {
+      Write-Host "This Diffinery is $server`: in the editor, run Diffinery: Use Another Server... from the Command Palette and enter it."
+    }
+  }
   Write-Host "Next: in the editor, run Git: Clone and pick Clone from Diffinery. ($server/docs/repositories/clone-in-your-editor)"
 } finally {
   Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue

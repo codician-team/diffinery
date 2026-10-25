@@ -15,6 +15,8 @@ const SEGMENT = /^[A-Za-z0-9._-]+$/
  */
 export function remoteRepo(url: string, host: string): string | null {
   const u = url.trim()
+  // Remotes name the host with or without the port the Diffinery URL has (localhost:8787).
+  host = host.replace(/:\d+$/, '')
   let rest: string | null = null
   const withScheme = /^[A-Za-z][A-Za-z0-9+.-]*:\/\/(?:[^@/]+@)?([^/:]+)(?::\d+)?\/(.+)$/.exec(u)
   if (withScheme) {
@@ -37,6 +39,40 @@ export function hostOf(url: string): string | null {
   } catch {
     return null
   }
+}
+
+export const DEFAULT_URL = 'https://diffinery.com'
+
+/** What readAuth found: the environment, the plugin's Diffinery URL setting and the CLI's config file. */
+export type AuthInputs = {
+  envUrl: string | null
+  envToken: string | null
+  option: string | null
+  savedUrl: string | null
+  savedToken: string | null
+}
+
+const clean = (url: string | null): string | null => {
+  const u = url?.trim().replace(/\/+$/, '')
+  return u && hostOf(u) ? u : null
+}
+
+/**
+ * Which Diffinery instance to read, and the token that belongs to it. The instance is
+ * DIFFINERY_URL, else the plugin's Diffinery URL setting when it isn't the default, else the
+ * URL `diffinery login` saved, else diffinery.com. A token only goes to its own instance, as
+ * the CLI uses it: DIFFINERY_TOKEN to DIFFINERY_URL (else the saved URL, else diffinery.com),
+ * the saved token to the saved URL (else diffinery.com). Null token: try gh for the host.
+ */
+export function chooseAuth(i: AuthInputs): { url: string; host: string; token: string | null; source: string } {
+  const envUrl = clean(i.envUrl)
+  const saved = clean(i.savedUrl)
+  const option = clean(i.option)
+  const url = envUrl ?? (option && option !== DEFAULT_URL ? option : null) ?? saved ?? DEFAULT_URL
+  const host = hostOf(url)!
+  if (i.envToken && hostOf(envUrl ?? saved ?? DEFAULT_URL) === host) return { url, host, token: i.envToken, source: 'DIFFINERY_TOKEN' }
+  if (i.savedToken && hostOf(saved ?? DEFAULT_URL) === host) return { url, host, token: i.savedToken, source: 'diffinery login' }
+  return { url, host, token: null, source: '' }
 }
 
 /** Picks the first Diffinery remote from `git remote -v`-style lines, origin first. */

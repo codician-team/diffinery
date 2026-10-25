@@ -8,6 +8,7 @@ import { browserLikely, browserLogin, deviceLogin, revokeCliToken, type Scope } 
 import { json } from "../output.js";
 import { agentSetup, ghEnvToken, setupRepo } from "./agent-setup.js";
 import { setupClaudePlugins } from "./claude-plugins.js";
+import { setupCodexMcp } from "./codex.js";
 
 interface User {
   login: string;
@@ -257,7 +258,10 @@ signed in already, then runs \`diffinery auth setup-git\` so git clone, fetch an
 sign-in, and \`diffinery auth setup-gh\` when the GitHub CLI (gh) is installed. Where Claude Code is
 installed, it also adds Claude Code's Diffinery plugins (diffinery and diffinery-ci): they're saved in
 ~/.claude/diffinery-plugins and named in ~/.claude/settings.json, so every new Claude Code session loads
-them. Skip that with --no-claude-plugins (or DIFFINERY_NO_CLAUDE_PLUGINS=1). Last, on a terminal, it asks
+them, with their Diffinery URL setting pointed at this server. Skip that with --no-claude-plugins (or
+DIFFINERY_NO_CLAUDE_PLUGINS=1). For a server other than diffinery.com (--url, a self-hosted Diffinery), it
+also points Codex's diffinery MCP server there when Codex is installed (codex mcp add; skip with
+DIFFINERY_NO_CODEX=1). Last, on a terminal, it asks
 whether to turn on auto-merge for the pull requests you open (--auto-merge says yes without asking,
 --no-auto-merge skips the question). Safe to run again; it brings the plugins up to date.
 
@@ -331,6 +335,13 @@ page. Exits 1 when a check fails. This is what <server>/OWNER/NAME/agent-setup.s
         ctx.err(`${ctx.c.yellow("warning:")} Claude Code plugins: ${(e as Error).message}`);
         failed = true;
       }
+    }
+    try {
+      const p = await setupCodexMcp(ctx.io.env, url);
+      if (p?.ok) ctx.out(`${ctx.c.green("✓")} Codex: ${p.message}`);
+      else if (p) ctx.err(`${ctx.c.yellow("warning:")} Codex: ${p.message}`);
+    } catch (e) {
+      ctx.err(`${ctx.c.yellow("warning:")} Codex: ${(e as Error).message}`);
     }
     try {
       await offerAutoMerge(new Ctx(ctx.io, {}), url, { yes: o["auto-merge"] === true, skip: o["no-auto-merge"] === true });

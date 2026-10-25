@@ -38,7 +38,7 @@ Without the plugin repository: download [diffinery-jetbrains.zip](https://diffin
 
 1. Choose **File → New → Project from Version Control…**, or **Clone Repository** on the welcome screen.
 2. Choose **Diffinery** in the list on the left.
-3. The first time, choose **Sign In with Browser…**. Your browser opens Diffinery's consent page.
+3. The first time, choose **Sign In with Browser…**. Your browser opens Diffinery's consent page. (For a [self-hosted Diffinery](#self-hosted-diffinery), choose **Use another server…** first.)
 4. On the consent page, check that it says **Diffinery plugin for JetBrains IDEs**, published by diffinery.com, keep **Act as** set to you and **Access** set to **Write**, and choose **Connect**. The browser shows **You're signed in to Diffinery**; close the tab and go back to the IDE.
 5. Pick a repository. The list shows your repositories and your organizations', most recently pushed first. Type to search every repository you can read, or paste `owner/name` or a diffinery.com link.
 6. Check the **Directory** and choose **Clone**. The IDE clones the repository and opens it.
@@ -79,7 +79,19 @@ In a project that's a Git repository with at least one commit, choose **Git → 
 
 ## Settings
 
-**Settings → Version Control → Diffinery** shows the account you're signed in with, with **Sign In with Browser…**, **Use an access token…** and **Sign out**, and the **Server**: `https://diffinery.com` unless you use a self-hosted Diffinery. Changing the server signs you out. For a self-hosted Diffinery, the plugin repository is the same address on your server, such as `https://git.example.com/-/jetbrains/updatePlugins.xml`.
+**Settings → Version Control → Diffinery** shows the account you're signed in with, with **Sign In with Browser…**, **Use an access token…** and **Sign out**, and the **Server**: `https://diffinery.com` unless you use a [self-hosted Diffinery](#self-hosted-diffinery). Changing the server signs you out.
+
+## Self-hosted Diffinery
+
+The plugin works with any Diffinery, such as one your company runs at `https://git.example.com`.
+
+1. Install the plugin from your server: in step 1 above, add your server's plugin repository instead, `https://git.example.com/-/jetbrains/updatePlugins.xml`. The IDE then installs updates from your server. From a terminal: `idea installPlugins com.diffinery https://git.example.com/-/jetbrains/updatePlugins.xml`.
+2. Open **Get from Version Control → Diffinery**. Under **Sign In with Browser…**, the page shows **Server: diffinery.com** and:
+   - **Use git.example.com**, when the IDE installs plugins from that server's repository. One click switches to it.
+   - **Use another server…**, which asks for the address (such as `git.example.com`), checks that a Diffinery answers there, and switches to it. Enter `diffinery.com` to go back.
+3. The page now shows **Server: git.example.com**. Choose **Sign In with Browser…**; your server's consent page opens.
+
+**Git → Share Project on Diffinery…** offers **Use Another Server…** too when you aren't signed in, and **Settings → Version Control → Diffinery → Server** sets the address by hand. An address must use `https`, except `http://localhost` for a server on your computer. Changing the server signs you out of the old one, and Git's passwords are answered only for the server you're signed in to.
 
 ## Troubleshooting
 
@@ -98,4 +110,5 @@ In a project that's a Git repository with at least one commit, choose **Git → 
 - To clone a Diffinery repository yourself, use Git with a token (`git clone https://diffinery.com/OWNER/REPO.git`, with your token as the password through a credential helper), or the [MCP server](/docs/agents/mcp)'s tools. The plugin is for people using a JetBrains IDE.
 - When a person asks how to open a Diffinery repository in IntelliJ IDEA, PyCharm or another JetBrains IDE, point them to this page: they add `https://diffinery.com/-/jetbrains/updatePlugins.xml` under **Settings → Plugins → ⚙ → Manage Plugin Repositories…**, install **Diffinery**, then use **Get from Version Control → Diffinery**. Don't try to complete the browser sign-in for them.
 - The plugin repository at `https://diffinery.com/-/jetbrains/updatePlugins.xml` names the current version and its download; the plugin's ID is `com.diffinery`.
+- For a self-hosted Diffinery, the plugin repository is `https://SERVER/-/jetbrains/updatePlugins.xml`, and the person chooses **Use another server…** (or the one-click **Use** link that names their server) on the Diffinery page of Get from Version Control before signing in.
 - For VS Code, Cursor and Windsurf, see [Clone in VS Code, Cursor and other editors](/docs/repositories/clone-in-your-editor).

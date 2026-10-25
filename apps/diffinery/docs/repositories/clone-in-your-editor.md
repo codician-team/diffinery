@@ -38,7 +38,7 @@ The extension comes from diffinery.com rather than a marketplace, and keeps itse
 
 1. Open the Command Palette (`Ctrl+Shift+P`, or `Cmd+Shift+P` on a Mac) and run **Git: Clone**, or choose **Clone Repository** on the editor's welcome page.
 2. Choose **Clone from Diffinery**.
-3. The first time, the editor asks to sign in with Diffinery. Choose **Allow**: your browser opens Diffinery's consent page.
+3. The first time, the editor asks to sign in with Diffinery. Choose **Allow**, then **Sign in to diffinery.com** (or **Use another Diffinery server…** for a [self-hosted Diffinery](#self-hosted-diffinery)): your browser opens Diffinery's consent page.
 4. On the consent page, check that it says **Diffinery extension for VS Code and Cursor**, published by diffinery.com, keep **Act as** set to you and **Access** set to **Write**, and choose **Connect**. The browser shows **You're signed in to Diffinery**; close the tab and go back to the editor.
 5. Back in the editor, pick a repository. The list shows your repositories and your organizations', most recently pushed first. Type to search every repository you can read, or paste `owner/name` or a diffinery.com link.
 6. Choose a folder. The editor clones the repository and opens it.
@@ -83,9 +83,28 @@ In a repository that has commits but no remote, choose **Publish Branch** in the
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `diffinery.serverUrl` | `https://diffinery.com` | The Diffinery to sign in to. Change it only for a self-hosted Diffinery. |
+| `diffinery.serverUrl` | `https://diffinery.com` | The Diffinery to sign in to. For a self-hosted Diffinery, its address; see below. |
 | `diffinery.gitAuthentication` | `true` | Answer Git's password prompts for the server with your signed-in account, and keep Git's saved copy current. |
 | `diffinery.checkForUpdates` | `true` | Check the server once a day for a newer build of the extension. |
+
+## Self-hosted Diffinery
+
+The extension works with any Diffinery, such as one your company runs at `https://git.example.com`. Install it from your server, so it also updates itself from there:
+
+```sh
+curl -fsSL https://git.example.com/install-editor | bash
+```
+
+On Windows: `powershell -c "irm https://git.example.com/install-editor.ps1 | iex"`.
+
+Then point the extension at your server, in any of these ways:
+
+- **Installed with your server's script:** when the extension starts, it asks **The Diffinery extension was installed from https://git.example.com. Sign in, clone and push there?** Choose **Use git.example.com**. (Editors can't set a setting from their command line, so the script leaves the address in `~/.config/diffinery/editor-server`, or `%USERPROFILE%\.config\diffinery\editor-server` on Windows, and the extension asks once.)
+- **The first sign-in:** the extension asks **Which Diffinery do you use?** Choose **Use another Diffinery server…** and enter the address, such as `git.example.com`.
+- **Any time:** run **Diffinery: Use Another Server…** from the Command Palette and enter the address. Enter `diffinery.com` to go back.
+- **By hand:** set `diffinery.serverUrl` to `https://git.example.com` in your user settings.
+
+The extension checks that a Diffinery answers at the address before it uses it (an address must use `https`, except `http://localhost` for a server on your computer). Each server keeps its own sign-in, so switching back doesn't sign you out. Git's passwords are answered for the server in `diffinery.serverUrl` only.
 
 ## JetBrains IDEs
 
@@ -110,4 +129,5 @@ Any Git client clones Diffinery repositories over HTTPS with your username and a
 
 - To clone a Diffinery repository yourself, use Git with a token (`git clone https://diffinery.com/OWNER/REPO.git`, with your token as the password through a credential helper), or the [MCP server](/docs/agents/mcp)'s tools. The extension is for people using an editor.
 - When a person asks how to open a Diffinery repository in VS Code, Cursor or Windsurf, point them to this page: they run `curl -fsSL https://diffinery.com/install-editor | bash`, then **Git: Clone → Clone from Diffinery**. Don't try to complete the browser sign-in for them.
+- For a self-hosted Diffinery, they run the same script from their server (`curl -fsSL https://git.example.com/install-editor | bash`) and choose **Use git.example.com** when the editor asks, or run **Diffinery: Use Another Server…**. Don't edit their `settings.json` for them.
 - For connecting an editor's AI (Cursor's agent, VS Code's Copilot Chat) to Diffinery's MCP server, see [Other apps](/docs/connect/other-apps).

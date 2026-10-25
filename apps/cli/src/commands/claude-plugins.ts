@@ -12,8 +12,13 @@ import { VERSION } from "../version.js";
  * they're saved in Claude Code's settings directory and named in the `env` block of its user settings as
  * CLAUDE_CODE_PLUGIN_DIRS, which Claude Code reads at the start of every session: the terminal, the
  * desktop app, VS Code, and cloud sessions and project threads, whose setup script runs this. A cloud
- * environment keeps them in its snapshot. Running it again brings them up to date.
+ * environment keeps them in its snapshot. Running it again brings them up to date. Their "Diffinery URL"
+ * setting is set to the server this runs against (pluginConfigs in the same settings file), for these
+ * copies and for copies installed from the Diffinery marketplace alike.
  */
+
+/** What the plugins' Diffinery URL setting defaults to; `pluginConfigs` is written only to change it. */
+const PLUGIN_DEFAULT_URL = "https://diffinery.com";
 
 export const CLAUDE_PLUGINS = ["diffinery", "diffinery-ci"] as const;
 
@@ -44,6 +49,23 @@ export function withOurs(current: string | undefined, ours: string[]): string {
     .map((p) => p.trim())
     .filter((p) => p && !(path.basename(path.dirname(p)) === "diffinery-plugins" && names.has(path.basename(p))) && !ours.includes(p));
   return [...kept, ...ours].join(path.delimiter);
+}
+
+/**
+ * `pluginConfigs` with each plugin id's `url` option set to `url`, other options and plugins kept; null when
+ * nothing would change. A plugin with no saved URL is left alone for diffinery.com, its default.
+ */
+export function withUrlOption(current: unknown, ids: string[], url: string): Record<string, unknown> | null {
+  const all = current && typeof current === "object" && !Array.isArray(current) ? { ...(current as Record<string, unknown>) } : {};
+  let changed = false;
+  for (const id of ids) {
+    const entry = all[id] && typeof all[id] === "object" && !Array.isArray(all[id]) ? (all[id] as Record<string, unknown>) : {};
+    const options = entry.options && typeof entry.options === "object" && !Array.isArray(entry.options) ? (entry.options as Record<string, unknown>) : {};
+    if (options.url === url || (options.url === undefined && url === PLUGIN_DEFAULT_URL)) continue;
+    all[id] = { ...entry, options: { ...options, url } };
+    changed = true;
+  }
+  return changed ? all : null;
 }
 
 export interface PluginsResult {
@@ -101,15 +123,23 @@ export async function setupClaudePlugins(env: NodeJS.ProcessEnv, url: string, cl
     got.push(`${name} ${res.headers.get("x-diffinery-plugin-version") ?? ""}`.trim());
   }
 
-  if (files.length) {
-    const block = settings.env && typeof settings.env === "object" && !Array.isArray(settings.env) ? (settings.env as Record<string, unknown>) : {};
-    const current = typeof block.CLAUDE_CODE_PLUGIN_DIRS === "string" ? block.CLAUDE_CODE_PLUGIN_DIRS : undefined;
-    const next = { ...settings, env: { ...block, CLAUDE_CODE_PLUGIN_DIRS: withOurs(current, files) } };
+  // Plugins loaded from a directory or zip are <name>@inline; marketplace ones keep their enabledPlugins id.
+  const ids = [...wanted.map((n) => `${n}@inline`), ...enabled.filter((k) => fromMarketplace.some((n) => k.startsWith(`${n}@`)))];
+  const configs = withUrlOption(settings.pluginConfigs, ids, url);
+  if (files.length || configs) {
+    let next = settings;
+    if (files.length) {
+      const block = settings.env && typeof settings.env === "object" && !Array.isArray(settings.env) ? (settings.env as Record<string, unknown>) : {};
+      const current = typeof block.CLAUDE_CODE_PLUGIN_DIRS === "string" ? block.CLAUDE_CODE_PLUGIN_DIRS : undefined;
+      next = { ...next, env: { ...block, CLAUDE_CODE_PLUGIN_DIRS: withOurs(current, files) } };
+    }
+    if (configs) next = { ...next, pluginConfigs: configs };
     await writeFile(`${settingsFile}.tmp`, `${JSON.stringify(next, null, 2)}\n`);
     await rename(`${settingsFile}.tmp`, settingsFile);
   }
   const parts = [];
   if (got.length) parts.push(`${got.join(" and ")} load in new Claude Code sessions (named in ${settingsFile})`);
   if (fromMarketplace.length) parts.push(`${fromMarketplace.join(" and ")} already installed from the Diffinery marketplace`);
+  if (configs) parts.push(`their Diffinery URL is ${url}`);
   return { ok: true, message: parts.join("; ") };
 }
