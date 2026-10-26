@@ -444,11 +444,22 @@ jobs:
   assert.equal(file.structuredContent.content, "# demo\n");
   const commit = await rpc("tools/call", { name: "commit_files", arguments: { owner, repo: "demo", branch: "mcp-change", create_branch_from: "main", message: "Edit via MCP", files: [{ path: "docs/notes.md", content: "hello\n" }] } });
   assert.equal(commit.isError, false, JSON.stringify(commit));
+  assert.equal(commit.structuredContent.html_url, `${base}/${owner}/demo/commit/${commit.structuredContent.sha}`);
   const blocked = await rpc("tools/call", { name: "commit_files", arguments: { owner, repo: "demo", branch: "main", message: "sneaky", files: [{ path: "x", content: "y" }] } });
   assert.equal(blocked.isError, true);
   const opened = await rpc("tools/call", { name: "create_pull_request", arguments: { owner, repo: "demo", title: "Notes", head: "mcp-change", intent: "Add notes" } });
   assert.equal(opened.isError, false, JSON.stringify(opened));
   assert.equal(opened.structuredContent.number, 2);
+  // Results link to what they made or read, for the agent to hand people.
+  assert.equal(opened.structuredContent.html_url, `${base}/${owner}/demo/pull/2`);
+  const said = await rpc("tools/call", { name: "comment", arguments: { owner, repo: "demo", number: 2, body: "Ready for a look" } });
+  assert.equal(said.structuredContent.html_url, `${base}/${owner}/demo/issues/2#c-${said.structuredContent.id}`);
+  const runs = await rpc("tools/call", { name: "list_workflow_runs", arguments: { owner, repo: "demo" } });
+  const run = runs.structuredContent.runs[0];
+  assert.equal(run.html_url, `${base}/${owner}/demo/actions/runs/${run.id}`);
+  const detail = await rpc("tools/call", { name: "get_workflow_run", arguments: { owner, repo: "demo", run_id: run.id } });
+  assert.equal(detail.structuredContent.jobs[0].html_url, `${base}/${owner}/demo/actions/runs/${run.id}/job/${detail.structuredContent.jobs[0].id}`);
+  for (const path of [new URL(said.structuredContent.html_url).pathname, new URL(detail.structuredContent.jobs[0].html_url).pathname]) assert.equal((await fetch(`${base}${path}`)).status, 200, path);
 
   // ------------------------------------------------------------ web UI renders the same data (signed in via DEV_AUTH)
   for (const path of ["/", `/${owner}`, `/${owner}/demo`, `/${owner}/demo/blob/main/app.txt`, `/${owner}/demo/commits/main`, `/${owner}/demo/pulls`, `/${owner}/demo/pull/1`, `/${owner}/demo/pull/1/files`, `/${owner}/demo/actions`, `/${owner}/demo/actions/runs/${pushRun.id}`, `/${owner}/demo/actions/runs/${pushRun.id}/job/${job1.claim.job_id}`, `/${owner}/demo/settings/branches`, "/settings/tokens"]) {

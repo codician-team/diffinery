@@ -59,6 +59,8 @@ const int = (a: Args, k: string) => {
 };
 // A transferred or renamed repository is served under its old owner/name too.
 const repoOf = (c: AppContext, a: Args, min: Role = "read") => loadRepo(c, str(a, "owner"), str(a, "repo"), min, { follow: true });
+/** A page of the repository on the web, for the `html_url` results carry so an agent can link people to what it made or read. */
+const web = (c: AppContext, repo: { owner_login: string; name: string }, path = "") => `${c.env.PUBLIC_URL}/${repo.owner_login}/${repo.name}${path}`;
 const OWNER_REPO = {
   owner: { type: "string", description: "Repository owner (user or org login)" },
   repo: { type: "string", description: "Repository name" },
@@ -125,11 +127,11 @@ const TOOLS: Record<string, Tool> = {
     input: { ...OWNER_REPO, branch: { type: "string" }, from: { type: "string", description: "Default: the default branch" } },
     required: ["owner", "repo", "branch"],
     run: async (c, a) => {
-      const { stub, caller } = await repoOf(c, a, "write");
+      const { stub, caller, repo } = await repoOf(c, a, "write");
       const sha = await stub.resolve(optStr(a, "from") ?? "HEAD");
       if (!sha) throw new HttpError(404, "source ref not found");
       await stub.createRef(`refs/heads/${str(a, "branch")}`, sha, caller);
-      return { branch: str(a, "branch"), sha };
+      return { branch: str(a, "branch"), sha, html_url: web(c, repo, `/tree/${encodeURI(str(a, "branch"))}`) };
     },
   },
   commit_files: {
@@ -146,7 +148,7 @@ const TOOLS: Record<string, Tool> = {
     },
     required: ["owner", "repo", "branch", "message"],
     run: async (c, a) => {
-      const { stub, caller } = await repoOf(c, a, "write");
+      const { stub, caller, repo } = await repoOf(c, a, "write");
       const files = Array.isArray(a.files) ? (a.files as Array<{ path: string; content?: string; encoding?: string; executable?: boolean }>) : [];
       const deletes = Array.isArray(a.deletes) ? (a.deletes as string[]) : [];
       if (!files.length && !deletes.length) throw new HttpError(422, "nothing to commit");
@@ -158,7 +160,8 @@ const TOOLS: Record<string, Tool> = {
         })),
         ...deletes.map((p) => ({ path: String(p), delete: true })),
       ];
-      return stub.commitFiles({ branch: str(a, "branch"), message: str(a, "message"), changes, expectedHeadSha: optStr(a, "expected_head_sha"), createBranchFrom: optStr(a, "create_branch_from") }, caller);
+      const out = await stub.commitFiles({ branch: str(a, "branch"), message: str(a, "message"), changes, expectedHeadSha: optStr(a, "expected_head_sha"), createBranchFrom: optStr(a, "create_branch_from") }, caller);
+      return { ...out, html_url: web(c, repo, `/commit/${out.sha}`) };
     },
   },
   compare: {
@@ -174,9 +177,9 @@ const TOOLS: Record<string, Tool> = {
     required: ["owner", "repo"],
     readOnly: true,
     run: async (c, a) => {
-      const { stub } = await repoOf(c, a);
+      const { stub, repo } = await repoOf(c, a);
       const { items, total } = await stub.issues({ kind: "pull", state: (optStr(a, "state") as "open") ?? "open", limit: 100, hide: await hiddenAuthors(c) });
-      return { total, items: items.map((i) => ({ number: i.number, title: i.title, state: i.state, author: i.author, head: i.pull?.head, base: i.pull?.base, draft: i.pull?.draft, merged: !!i.pull?.mergedAt })) };
+      return { total, items: items.map((i) => ({ number: i.number, title: i.title, state: i.state, author: i.author, head: i.pull?.head, base: i.pull?.base, draft: i.pull?.draft, merged: !!i.pull?.mergedAt, html_url: web(c, repo, `/pull/${i.number}`) })) };
     },
   },
   get_pull_request: {
@@ -186,12 +189,12 @@ const TOOLS: Record<string, Tool> = {
     required: ["owner", "repo", "number"],
     readOnly: true,
     run: async (c, a) => {
-      const { stub, caller } = await repoOf(c, a);
+      const { stub, caller, repo } = await repoOf(c, a);
       const n = int(a, "number");
       // An agent may not merge into a protected branch itself, but auto-merge may land it for the agent: say what each needs.
       const [detail, mergeability, automatic] = await Promise.all([stub.issue(n, await hiddenAuthors(c)), stub.mergeability(n, caller).catch(() => null), isPerson(caller) ? null : stub.mergeability(n, caller, { automatic: true }).catch(() => null)]);
       const files = a.include_diff ? await stub.pullFiles(n) : undefined;
-      return { ...detail, mergeability, ...(automatic ? { auto_merge_blockers: automatic.blockers } : {}), files };
+      return { ...detail, html_url: web(c, repo, `/pull/${n}`), mergeability, ...(automatic ? { auto_merge_blockers: automatic.blockers } : {}), files };
     },
   },
   create_pull_request: {
@@ -200,8 +203,8 @@ const TOOLS: Record<string, Tool> = {
     input: { ...OWNER_REPO, title: { type: "string" }, body: { type: "string" }, head: { type: "string" }, base: { type: "string" }, draft: { type: "boolean" }, intent: { type: "string" }, reviewers: { type: "array", items: { type: "string" } }, auto_merge: { type: "boolean" } },
     required: ["owner", "repo", "title", "head"],
     run: async (c, a) => {
-      const { stub, caller } = await repoOf(c, a, "write");
-      return stub.createPull(
+      const { stub, caller, repo } = await repoOf(c, a, "write");
+      const pull = await stub.createPull(
         {
           title: str(a, "title"),
           body: optStr(a, "body"),
@@ -214,6 +217,7 @@ const TOOLS: Record<string, Tool> = {
         },
         caller,
       );
+      return { ...pull, html_url: web(c, repo, `/pull/${pull.number}`) };
     },
   },
   comment: {
@@ -221,8 +225,9 @@ const TOOLS: Record<string, Tool> = {
     input: { ...OWNER_REPO, number: { type: "integer" }, body: { type: "string" } },
     required: ["owner", "repo", "number", "body"],
     run: async (c, a) => {
-      const { stub, caller } = await repoOf(c, a, "triage");
-      return stub.addComment(int(a, "number"), str(a, "body"), caller);
+      const { stub, caller, repo } = await repoOf(c, a, "triage");
+      const comment = await stub.addComment(int(a, "number"), str(a, "body"), caller);
+      return { ...comment, html_url: web(c, repo, `/issues/${int(a, "number")}#c-${comment.id}`) };
     },
   },
   review_pull_request: {
@@ -294,9 +299,9 @@ const TOOLS: Record<string, Tool> = {
     required: ["owner", "repo"],
     readOnly: true,
     run: async (c, a) => {
-      const { stub } = await repoOf(c, a);
+      const { stub, repo } = await repoOf(c, a);
       const { items, total } = await stub.issues({ kind: "issue", state: (optStr(a, "state") as "open") ?? "open", q: optStr(a, "q"), label: optStr(a, "label"), limit: 100, hide: await hiddenAuthors(c) });
-      return { total, items: items.map((i) => ({ number: i.number, title: i.title, state: i.state, author: i.author, labels: i.labels })) };
+      return { total, items: items.map((i) => ({ number: i.number, title: i.title, state: i.state, author: i.author, labels: i.labels, html_url: web(c, repo, `/issues/${i.number}`) })) };
     },
   },
   get_issue: {
@@ -304,15 +309,19 @@ const TOOLS: Record<string, Tool> = {
     input: { ...OWNER_REPO, number: { type: "integer" } },
     required: ["owner", "repo", "number"],
     readOnly: true,
-    run: async (c, a) => (await repoOf(c, a)).stub.issue(int(a, "number"), await hiddenAuthors(c)),
+    run: async (c, a) => {
+      const { stub, repo } = await repoOf(c, a);
+      return { ...(await stub.issue(int(a, "number"), await hiddenAuthors(c))), html_url: web(c, repo, `/issues/${int(a, "number")}`) };
+    },
   },
   create_issue: {
     description: "Open an issue.",
     input: { ...OWNER_REPO, title: { type: "string" }, body: { type: "string" }, labels: { type: "array", items: { type: "string" } } },
     required: ["owner", "repo", "title"],
     run: async (c, a) => {
-      const { stub, caller } = await repoOf(c, a, "read");
-      return stub.createIssue({ title: str(a, "title"), body: optStr(a, "body"), labels: Array.isArray(a.labels) ? (a.labels as string[]) : undefined }, caller);
+      const { stub, caller, repo } = await repoOf(c, a, "read");
+      const issue = await stub.createIssue({ title: str(a, "title"), body: optStr(a, "body"), labels: Array.isArray(a.labels) ? (a.labels as string[]) : undefined }, caller);
+      return { ...issue, html_url: web(c, repo, `/issues/${issue.number}`) };
     },
   },
   update_issue: {
@@ -320,8 +329,9 @@ const TOOLS: Record<string, Tool> = {
     input: { ...OWNER_REPO, number: { type: "integer" }, title: { type: "string" }, body: { type: "string" }, state: { type: "string", enum: ["open", "closed"] }, labels: { type: "array", items: { type: "string" } } },
     required: ["owner", "repo", "number"],
     run: async (c, a) => {
-      const { stub, caller } = await repoOf(c, a, "triage");
-      return stub.updateIssue(int(a, "number"), { title: optStr(a, "title"), body: optStr(a, "body"), state: optStr(a, "state") as "open" | undefined, labels: Array.isArray(a.labels) ? (a.labels as string[]) : undefined }, caller);
+      const { stub, caller, repo } = await repoOf(c, a, "triage");
+      const issue = await stub.updateIssue(int(a, "number"), { title: optStr(a, "title"), body: optStr(a, "body"), state: optStr(a, "state") as "open" | undefined, labels: Array.isArray(a.labels) ? (a.labels as string[]) : undefined }, caller);
+      return { ...issue, html_url: web(c, repo, `/issues/${int(a, "number")}`) };
     },
   },
   list_workflow_runs: {
@@ -330,8 +340,9 @@ const TOOLS: Record<string, Tool> = {
     required: ["owner", "repo"],
     readOnly: true,
     run: async (c, a) => {
-      const { stub } = await repoOf(c, a);
-      return stub.runs({ branch: optStr(a, "branch"), sha: optStr(a, "sha"), status: optStr(a, "status"), prNumber: a.pr_number ? int(a, "pr_number") : undefined, limit: 30 });
+      const { stub, repo } = await repoOf(c, a);
+      const res = await stub.runs({ branch: optStr(a, "branch"), sha: optStr(a, "sha"), status: optStr(a, "status"), prNumber: a.pr_number ? int(a, "pr_number") : undefined, limit: 30 });
+      return { ...res, runs: res.runs.map((r) => ({ ...r, html_url: web(c, repo, `/actions/runs/${r.id}`) })) };
     },
   },
   get_workflow_run: {
@@ -339,7 +350,12 @@ const TOOLS: Record<string, Tool> = {
     input: { ...OWNER_REPO, run_id: { type: "string" } },
     required: ["owner", "repo", "run_id"],
     readOnly: true,
-    run: async (c, a) => (await repoOf(c, a)).stub.run(str(a, "run_id")),
+    run: async (c, a) => {
+      const { stub, repo } = await repoOf(c, a);
+      // The RPC result's type is too deep to map over; only the ids are needed here.
+      const run = (await stub.run(str(a, "run_id"))) as unknown as { id: string; jobs: Array<{ id: string }> };
+      return { ...run, html_url: web(c, repo, `/actions/runs/${run.id}`), jobs: run.jobs.map((j) => ({ ...j, html_url: web(c, repo, `/actions/runs/${run.id}/job/${j.id}`) })) };
+    },
   },
   get_job_logs: {
     description: "Fetch a job's log as plain text. Use `tail` to limit to the last N lines (default 400).",
@@ -358,8 +374,9 @@ const TOOLS: Record<string, Tool> = {
     input: { ...OWNER_REPO, run_id: { type: "string" }, failed_only: { type: "boolean" } },
     required: ["owner", "repo", "run_id"],
     run: async (c, a) => {
-      const { stub, caller } = await repoOf(c, a, "write");
-      return stub.rerun(str(a, "run_id"), caller, a.failed_only === true ? "failed" : "all");
+      const { stub, caller, repo } = await repoOf(c, a, "write");
+      const run = await stub.rerun(str(a, "run_id"), caller, a.failed_only === true ? "failed" : "all");
+      return { ...run, html_url: web(c, repo, `/actions/runs/${run.id}`) };
     },
   },
   rerun_job: {
@@ -367,8 +384,9 @@ const TOOLS: Record<string, Tool> = {
     input: { ...OWNER_REPO, job_id: { type: "string" } },
     required: ["owner", "repo", "job_id"],
     run: async (c, a) => {
-      const { stub, caller } = await repoOf(c, a, "write");
-      return stub.rerunJob(str(a, "job_id"), caller);
+      const { stub, caller, repo } = await repoOf(c, a, "write");
+      const run = await stub.rerunJob(str(a, "job_id"), caller);
+      return { ...run, html_url: web(c, repo, `/actions/runs/${run.id}`) };
     },
   },
   cancel_workflow: {
@@ -387,7 +405,8 @@ const TOOLS: Record<string, Tool> = {
     required: ["owner", "repo", "workflow"],
     run: async (c, a) => {
       const { stub, caller, repo } = await repoOf(c, a, "write");
-      return stub.dispatchWorkflow(str(a, "workflow"), optStr(a, "ref") ?? repo.default_branch, (a.inputs as Record<string, unknown>) ?? {}, caller);
+      const run = await stub.dispatchWorkflow(str(a, "workflow"), optStr(a, "ref") ?? repo.default_branch, (a.inputs as Record<string, unknown>) ?? {}, caller);
+      return { ...run, html_url: web(c, repo, `/actions/runs/${run.id}`) };
     },
   },
   get_organization: {

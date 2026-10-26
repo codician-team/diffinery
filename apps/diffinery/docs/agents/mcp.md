@@ -369,6 +369,8 @@ A successful `tools/call` returns the tool's output twice: as pretty-printed JSO
 }
 ```
 
+Results about something with a page on the web carry its address as `html_url`, so an agent can link people to what it made or read. This covers branches (`create_branch`), commits (`commit_files`), issues and pull requests (`create_issue`, `update_issue`, `get_issue`, `list_issues`, `create_pull_request`, `get_pull_request`, `list_pull_requests`), comments (`comment`), workflow runs (`list_workflow_runs`, `get_workflow_run` and each of its jobs, `dispatch_workflow`, `rerun_workflow`, `rerun_job`), releases and imports.
+
 When a tool fails, the call still succeeds at the JSON-RPC level, with `isError: true` and the error message as text. The messages are the same as the REST API's:
 
 ```json
