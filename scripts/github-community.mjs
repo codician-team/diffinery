@@ -5,6 +5,7 @@
 // - the labels `roadmap`, `help wanted` and `good first issue`
 // - Discussions turned on, and the welcome post (github-community/welcome-discussion.md) in Announcements
 // - the roadmap issue (github-community/roadmap-issue.md), labelled and pinned
+// - replies to issues and discussions, read from the `community-replies` branch (see replies() below)
 //
 // Every step looks first and only creates what is missing, so running it again changes nothing.
 // A step the token isn't allowed to do is reported with the permission it needs, and the others
@@ -13,6 +14,7 @@
 //   MIRROR_TOKEN=github_pat_... node scripts/github-community.mjs [--dry-run]
 //
 // GitHub has no API to pin a discussion or to edit discussion categories, so those stay as they are.
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,6 +22,7 @@ import { fileURLToPath } from "node:url";
 const REPO = process.env.MIRROR_REPO || "codician-team/diffinery";
 const TOKEN = process.env.MIRROR_TOKEN;
 const DRY = process.argv.includes("--dry-run");
+const REPLIES_BRANCH = process.env.REPLIES_BRANCH || "community-replies";
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "github-community");
 
 const WELCOME_TITLE = "Welcome to Diffinery";
@@ -206,6 +209,142 @@ async function roadmap() {
   }
 }
 
+// Replies to issues and discussions on the mirror, posted as the token's account. They wait on
+// the `community-replies` branch of this repository (never merged, never mirrored) as
+// replies/<id>.md, so posting one needs a push to that branch and a run of this workflow, not a
+// pull request. Each file starts with a header:
+//
+//   ---
+//   target: issue 4            (or: discussion 2)
+//   labels: bug, gh            (optional, added to an issue)
+//   close: completed           (optional: completed or not_planned, closes an issue)
+//   ---
+//   The reply, in Markdown.
+//
+// The posted comment ends with <!-- diffinery-reply: <id> -->, and a reply whose marker is
+// already on its target is skipped, so running again posts nothing twice.
+function replyFiles() {
+  const git = (...args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  try {
+    git("fetch", "--quiet", "--depth=1", "origin", `+refs/heads/${REPLIES_BRANCH}:refs/remotes/origin/${REPLIES_BRANCH}`);
+  } catch {
+    return null;
+  }
+  const ref = `origin/${REPLIES_BRANCH}`;
+  const names = git("ls-tree", "--name-only", ref, "replies/").split("\n").filter((n) => n.endsWith(".md")).map((n) => n.slice("replies/".length));
+  return names.sort().map((name) => ({ id: name.slice(0, -3), text: git("show", `${ref}:replies/${name}`) }));
+}
+
+function parseReply(id, text) {
+  const m = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(text.replace(/\r\n/g, "\n"));
+  if (!m) throw new Error("no --- header");
+  const head = Object.fromEntries(
+    m[1].split("\n").filter((l) => l.trim()).map((l) => {
+      const i = l.indexOf(":");
+      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
+    }),
+  );
+  const t = /^(issue|discussion) (\d+)$/.exec(head.target ?? "");
+  if (!t) throw new Error(`target must be "issue N" or "discussion N", not "${head.target ?? ""}"`);
+  if (head.close && !["completed", "not_planned"].includes(head.close)) throw new Error(`close must be completed or not_planned`);
+  const body = m[2].trim();
+  if (!body) throw new Error("empty reply");
+  return {
+    id,
+    kind: t[1],
+    number: Number(t[2]),
+    labels: (head.labels ?? "").split(",").map((l) => l.trim()).filter(Boolean),
+    close: head.close || null,
+    marker: `<!-- diffinery-reply: ${id} -->`,
+    body,
+  };
+}
+
+async function issueReply(r, step) {
+  let posted = false;
+  for (let page = 1; page <= 20 && !posted; page++) {
+    const list = await rest("GET", `/repos/${REPO}/issues/${r.number}/comments?per_page=100&page=${page}`);
+    posted = list.some((c) => c.body?.includes(r.marker));
+    if (list.length < 100) break;
+  }
+  if (posted) report(step, "already posted");
+  else if (DRY) report(step, "would post");
+  else {
+    const c = await rest("POST", `/repos/${REPO}/issues/${r.number}/comments`, { body: `${r.body}\n\n${r.marker}\n` });
+    report(step, "posted", c.html_url);
+  }
+  const issue = await rest("GET", `/repos/${REPO}/issues/${r.number}`);
+  const missing = r.labels.filter((l) => !issue.labels.some((x) => (x.name ?? x) === l));
+  if (missing.length) {
+    if (DRY) report(`${step} labels`, "would add", missing.join(", "));
+    else {
+      await rest("POST", `/repos/${REPO}/issues/${r.number}/labels`, { labels: missing });
+      report(`${step} labels`, "added", missing.join(", "));
+    }
+  }
+  // Close only alongside the first posting, so an issue someone reopened stays open.
+  if (r.close && !posted && issue.state === "open") {
+    if (DRY) report(`${step} close`, "would close", r.close);
+    else {
+      await rest("PATCH", `/repos/${REPO}/issues/${r.number}`, { state: "closed", state_reason: r.close });
+      report(`${step} close`, "closed", r.close);
+    }
+  }
+}
+
+async function discussionReply(r, step) {
+  const [owner, name] = REPO.split("/");
+  const q = await graphql(
+    `query($owner: String!, $name: String!, $number: Int!) {
+      repository(owner: $owner, name: $name) {
+        discussion(number: $number) { id comments(last: 100) { nodes { body replies(last: 50) { nodes { body } } } } }
+      }
+    }`,
+    { owner, name, number: r.number },
+  );
+  const d = q.repository.discussion;
+  if (!d) throw new HttpError(404, `discussion ${r.number} not found`);
+  const bodies = d.comments.nodes.flatMap((c) => [c.body, ...c.replies.nodes.map((x) => x.body)]);
+  if (bodies.some((b) => b?.includes(r.marker))) report(step, "already posted");
+  else if (DRY) report(step, "would post");
+  else {
+    const c = await graphql(
+      `mutation($id: ID!, $body: String!) { addDiscussionComment(input: { discussionId: $id, body: $body }) { comment { url } } }`,
+      { id: d.id, body: `${r.body}\n\n${r.marker}\n` },
+    );
+    report(step, "posted", c.addDiscussionComment.comment.url);
+  }
+}
+
+async function replies() {
+  let files;
+  try {
+    files = replyFiles();
+  } catch (e) {
+    report("Replies", "failed", e.message);
+    return;
+  }
+  if (!files?.length) {
+    report("Replies", "none waiting", `no replies/ on the ${REPLIES_BRANCH} branch`);
+    return;
+  }
+  for (const f of files) {
+    let r;
+    try {
+      r = parseReply(f.id, f.text);
+    } catch (e) {
+      report(`Reply ${f.id}`, "failed", e.message);
+      continue;
+    }
+    const step = `Reply ${r.id} on ${r.kind} ${r.number}`;
+    try {
+      await (r.kind === "issue" ? issueReply(r, step) : discussionReply(r, step));
+    } catch (e) {
+      report(step, "failed", why(e, r.kind === "issue" ? "Issues: Read and write" : "Discussions: Read and write"));
+    }
+  }
+}
+
 async function summary() {
   const file = process.env.GITHUB_STEP_SUMMARY;
   if (!file) return;
@@ -227,5 +366,6 @@ try {
 await labels();
 await discussions();
 await roadmap();
+await replies();
 await summary();
 process.exitCode = results.some((r) => r.outcome === "failed") ? 1 : 0;
