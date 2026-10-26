@@ -9,7 +9,8 @@
  * CI chip a GitHub one does. See /docs/api/graphql.
  *
  * The same endpoint answers the GitHub CLI's issue commands (`gh issue list`, `view`, `create`,
- * `comment`, `close`, `reopen`, `edit`, `status`), and a workflow's GITHUB_TOKEN may use it with the
+ * `comment`, `close`, `reopen`, `edit`, `status`) and `gh release list`, and release-please's commit
+ * history, merged pull request and release queries; a workflow's GITHUB_TOKEN may use it with the
  * same per-scope `permissions:` it has over REST.
  *
  * Execution is lenient where GitHub is strict: a field Diffinery doesn't have is left out of the
@@ -44,8 +45,9 @@ import { overLimit, RATE_LIMITS } from "../lib/rate-limit.js";
 import { atLeast, type Caller, type Role } from "../repo/types.js";
 import type { Check, Issue, Review } from "../repo/collab.js";
 import type { CommitStatus } from "../repo/statuses.js";
+import type { Release } from "../repo/releases.js";
 import { hiddenAuthors, loadRepo, repoStub } from "./common.js";
-import { baseOf, nodeId, numericId, repoHtml } from "./gh.js";
+import { baseOf, encPath, isoSeconds, nodeId, numericId, repoHtml } from "./gh.js";
 import { SCHEMA_SDL } from "./graphql-schema.js";
 import { apiRootJson } from "./api.js";
 
@@ -326,7 +328,46 @@ function repository(ctx: Ctx, l: Loaded): Obj {
     viewerCanAdminister: caller.role === "admin",
     defaultBranchRef: async () => {
       const sha = await defaultHead(ctx, l);
-      return sha ? { __typename: "Ref", id: nodeId("Ref", `${repo.id}/refs/heads/${repo.default_branch}`), name: repo.default_branch, prefix: "refs/heads/", target: commit(ctx, l, sha) } : null;
+      return sha ? refObj(ctx, l, `refs/heads/${repo.default_branch}`, sha) : null;
+    },
+    ref: async (args: Args) => {
+      need(l, ["contents"]);
+      const q = String(args.qualifiedName ?? "");
+      // A ref name, not a revision such as `main~1`.
+      if (!q || /[~^:\\\s]|\.\.|@\{/.test(q)) return null;
+      for (const name of q.startsWith("refs/") ? [q] : [`refs/heads/${q}`, `refs/tags/${q}`]) {
+        const sha = await stub.resolve(name).catch(() => null);
+        if (sha) return refObj(ctx, l, name, sha);
+      }
+      return null;
+    },
+    releases: async (args: Args) => {
+      need(l, ["contents"]);
+      const order = args.orderBy as { direction?: string } | undefined;
+      // As GitHub: oldest first unless asked otherwise (so `releases(last: 1)` is the newest).
+      const newestFirst = order?.direction === "DESC";
+      return pagedConnection(
+        args,
+        async (limit, offset) => {
+          if (newestFirst) return stub.listReleases({ limit, offset }, caller);
+          // The repository lists newest first: read the same window from the other end.
+          const total = (await stub.listReleases({ limit: 0, offset: 0 }, caller)).total;
+          const from = Math.max(0, total - offset - limit);
+          const page = await stub.listReleases({ limit: Math.max(0, total - offset - from), offset: from }, caller);
+          return { items: page.items.reverse(), total: page.total };
+        },
+        (r) => releaseObj(ctx, l, r),
+      );
+    },
+    release: async (args: Args) => {
+      need(l, ["contents"]);
+      const r = await orNull(stub.releaseByTag(String(args.tagName ?? ""), caller));
+      return r ? releaseObj(ctx, l, r) : null;
+    },
+    latestRelease: async () => {
+      need(l, ["contents"]);
+      const r = await orNull(stub.latestRelease());
+      return r ? releaseObj(ctx, l, r) : null;
     },
     assignableUsers: async (args: Args) => connection(await people(ctx, l, args.query), args),
     mentionableUsers: async (args: Args) => connection(await people(ctx, l, args.query), args),
@@ -409,11 +450,52 @@ function repository(ctx: Ctx, l: Loaded): Obj {
 
 const defaultHead = (ctx: Ctx, l: Loaded) => once(ctx, `head:${l.repo.id}`, () => l.stub.resolve(l.repo.default_branch).catch(() => null));
 
+/** A branch or tag (`name` is the full ref) pointing at commit `oid`; an annotated tag is peeled to its commit. */
+function refObj(ctx: Ctx, l: Loaded, name: string, oid: string): Obj {
+  const prefix = name.startsWith("refs/heads/") ? "refs/heads/" : name.startsWith("refs/tags/") ? "refs/tags/" : name.slice(0, name.lastIndexOf("/") + 1);
+  return { __typename: "Ref", id: nodeId("Ref", `${l.repo.id}/${name}`), name: name.slice(prefix.length), prefix, target: commit(ctx, l, oid) };
+}
+
+function releaseObj(ctx: Ctx, l: Loaded, r: Release): Obj {
+  const { repo, stub } = l;
+  const tagRef = `refs/tags/${r.tagName}`;
+  // A draft's tag may not exist yet: then `tag` and `tagCommit` are null, as on GitHub.
+  const tagSha = () => once(ctx, `tag:${repo.id}:${r.tagName}`, () => stub.resolve(tagRef).catch(() => null));
+  return {
+    __typename: "Release",
+    id: nodeId("Release", r.id),
+    databaseId: r.id,
+    name: r.name || null,
+    tagName: r.tagName,
+    description: r.body || null,
+    isDraft: r.draft,
+    isPrerelease: r.prerelease,
+    isLatest: !!r.latest,
+    createdAt: isoSeconds(r.createdAt),
+    publishedAt: isoSeconds(r.publishedAt),
+    updatedAt: isoSeconds(r.updatedAt),
+    author: { ...actor(ctx, r.author), __typename: "User" },
+    url: `${repoHtml(ctx.base, repo.owner_login, repo.name)}/releases/tag/${encPath(r.tagName)}`,
+    resourcePath: `/${repo.owner_login}/${repo.name}/releases/tag/${encPath(r.tagName)}`,
+    tag: async () => {
+      const sha = await tagSha();
+      return sha ? refObj(ctx, l, tagRef, sha) : null;
+    },
+    tagCommit: async () => {
+      const sha = await tagSha();
+      return sha ? commit(ctx, l, sha) : null;
+    },
+  };
+}
+
 const issueOf = (ctx: Ctx, l: Loaded, n: number): Promise<Issue> =>
   once(ctx, `issue:${l.repo.id}:${n}`, async () => (await l.stub.issue(n, await hiddenAuthors(ctx.c))).issue);
 
-const issueOrNull = (ctx: Ctx, l: Loaded, n: number): Promise<Issue | null> =>
-  issueOf(ctx, l, n).catch((e) => {
+const issueOrNull = (ctx: Ctx, l: Loaded, n: number): Promise<Issue | null> => orNull(issueOf(ctx, l, n));
+
+/** A lookup's value, or null when the repository answers 404. */
+const orNull = <T>(p: Promise<T>): Promise<T | null> =>
+  p.catch((e) => {
     if (statusOf(e)?.status === 404) return null;
     throw e;
   });
@@ -665,7 +747,12 @@ function pullRequest(ctx: Ctx, l: Loaded, i: Issue, repoObj: () => Obj): Obj {
 
 // ---------------------------------------------------------------- commits and checks
 
-type CommitOpts = { pullNumber?: number; review?: () => Promise<{ requiredChecks: string[] }> };
+type CommitOpts = {
+  pullNumber?: number;
+  review?: () => Promise<{ requiredChecks: string[] }>;
+  /** The numbers of the pull requests associated with the commit, when a history page has read them for all its commits at once. */
+  pulls?: () => Promise<number[]>;
+};
 type CommitLike = { sha: string; message: string; author: { name: string; email: string; date?: string; time?: number }; committer: { name: string; email: string; date?: string; time?: number } };
 
 function commit(ctx: Ctx, l: Loaded, oid: string, opts: CommitOpts = {}, known?: CommitLike): Obj {
@@ -687,6 +774,19 @@ function commit(ctx: Ctx, l: Loaded, oid: string, opts: CommitOpts = {}, known?:
     commitUrl: `${html}/commit/${oid}`,
     message,
     messageHeadline: async () => (await message()).split("\n")[0]!,
+    associatedPullRequests: async (args: Args) => {
+      need(l, ["pull-requests"]);
+      const numbers = await (opts.pulls ?? (() => once(ctx, `pulls-for:${repo.id}:${oid}`, () => stub.pullsForCommit(oid))))();
+      const found = (await Promise.all(numbers.map((n) => issueOrNull(ctx, l, n)))).filter((i): i is Issue => i?.kind === "pull");
+      return connection(
+        found.map((i) => pullRequest(ctx, l, i, () => repository(ctx, l))),
+        args,
+      );
+    },
+    history: (args: Args) => {
+      need(l, ["contents"]);
+      return history(ctx, l, oid, args);
+    },
     messageBody: async () => (await message()).split("\n").slice(1).join("\n").replace(/^\n+/, ""),
     authoredDate: async () => dateOf((await info()).author),
     committedDate: async () => dateOf((await info()).committer),
@@ -718,6 +818,43 @@ function commit(ctx: Ctx, l: Loaded, oid: string, opts: CommitOpts = {}, known?:
           }),
       };
     },
+  };
+}
+
+/**
+ * A commit and its ancestors in git log order, a page at a time: the page is read with one more
+ * commit than asked for, to know whether another follows, and the whole count is only walked when
+ * `last`, `before` or `totalCount` needs it. Each page reads its commits' pull requests in one call.
+ */
+async function history(ctx: Ctx, l: Loaded, oid: string, args: Args): Promise<Obj> {
+  const { repo, stub } = l;
+  pageSize(args);
+  const path = typeof args.path === "string" && args.path.replace(/^\/+|\/+$/g, "") ? args.path.replace(/^\/+|\/+$/g, "") : undefined;
+  const total = () => once(ctx, `log-count:${repo.id}:${oid}:${path ?? ""}`, () => stub.logCount(oid, path));
+  const after = offsetOf(args.after);
+  const before = offsetOf(args.before);
+  const first = typeof args.first === "number" ? args.first : null;
+  const last = typeof args.last === "number" ? args.last : null;
+  let start = after >= 0 ? after + 1 : 0;
+  let end = last !== null || before >= 0 ? await total() : Number.MAX_SAFE_INTEGER;
+  if (before >= 0) end = Math.max(Math.min(before, end), start);
+  if (first !== null) end = Math.min(end, start + first);
+  if (last !== null) start = Math.max(start, end - last);
+  if (first === null && last === null) end = Math.min(end, start + LIMITS.pageSize);
+  const want = Math.max(0, end - start);
+  // log answers at most 100 commits a call, so a full page of 100 asks separately whether one follows.
+  const read = want ? await stub.log(oid, { path, limit: Math.min(want + 1, 100), skip: start }) : [];
+  const more = read.length > want || (want === 100 && read.length === 100 && (await stub.log(oid, { path, limit: 1, skip: start + want })).length > 0);
+  const page = read.slice(0, want);
+  // Walking the default branch, every commit is on it: no need to check open pull requests' ancestry.
+  const onDefault = oid === (await defaultHead(ctx, l)) ? true : undefined;
+  const pulls = () => once(ctx, `pulls-for-page:${repo.id}:${oid}:${start}:${want}`, () => stub.pullsForCommits(page.map((c) => c.sha), onDefault));
+  const nodes = page.map((c) => commit(ctx, l, c.sha, { pulls: async () => (await pulls())[c.sha] ?? [] }, c));
+  return {
+    totalCount: total,
+    nodes,
+    edges: nodes.map((node, i) => ({ node, cursor: cursorOf(start + i) })),
+    pageInfo: { hasNextPage: more, hasPreviousPage: start > 0, startCursor: page.length ? cursorOf(start) : null, endCursor: page.length ? cursorOf(start + page.length - 1) : null },
   };
 }
 

@@ -911,7 +911,7 @@ The REST API is `GET /repos/{owner}/{repo}/pulls`. Closed results include merged
 
 To search across repositories with qualifiers, use `GET /search/issues` with `is:pr`, for example `q=repo:acme/website is:pr is:open base:main`. Supported qualifiers are listed in [Issues](/docs/collaboration/issues#search-issues-and-pull-requests).
 
-To find the pull requests a commit belongs to, use `GET /repos/{owner}/{repo}/commits/{sha}/pulls`. It returns pull requests whose head commit or merge commit is that commit, and open pull requests (among the 50 most recently opened) whose head branch contains it. An unknown commit returns `422` with `No commit found for SHA: <sha>`.
+To find the pull requests a commit belongs to, use `GET /repos/{owner}/{repo}/commits/{sha}/pulls`. It returns pull requests whose head commit or merge commit is that commit and, for a commit that isn't on the default branch, open pull requests (among the 50 most recently opened) whose head branch contains it. As on GitHub, a commit on the default branch lists only the pull request that merged it, not every open pull request that branched off after it. An unknown commit returns `422` with `No commit found for SHA: <sha>`.
 
 `diffinery pr comment 12 --body "..."` adds a conversation comment.
 

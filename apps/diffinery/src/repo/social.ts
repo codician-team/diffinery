@@ -408,13 +408,31 @@ export class Social {
     return { sha };
   }
 
-  /** Pull requests associated with a commit: merged by it or containing it as their head (basic). */
-  async pullsForCommit(sha: string): Promise<number[]> {
+  /**
+   * Pull requests associated with a commit, as GitHub lists them: those merged by it or with it as
+   * their head and, for a commit that isn't on the default branch, the open pull requests that
+   * contain it. (On the default branch every open pull request contains its older commits, so
+   * GitHub lists only the merged one.) `onDefault` skips that ancestry check when the caller knows,
+   * as a walk of the default branch's history does.
+   */
+  async pullsForCommit(sha: string, onDefault?: boolean): Promise<number[]> {
     const direct = this.sql.exec<{ number: number }>("SELECT number FROM pulls WHERE merge_commit = ? OR head_sha = ? ORDER BY number DESC", sha, sha).toArray().map((r) => r.number);
+    if (onDefault || !this.repo.store.has(sha)) return direct;
     const open = this.sql.exec<{ number: number; head_sha: string }>("SELECT p.number, p.head_sha FROM pulls p JOIN issues i ON i.number = p.number WHERE i.state = 'open' ORDER BY p.number DESC LIMIT 50").toArray();
     const out = new Set(direct);
-    for (const p of open) if (!out.has(p.number) && this.repo.store.has(sha) && (await isAncestor(this.repo.store, sha, p.head_sha).catch(() => false))) out.add(p.number);
-    return [...out];
+    const containing: number[] = [];
+    for (const p of open) if (!out.has(p.number) && (await isAncestor(this.repo.store, sha, p.head_sha).catch(() => false))) containing.push(p.number);
+    if (!containing.length) return direct;
+    const main = this.repo.getRef(this.repo.headRef);
+    if (onDefault === undefined && main && (await isAncestor(this.repo.store, sha, main).catch(() => false))) return direct;
+    return [...direct, ...containing];
+  }
+
+  /** pullsForCommit for each of a page of commits, in one call. */
+  async pullsForCommits(shas: string[], onDefault?: boolean): Promise<Record<string, number[]>> {
+    const out: Record<string, number[]> = {};
+    for (const sha of shas.slice(0, 100)) out[sha] = await this.pullsForCommit(sha, onDefault);
+    return out;
   }
 
   // ---------------------------------------------------------------- reactions

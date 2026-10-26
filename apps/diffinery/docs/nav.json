@@ -14,6 +14,7 @@
       "guides",
       "guides/move-github-actions-workflows",
       "guides/faster-ci",
+      "guides/release-please",
       "guides/ai-agent-with-guardrails",
       "guides/mirror-from-github"
     ]

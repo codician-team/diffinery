@@ -995,15 +995,30 @@ export class RepoDO extends DurableObject<Env> {
     const out: CommitInfo[] = [];
     let skipped = 0;
     for (const c of await walkCommits(this.store, [sha], { limit: 2000 })) {
-      const mine = await resolvePath(this.store, c.commit.tree, opts.path);
-      const parent = c.commit.parents[0] ? await readCommit(this.store, c.commit.parents[0]).catch(() => null) : null;
-      const theirs = parent ? await resolvePath(this.store, parent.tree, opts.path) : null;
-      if ((mine?.oid ?? null) === (theirs?.oid ?? null)) continue;
+      if (!(await this.changes(c.commit, opts.path))) continue;
       if (skipped++ < skip) continue;
       out.push(toInfo(c.oid, c.commit));
       if (out.length >= limit) break;
     }
     return out;
+  }
+
+  /** How many commits `log` lists from a commit: up to MAX_LOG_DEPTH, or with `path`, those of the first 2000 that changed it. */
+  async logCount(rev: string, path?: string): Promise<number> {
+    const sha = await this.resolve(rev);
+    if (!sha) return 0;
+    if (!path) return (await walkCommits(this.store, [sha], { limit: MAX_LOG_DEPTH })).length;
+    let n = 0;
+    for (const c of await walkCommits(this.store, [sha], { limit: 2000 })) if (await this.changes(c.commit, path)) n++;
+    return n;
+  }
+
+  /** Whether a commit's tree entry at `path` differs from its first parent's. */
+  private async changes(c: Commit, path: string): Promise<boolean> {
+    const mine = await resolvePath(this.store, c.tree, path);
+    const parent = c.parents[0] ? await readCommit(this.store, c.parents[0]).catch(() => null) : null;
+    const theirs = parent ? await resolvePath(this.store, parent.tree, path) : null;
+    return (mine?.oid ?? null) !== (theirs?.oid ?? null);
   }
 
   /** Diff between two commits (or a commit and its first parent). */
@@ -1894,6 +1909,9 @@ export class RepoDO extends DurableObject<Env> {
   }
   pullsForCommit(...a: Parameters<Social["pullsForCommit"]>) {
     return this.social.pullsForCommit(...a);
+  }
+  pullsForCommits(...a: Parameters<Social["pullsForCommits"]>) {
+    return this.social.pullsForCommits(...a);
   }
   reactions(...a: Parameters<Social["reactions"]>) {
     return this.social.reactions(...a);

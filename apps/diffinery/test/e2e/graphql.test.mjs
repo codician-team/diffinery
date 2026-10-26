@@ -3,7 +3,8 @@
 // check counts), the ones the GitHub CLI sends for `gh pr view` and `gh pr checks`, and the pull
 // request mutations behind `gh pr create`, `gh pr ready`, `gh pr edit`, `gh pr comment`,
 // `gh pr close`, `gh pr reopen` and `gh pr merge`, the queries and mutations behind `gh issue`
-// (list, view, create, comment, edit, close, reopen, status, list --search), and a workflow
+// (list, view, create, comment, edit, close, reopen, status, list --search), release-please's
+// commit history, merged pull request and release queries (and `gh release list`), and a workflow
 // job's GITHUB_TOKEN with its `permissions:`. Also covers sign-in, token scopes, limits and
 // GitHub's error shape.
 //
@@ -326,6 +327,118 @@ test("gh issue create, list, view, comment, edit, close, reopen, status and list
   assert.deepEqual((await search(`( crash ) repo:ann/app type:issue`)).nodes.map((i) => i.number), [n(first)]);
   assert.equal((await search(`repo:ann/app type:issue`)).issueCount, 3);
   assert.equal((await search(`repo:ann/app is:pr`)).issueCount, 1);
+});
+
+// release-please's queries, word for word (release-please 17, src/github.ts and src/github-api.ts).
+const RP_COMMITS = `query pullRequestsSince($owner: String!, $repo: String!, $num: Int!, $maxFilesChanged: Int, $targetBranch: String!, $cursor: String) {
+  repository(owner: $owner, name: $repo) { ref(qualifiedName: $targetBranch) { target { ... on Commit { history(first: $num, after: $cursor) {
+    nodes {
+      associatedPullRequests(first: 10) { nodes { number title baseRefName headRefName labels(first: 10) { nodes { name } } body mergeCommit { oid } files(first: $maxFilesChanged) { nodes { path } pageInfo { endCursor hasNextPage } } } }
+      sha: oid message author { name email user { login } }
+    }
+    pageInfo { hasNextPage endCursor }
+  } } } } }
+}`;
+const RP_PULLS = `query mergedPullRequests($owner: String!, $repo: String!, $num: Int!, $maxFilesChanged: Int, $targetBranch: String!, $states: [PullRequestState!], $cursor: String) {
+  repository(owner: $owner, name: $repo) { pullRequests(first: $num, after: $cursor, baseRefName: $targetBranch, states: $states, orderBy: {field: CREATED_AT, direction: DESC}) {
+    nodes { number title baseRefName headRefName labels(first: 10) { nodes { name } } body mergeCommit { oid } files(first: $maxFilesChanged) { nodes { path } pageInfo { endCursor hasNextPage } } }
+    pageInfo { endCursor hasNextPage }
+  } }
+}`;
+const RP_RELEASES = `query releases($owner: String!, $repo: String!, $num: Int!, $cursor: String) {
+  repository(owner: $owner, name: $repo) { releases(first: $num, after: $cursor, orderBy: {field: CREATED_AT, direction: DESC}) {
+    nodes { name tag { name } tagCommit { oid } url description isDraft }
+    pageInfo { endCursor hasNextPage }
+  } }
+}`;
+
+test("release-please: commit history with associated pull requests, refs and releases", async () => {
+  await rest("POST", "/user/repos", { name: "rel", private: true });
+  const src = join(work, "rel");
+  mkdirSync(src);
+  const commit = (file, text, message) => {
+    writeFileSync(join(src, file), text);
+    git(src, ["add", "-A"]);
+    git(src, ["commit", "-q", "-m", message]);
+    return git(src, ["rev-parse", "HEAD"]).trim();
+  };
+  git(src, ["init", "-q", "-b", "main"]);
+  const first = commit("package.json", '{"version": "1.0.0"}\n', "chore: initial commit");
+  git(src, ["push", "-q", `${base}/ann/rel.git`, "main"]);
+  git(src, ["checkout", "-q", "-b", "feat"]);
+  commit("hello.txt", "hi\n", "add hello");
+  git(src, ["push", "-q", `${base}/ann/rel.git`, "feat"]);
+  const pr = await rest("POST", "/repos/ann/rel/pulls", { title: "feat: add hello", head: "feat", base: "main", body: "Says hi." });
+  await rest("POST", `/repos/ann/rel/issues/${pr.number}/labels`, { labels: ["autorelease: pending"] });
+  const squash = (await rest("PUT", `/repos/ann/rel/pulls/${pr.number}/merge`, { merge_method: "squash" })).sha;
+  git(src, ["checkout", "-q", "main"]);
+  git(src, ["pull", "-q", `${base}/ann/rel.git`, "main"]);
+  const direct = commit("hello.txt", "hi there\n", "fix: a direct commit");
+  git(src, ["push", "-q", `${base}/ann/rel.git`, "main"]);
+  // An open pull request whose head contains every main commit: GitHub doesn't associate it with them.
+  git(src, ["checkout", "-q", "-b", "next"]);
+  const nextSha = commit("next.txt", "next\n", "feat: next");
+  git(src, ["push", "-q", `${base}/ann/rel.git`, "next"]);
+  const open = await rest("POST", "/repos/ann/rel/pulls", { title: "feat: next", head: "next", base: "main" });
+
+  const vars = { owner: "ann", repo: "rel", num: 2, maxFilesChanged: 100, targetBranch: "main" };
+  const page1 = (await data(RP_COMMITS, vars)).repository.ref.target.history;
+  assert.deepEqual(page1.nodes.map((n) => n.sha), [direct, squash]);
+  assert.equal(page1.pageInfo.hasNextPage, true);
+  assert.deepEqual(page1.nodes[0].associatedPullRequests.nodes, []);
+  assert.equal(page1.nodes[0].message, "fix: a direct commit");
+  assert.equal(page1.nodes[0].author.email, "ann@example.com");
+  const merged = page1.nodes[1].associatedPullRequests.nodes;
+  assert.equal(merged.length, 1);
+  assert.deepEqual({ ...merged[0], labels: merged[0].labels.nodes.map((l) => l.name), files: merged[0].files.nodes.map((f) => f.path) }, {
+    number: pr.number, title: "feat: add hello", baseRefName: "main", headRefName: "feat", body: "Says hi.", mergeCommit: { oid: squash },
+    labels: ["autorelease: pending"], files: ["hello.txt"],
+  });
+  const page2 = (await data(RP_COMMITS, { ...vars, cursor: page1.pageInfo.endCursor })).repository.ref.target.history;
+  assert.deepEqual(page2.nodes.map((n) => n.sha), [first]);
+  assert.equal(page2.pageInfo.hasNextPage, false);
+  // A branch that doesn't exist has no ref (release-please then stops quietly), and neither does a revision.
+  assert.equal((await data(RP_COMMITS, { ...vars, targetBranch: "nope" })).repository.ref, null);
+  assert.equal((await data(`query { repository(owner: "ann", name: "rel") { ref(qualifiedName: "main~1") { name } } }`)).repository.ref, null);
+  // Off the default branch, a commit is associated with the open pull requests that contain it, as over REST.
+  const off = await data(`query { repository(owner: "ann", name: "rel") { ref(qualifiedName: "refs/heads/next") { name prefix target { history(first: 1) { totalCount nodes { associatedPullRequests(first: 5) { nodes { number state } } } } } } } }`);
+  assert.equal(off.repository.ref.name, "next");
+  assert.equal(off.repository.ref.prefix, "refs/heads/");
+  assert.equal(off.repository.ref.target.history.totalCount, 4);
+  assert.deepEqual(off.repository.ref.target.history.nodes[0].associatedPullRequests.nodes, [{ number: open.number, state: "OPEN" }]);
+  assert.deepEqual((await rest("GET", `/repos/ann/rel/commits/${direct}/pulls`)).map((p) => p.number), []);
+  assert.deepEqual((await rest("GET", `/repos/ann/rel/commits/${nextSha}/pulls`)).map((p) => p.number), [open.number]);
+  // history(path:) and last:
+  const byPath = await data(`query { repository(owner: "ann", name: "rel") { defaultBranchRef { target { ... on Commit { history(first: 10, path: "hello.txt") { totalCount nodes { oid } } last: history(last: 1) { nodes { oid } pageInfo { hasPreviousPage } } } } } } }`);
+  assert.deepEqual(byPath.repository.defaultBranchRef.target.history.nodes.map((n) => n.oid), [direct, squash]);
+  assert.equal(byPath.repository.defaultBranchRef.target.history.totalCount, 2);
+  assert.deepEqual(byPath.repository.defaultBranchRef.target.last.nodes.map((n) => n.oid), [first]);
+  assert.equal(byPath.repository.defaultBranchRef.target.last.pageInfo.hasPreviousPage, true);
+
+  const prs = (await data(RP_PULLS, { ...vars, num: 25, maxFilesChanged: 64, states: "MERGED" })).repository.pullRequests;
+  assert.deepEqual(prs.nodes.map((p) => [p.number, p.mergeCommit?.oid]), [[pr.number, squash]]);
+
+  // Releases: none yet, then two and a draft whose tag doesn't exist yet.
+  assert.deepEqual((await data(RP_RELEASES, { owner: "ann", repo: "rel", num: 25 })).repository.releases.nodes, []);
+  await rest("POST", "/repos/ann/rel/releases", { tag_name: "v1.0.0", target_commitish: first, name: "v1.0.0", body: "First." });
+  await rest("POST", "/repos/ann/rel/releases", { tag_name: "v1.1.0", target_commitish: squash, name: "v1.1.0", body: "Second." });
+  await rest("POST", "/repos/ann/rel/releases", { tag_name: "v2.0.0-draft", target_commitish: "main", name: "draft", draft: true });
+  const rels = (await data(RP_RELEASES, { owner: "ann", repo: "rel", num: 25 })).repository.releases;
+  assert.deepEqual(rels.nodes.map((r) => [r.tag?.name ?? null, r.tagCommit?.oid ?? null, r.isDraft]), [[null, null, true], ["v1.1.0", squash, false], ["v1.0.0", first, false]]);
+  assert.equal(rels.nodes[1].url, `${base}/ann/rel/releases/tag/v1.1.0`);
+  assert.equal(rels.nodes[1].description, "Second.");
+  // gh release list's query, and GitHub's default order (oldest first, so `last: 1` is the newest).
+  const gh = await data(`query { repository(owner: "ann", name: "rel") { releases(first: 2, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { name tagName isDraft isLatest isPrerelease createdAt publishedAt } } oldest: releases(first: 1) { totalCount nodes { tagName } } newest: releases(last: 1) { nodes { tagName } } latestRelease { tagName isLatest } release(tagName: "v1.0.0") { name tag { prefix name target { oid } } } missing: release(tagName: "v9") { name } } }`);
+  assert.deepEqual(gh.repository.releases.nodes.map((r) => [r.tagName, r.isLatest]), [["v2.0.0-draft", false], ["v1.1.0", true]]);
+  assert.match(gh.repository.releases.nodes[1].createdAt, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
+  assert.equal(gh.repository.oldest.totalCount, 3);
+  assert.deepEqual(gh.repository.oldest.nodes.map((r) => r.tagName), ["v1.0.0"]);
+  assert.deepEqual(gh.repository.newest.nodes.map((r) => r.tagName), ["v2.0.0-draft"]);
+  assert.deepEqual(gh.repository.latestRelease, { tagName: "v1.1.0", isLatest: true });
+  assert.deepEqual(gh.repository.release.tag, { prefix: "refs/tags/", name: "v1.0.0", target: { oid: first } });
+  assert.equal(gh.repository.missing, null);
+  // A tag by its short name, after the branches.
+  assert.equal((await data(`query { repository(owner: "ann", name: "rel") { ref(qualifiedName: "v1.1.0") { prefix target { oid } } } }`)).repository.ref.target.oid, squash);
 });
 
 test("a workflow's GITHUB_TOKEN uses GraphQL with its permissions, as over REST", async () => {

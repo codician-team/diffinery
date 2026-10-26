@@ -1,11 +1,11 @@
 ---
 title: GraphQL API
-description: The GitHub-shaped GraphQL endpoint at /api/graphql that the GitHub CLI and Claude Code use for issues, pull requests and CI: what it answers, limits and errors.
+description: The GitHub-shaped GraphQL endpoint at /api/graphql that gh, Claude Code and release-please use for issues, pull requests, CI, commit history and releases: what it answers and limits.
 ---
 
-Diffinery answers GraphQL at `https://diffinery.com/api/graphql` with the part of GitHub's GraphQL schema that covers repositories, issues, pull requests, reviews and CI. Type, field, argument and enum names are GitHub's, so tools written for GitHub's GraphQL API work unchanged for those queries. The main users are the GitHub CLI (`gh pr create`, `gh pr view`, `gh pr checks`, `gh issue list`, `gh issue create` and the rest, see [GitHub CLI and Claude Code](/docs/agents/github-cli)) and Claude Code, which shows a session's pull request and its CI from it.
+Diffinery answers GraphQL at `https://diffinery.com/api/graphql` with the part of GitHub's GraphQL schema that covers repositories, issues, pull requests, reviews, CI, commit history and releases. Type, field, argument and enum names are GitHub's, so tools written for GitHub's GraphQL API work unchanged for those queries. The main users are the GitHub CLI (`gh pr create`, `gh pr view`, `gh pr checks`, `gh issue list`, `gh issue create` and the rest, see [GitHub CLI and Claude Code](/docs/agents/github-cli)) and Claude Code, which shows a session's pull request and its CI from it. [release-please](/docs/guides/release-please) reads commit history, merged pull requests and releases from it, and `gh release list` lists releases.
 
-Everything else (releases, Actions, settings and so on) is in the [REST API](/docs/reference/rest-api).
+Everything else (creating releases, Actions, settings and so on) is in the [REST API](/docs/reference/rest-api).
 
 ## Requests
 
@@ -35,7 +35,7 @@ curl https://diffinery.com/api/graphql \
 | Field | What you get |
 | --- | --- |
 | `viewer` | The signed-in account. |
-| `repository(owner, name)` | A repository: its id, name, owner, visibility, default branch, merge methods, your permission, `issue(number)`, `issues(states, labels, orderBy, filterBy)`, `issueOrPullRequest(number)`, `pullRequest(number)`, `pullRequests(states, headRefName, baseRefName, labels, orderBy)`, `labels`, `milestones`, `assignableUsers` and `mentionableUsers`. A renamed repository is found by its old name. |
+| `repository(owner, name)` | A repository: its id, name, owner, visibility, default branch, merge methods, your permission, `issue(number)`, `issues(states, labels, orderBy, filterBy)`, `issueOrPullRequest(number)`, `pullRequest(number)`, `pullRequests(states, headRefName, baseRefName, labels, orderBy)`, `labels`, `milestones`, `assignableUsers`, `mentionableUsers`, `ref(qualifiedName)`, `releases(orderBy)`, `release(tagName)` and `latestRelease`. A renamed repository is found by its old name. |
 | `user(login)` | A person or agent by login. |
 | `node(id)`, `nodes(ids)` | A repository, issue or pull request by its global id (the `node_id` of the REST API). |
 | `search(query, type: ISSUE)` | Issues and pull requests in one repository (`ISSUE_ADVANCED` works too). The query needs a `repo:owner/name` qualifier and understands `is:issue`, `is:pr`, `type:`, `is:open`, `is:closed`, `is:merged`, `state:`, `author:`, `assignee:`, `mentions:`, `label:`, `milestone:`, `no:assignee`, `no:label`, `no:milestone`, `review-requested:`, `head:`, `base:`, `draft:`, `sort:` and words to find in the title or body, with `@me` for yourself. This is what `gh pr status` and `gh issue list --search` send. |
@@ -44,6 +44,10 @@ curl https://diffinery.com/api/graphql \
 `issues` takes GitHub's `filterBy`: `assignee` (a login, `*` for anyone, `null` for no one), `createdBy`, `mentioned`, `labels`, `milestoneNumber` (a number, `*` or `null`), `since` and `states`. `labels` on `issues` matches issues with any of the labels, as on GitHub. An `Issue` has its number, title, body, state and `stateReason`, author, labels, assignees, milestone and comments.
 
 A `PullRequest` has its number, title, body, state, draft flag, author, branches (`baseRef` and `headRef`, with the branch's protection rule) and head commit, additions, deletions and changed files, labels, assignees, milestone, review requests, reviews and `latestReviews`, `reviewDecision`, comments, files, commits, `mergeable` and `mergeStateStatus`, auto-merge (`autoMergeRequest`) and `statusCheckRollup`.
+
+**Commits and refs.** `ref(qualifiedName:)` takes a full name (`refs/heads/main`, `refs/tags/v1.0.0`) or a short one, which is looked up as a branch, then as a tag, as on GitHub; a ref that doesn't exist is `null`. A ref's `target` is its commit (an annotated tag is peeled to the commit it tags). A `Commit` has `history(first, after, last, before, path)`, the commit and its ancestors in `git log` order (with `path`, only the commits that changed that file or directory), and `associatedPullRequests`: for a commit on the default branch, the merged pull request that brought it there; for any other commit, also the open pull requests that contain it, as on GitHub.
+
+**Releases.** `releases` lists published releases, and drafts for those who can push, oldest first unless `orderBy: {field: CREATED_AT, direction: DESC}` asks for newest first, as on GitHub. A `Release` has its `name`, `tagName`, `tag` and `tagCommit` (both `null` while a draft's tag doesn't exist yet), `description` (the notes), `url`, `isDraft`, `isPrerelease`, `isLatest`, `author`, `createdAt`, `publishedAt` and `updatedAt`.
 
 **CI.** A commit's `statusCheckRollup` combines its check runs and commit statuses: `state` is `SUCCESS`, `FAILURE`, `ERROR`, `PENDING` or `EXPECTED`, and `contexts` lists each `CheckRun` and `StatusContext`, with `checkRunCountsByState` and `statusContextCountsByState` for the counts. A check run from Diffinery Actions has its workflow under `checkSuite.workflowRun.workflow.name`, and `isRequired(pullRequestNumber:)` says whether the base branch requires it.
 

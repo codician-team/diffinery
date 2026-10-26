@@ -523,7 +523,7 @@ export const API_DOCS: Record<string, OpDoc> = {
   "GET /repos/{owner}/{repo}/commits/{ref}": { summary: "Get a commit", description: "The commit with its diff.", access: "read" },
   "GET /repos/{owner}/{repo}/commits/{sha}/pulls": {
     summary: "List pull requests for a commit",
-    description: "Pull requests whose head or merge commit is this commit, plus open pull requests (the 50 newest) that contain it. 422 when the commit doesn't exist.",
+    description: "Pull requests whose head or merge commit is this commit and, for a commit that isn't on the default branch, open pull requests (the 50 newest) that contain it, as on GitHub. 422 when the commit doesn't exist.",
     access: "read",
     query: { ...page },
   },

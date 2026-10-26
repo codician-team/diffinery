@@ -298,7 +298,7 @@ A version or repository that doesn't exist on GitHub fails with `Unable to resol
 
 ### Actions that call the GitHub API
 
-Actions built on `@actions/github` or Octokit read `GITHUB_API_URL` and `GITHUB_SERVER_URL`, which point at Diffinery, and authenticate with the job token. Diffinery's REST API uses GitHub's paths, JSON shapes, `Link` header pagination and error format, so calls to endpoints Diffinery has work (see [REST API](/docs/reference/rest-api)), within the job's `permissions:` (see [GITHUB_TOKEN and permissions](#github_token-and-permissions)). The same goes for the [GraphQL API](/docs/reference/graphql-api), for the issues, pull requests and CI it answers, so `gh` works in a job with `GH_TOKEN: ${{ github.token }}`.
+Actions built on `@actions/github` or Octokit read `GITHUB_API_URL` and `GITHUB_SERVER_URL`, which point at Diffinery, and authenticate with the job token. Diffinery's REST API uses GitHub's paths, JSON shapes, `Link` header pagination and error format, so calls to endpoints Diffinery has work (see [REST API](/docs/reference/rest-api)), within the job's `permissions:` (see [GITHUB_TOKEN and permissions](#github_token-and-permissions)). The same goes for the [GraphQL API](/docs/reference/graphql-api), for the issues, pull requests, CI, commit history and releases it answers, so `gh` works in a job with `GH_TOKEN: ${{ github.token }}` and `googleapis/release-please-action` runs unchanged (see [release-please](/docs/guides/release-please)).
 
 ### Actions that use the cache or artifact services
 

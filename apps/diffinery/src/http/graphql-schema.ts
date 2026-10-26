@@ -4,8 +4,9 @@
  * (Claude Code's pull request badge, `gh pr view`, `gh pr checks`, `gh pr list`, `gh pr status`,
  * `gh pr create`, `gh pr merge`, `gh pr ready`, `gh pr comment`) read and change Diffinery as a
  * GitHub Enterprise Server host, and `gh issue list`, `view`, `create`, `comment`, `close`, `reopen`,
- * `edit` and `status` work on its issues. The mutations are the pull request and issue ones gh uses;
- * everything else changes through the REST API.
+ * `edit` and `status` work on its issues. release-please reads commit history (with each commit's
+ * pull requests), merged pull requests and releases from it. The mutations are the pull request and
+ * issue ones gh uses; everything else changes through the REST API.
  */
 export const SCHEMA_SDL = /* GraphQL */ `
 """Ids from the REST API, which can be wider than GraphQL's 32-bit Int (GitHub types these as Int)."""
@@ -344,6 +345,12 @@ type Repository implements Node {
   pullRequest(number: Int!): PullRequest
   pullRequests(first: Int, last: Int, after: String, before: String, states: [PullRequestState!], headRefName: String, baseRefName: String, labels: [String!], orderBy: IssueOrder): PullRequestConnection!
   pushedAt: DateTime
+  "A branch, tag or full ref name: refs/heads/main, refs/tags/v1.0.0, or main (a branch before a tag), as on GitHub."
+  ref(qualifiedName: String!): Ref
+  "Published releases, and drafts for those who can push. Oldest first unless orderBy says DESC, as on GitHub."
+  releases(first: Int, last: Int, after: String, before: String, orderBy: ReleaseOrder): ReleaseConnection!
+  release(tagName: String!): Release
+  latestRelease: Release
   rebaseMergeAllowed: Boolean!
   resourcePath: URI!
   squashMergeAllowed: Boolean!
@@ -362,6 +369,34 @@ type Ref implements Node {
   prefix: String!
   target: Commit
 }
+
+type CommitHistoryConnection { edges: [CommitEdge], nodes: [Commit], pageInfo: PageInfo!, totalCount: Int! }
+type CommitEdge { cursor: String!, node: Commit }
+
+enum ReleaseOrderField { CREATED_AT }
+input ReleaseOrder { field: ReleaseOrderField!, direction: OrderDirection! }
+
+type Release implements Node {
+  author: User
+  createdAt: DateTime!
+  databaseId: Int
+  description: String
+  id: ID!
+  isDraft: Boolean!
+  isLatest: Boolean!
+  isPrerelease: Boolean!
+  name: String
+  publishedAt: DateTime
+  resourcePath: URI!
+  "The tag's ref, or null while a draft's tag doesn't exist yet."
+  tag: Ref
+  tagCommit: Commit
+  tagName: String!
+  updatedAt: DateTime!
+  url: URI!
+}
+type ReleaseEdge { cursor: String!, node: Release }
+type ReleaseConnection { edges: [ReleaseEdge], nodes: [Release], pageInfo: PageInfo!, totalCount: Int! }
 
 type BranchProtectionRule implements Node {
   id: ID!
@@ -586,6 +621,10 @@ type Commit implements Node {
   committer: GitActor
   id: ID!
   message: String!
+  "The merged pull request that brought this commit to the default branch; for a commit not on it, also the open pull requests that contain it."
+  associatedPullRequests(first: Int, last: Int, after: String, before: String): PullRequestConnection
+  "The commit and its ancestors, newest first (git log order). With path, only the commits that changed it."
+  history(first: Int, last: Int, after: String, before: String, path: String): CommitHistoryConnection!
   messageBody: String!
   messageHeadline: String!
   oid: GitObjectID!
