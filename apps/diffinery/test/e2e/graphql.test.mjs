@@ -2,7 +2,9 @@
 // the queries Claude Code sends to show a session's pull request and its CI (the badge and the
 // check counts), the ones the GitHub CLI sends for `gh pr view` and `gh pr checks`, and the pull
 // request mutations behind `gh pr create`, `gh pr ready`, `gh pr edit`, `gh pr comment`,
-// `gh pr close`, `gh pr reopen` and `gh pr merge`. Also covers sign-in, token scopes, limits and
+// `gh pr close`, `gh pr reopen` and `gh pr merge`, the queries and mutations behind `gh issue`
+// (list, view, create, comment, edit, close, reopen, status, list --search), and a workflow
+// job's GITHUB_TOKEN with its `permissions:`. Also covers sign-in, token scopes, limits and
 // GitHub's error shape.
 //
 //   pnpm --filter @diffinery/app exec node --test test/e2e/graphql.test.mjs
@@ -219,6 +221,144 @@ test("gh pr ready, edit, comment, close, reopen and merge", async () => {
   p = await pr();
   assert.equal(p.state, "MERGED");
   assert.equal(p.merged, true);
+});
+
+// gh's issue fields (api.IssueGraphQL for `gh issue list` and `gh issue view`), as gh 2.89 sends them.
+const ISSUE_FIELDS = `number,title,url,state,stateReason,createdAt,updatedAt,closedAt,isPinned,author{login,...on User{id,name}},assignees(first:100){nodes{id,login,name,databaseId},totalCount},labels(first:100){nodes{id,name,description,color},totalCount},milestone{number,title,description,dueOn},comments(first:100){nodes{id,author{login,...on User{id,name}},authorAssociation,body,createdAt,includesCreatedEdit,isMinimized,minimizedReason,reactionGroups{content,users{totalCount}},url,viewerDidAuthor},pageInfo{hasNextPage,endCursor},totalCount},reactionGroups{content,users{totalCount}},body,projectCards(first:100){nodes{project{name}column{name}},totalCount}`;
+const ISSUE_LIST = `fragment issue on Issue {${ISSUE_FIELDS}}
+query IssueList($owner: String!, $repo: String!, $limit: Int, $endCursor: String, $states: [IssueState!] = OPEN, $assignee: String, $author: String, $mention: String) {
+  repository(owner: $owner, name: $repo) {
+    hasIssuesEnabled
+    issues(first: $limit, after: $endCursor, orderBy: {field: CREATED_AT, direction: DESC}, states: $states, filterBy: {assignee: $assignee, createdBy: $author, mentioned: $mention}) {
+      totalCount nodes { ...issue } pageInfo { hasNextPage endCursor }
+    }
+  }
+}`;
+const ISSUE_BY_NUMBER = `query IssueByNumber($owner: String!, $repo: String!, $number: Int!) {
+  repository(owner: $owner, name: $repo) {
+    hasIssuesEnabled
+    issue: issueOrPullRequest(number: $number) { __typename ...on Issue{id,${ISSUE_FIELDS}} ...on PullRequest{id,number,title,state,url} }
+  }
+}`;
+
+test("gh issue create, list, view, comment, edit, close, reopen, status and list --search", async () => {
+  // gh issue create: the repository's id (RepositoryInfo), label ids, then createIssue.
+  const labels = (await data(`query { repository(owner: "ann", name: "app") { labels(first: 100) { nodes { id name } } } }`)).repository.labels.nodes;
+  await rest("POST", "/repos/ann/app/labels", { name: "bug", color: "d73a4a" });
+  const bug = (await data(`query { repository(owner: "ann", name: "app") { label(name: "bug") { id } } }`)).repository.label.id;
+  assert.ok(labels.some((l) => l.name === "docs"));
+  const ann = (await data(`query { repository(owner: "ann", name: "app") { assignableUsers(first: 10) { nodes { id login } } } }`)).repository.assignableUsers.nodes.find((u) => u.login === "ann");
+  const create = (input) => data(`mutation IssueCreate($input: CreateIssueInput!) { createIssue(input: $input) { issue { id url } } }`, { input });
+  const first = (await create({ repositoryId: repoId, title: "Crash on start", body: "It crashes when @bob opens it.", labelIds: [bug], assigneeIds: [ann.id] })).createIssue.issue;
+  const second = (await create({ repositoryId: repoId, title: "Docs typo", body: "A typo." })).createIssue.issue;
+  const third = (await create({ repositoryId: repoId, title: "Old idea", body: "Later." })).createIssue.issue;
+  const n = (issue) => Number(issue.url.split("/").pop());
+  assert.match(first.url, new RegExp(`^${base}/ann/app/issues/\\d+$`));
+  assert.ok(n(first) > 1, "issues share numbers with pull requests");
+
+  // gh issue list: newest first, a page at a time, without the pull request.
+  let page = (await data(ISSUE_LIST, { owner: "ann", repo: "app", limit: 2 })).repository;
+  assert.equal(page.hasIssuesEnabled, true);
+  assert.equal(page.issues.totalCount, 3);
+  assert.deepEqual(page.issues.nodes.map((i) => i.number), [n(third), n(second)]);
+  assert.equal(page.issues.pageInfo.hasNextPage, true);
+  page = (await data(ISSUE_LIST, { owner: "ann", repo: "app", limit: 2, endCursor: page.issues.pageInfo.endCursor })).repository;
+  assert.deepEqual(page.issues.nodes.map((i) => i.number), [n(first)]);
+  assert.equal(page.issues.pageInfo.hasNextPage, false);
+  const listed = page.issues.nodes[0];
+  assert.equal(listed.state, "OPEN");
+  assert.equal(listed.author.login, "ann");
+  assert.deepEqual(listed.labels.nodes.map((l) => l.name), ["bug"]);
+  assert.deepEqual(listed.assignees.nodes.map((u) => u.login), ["ann"]);
+  // --assignee, --author and --mention.
+  const only = async (vars) => (await data(ISSUE_LIST, { owner: "ann", repo: "app", limit: 30, ...vars })).repository.issues.nodes.map((i) => i.number);
+  assert.deepEqual(await only({ assignee: "ann" }), [n(first)]);
+  assert.deepEqual(await only({ author: "ann" }), [n(third), n(second), n(first)]);
+  assert.deepEqual(await only({ mention: "bob" }), [n(first)]);
+  assert.deepEqual(await only({ mention: "bo" }), []);
+
+  // gh issue view: issueOrPullRequest, then the issue's project items (none).
+  let view = (await data(ISSUE_BY_NUMBER, { owner: "ann", repo: "app", number: n(first) })).repository.issue;
+  assert.equal(view.__typename, "Issue");
+  assert.equal(view.id, first.id);
+  assert.equal(view.body, "It crashes when @bob opens it.");
+  const pr = (await data(ISSUE_BY_NUMBER, { owner: "ann", repo: "app", number: 1 })).repository.issue;
+  assert.equal(pr.__typename, "PullRequest");
+  const items = await data(`query IssueProjectItems($endCursor: String, $name: String!, $number: Int!, $owner: String!) { repository(owner: $owner, name: $name) { issue(number: $number) { projectItems(first: 100, after: $endCursor) { totalCount nodes { id project { id title } status: fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { optionId name } } } pageInfo { hasNextPage endCursor } } } } }`, { owner: "ann", name: "app", number: n(first) });
+  assert.equal(items.repository.issue.projectItems.totalCount, 0);
+  const missing = await gql(`query { repository(owner: "ann", name: "app") { issue(number: 1) { id } } }`);
+  assert.equal(missing.body.errors[0].type, "NOT_FOUND", "a pull request's number is no issue");
+
+  // gh issue comment, gh issue edit (title, body, labels), gh issue close and reopen.
+  const comment = await data(`mutation CommentCreate($input: AddCommentInput!) { addComment(input: $input) { commentEdge { node { url } } } }`, { input: { subjectId: first.id, body: "Same here, @bob." } });
+  assert.match(comment.addComment.commentEdge.node.url, new RegExp(`/ann/app/issues/${n(first)}#issuecomment-`));
+  await data(`mutation IssueUpdate($input: UpdateIssueInput!) { updateIssue(input: $input) { __typename } }`, { input: { id: second.id, title: "Docs: fix a typo", body: "In the README." } });
+  const docs = labels.find((l) => l.name === "docs");
+  await data(`mutation LabelAdd($input: AddLabelsToLabelableInput!) { addLabelsToLabelable(input: $input) { __typename } }`, { input: { labelableId: second.id, labelIds: [docs.id] } });
+  await data(`mutation IssueClose($input: CloseIssueInput!) { closeIssue(input: $input) { issue { id } } }`, { input: { issueId: third.id, stateReason: "NOT_PLANNED" } });
+  view = (await data(ISSUE_BY_NUMBER, { owner: "ann", repo: "app", number: n(second) })).repository.issue;
+  assert.equal(view.title, "Docs: fix a typo");
+  assert.equal(view.body, "In the README.");
+  assert.deepEqual(view.labels.nodes.map((l) => l.name), ["docs"]);
+  const closed = (await data(ISSUE_BY_NUMBER, { owner: "ann", repo: "app", number: n(third) })).repository.issue;
+  assert.deepEqual([closed.state, closed.stateReason], ["CLOSED", "NOT_PLANNED"]);
+  assert.deepEqual(await only({}), [n(second), n(first)], "open issues by default");
+  assert.deepEqual(await only({ states: ["CLOSED"] }), [n(third)]);
+  await data(`mutation IssueReopen($input: ReopenIssueInput!) { reopenIssue(input: $input) { issue { id } } }`, { input: { issueId: third.id } });
+  assert.equal((await data(ISSUE_BY_NUMBER, { owner: "ann", repo: "app", number: n(third) })).repository.issue.state, "OPEN");
+  // An issue's id isn't a pull request's: GitHub's pull request mutations refuse it.
+  const wrong = await gql(`mutation($id: ID!) { closePullRequest(input: { pullRequestId: $id }) { pullRequest { state } } }`, { id: first.id });
+  assert.equal(wrong.body.errors[0].type, "NOT_FOUND");
+  // A read token can look but not open or close issues.
+  const refused = await gql(`mutation IssueClose($input: CloseIssueInput!) { closeIssue(input: $input) { issue { id } } }`, { input: { issueId: first.id } }, T.annRead);
+  assert.equal(refused.body.errors?.[0]?.type, "FORBIDDEN", JSON.stringify(refused.body));
+
+  // gh issue status: three filtered lists at once.
+  const status = await data(
+    `fragment issue on Issue{number,title} query IssueStatus($owner: String!, $repo: String!, $viewer: String!, $per_page: Int = 10) { repository(owner: $owner, name: $repo) { hasIssuesEnabled assigned: issues(filterBy: {assignee: $viewer, states: OPEN}, first: $per_page, orderBy: {field: UPDATED_AT, direction: DESC}) { totalCount nodes { ...issue } } mentioned: issues(filterBy: {mentioned: $viewer, states: OPEN}, first: $per_page, orderBy: {field: UPDATED_AT, direction: DESC}) { totalCount nodes { ...issue } } authored: issues(filterBy: {createdBy: $viewer, states: OPEN}, first: $per_page, orderBy: {field: UPDATED_AT, direction: DESC}) { totalCount nodes { ...issue } } } }`,
+    { owner: "ann", repo: "app", viewer: "ann" },
+  );
+  assert.deepEqual([status.repository.assigned.totalCount, status.repository.mentioned.totalCount, status.repository.authored.totalCount], [1, 0, 3]);
+
+  // gh issue list --label/--search: GitHub's issue search, in the advanced syntax gh writes.
+  const search = async (query) => (await data(`fragment issue on Issue {number,title} query IssueSearch($repo: String!, $owner: String!, $type: SearchType!, $limit: Int, $after: String, $query: String!) { repository(name: $repo, owner: $owner) { hasIssuesEnabled } search(type: $type, last: $limit, after: $after, query: $query) { issueCount nodes { ...issue } pageInfo { hasNextPage endCursor } } }`, { owner: "ann", repo: "app", type: "ISSUE_ADVANCED", limit: 30, query })).search;
+  assert.deepEqual((await search(`repo:ann/app state:open type:issue label:bug`)).nodes.map((i) => i.number), [n(first)]);
+  assert.deepEqual((await search(`( crash ) repo:ann/app type:issue`)).nodes.map((i) => i.number), [n(first)]);
+  assert.equal((await search(`repo:ann/app type:issue`)).issueCount, 3);
+  assert.equal((await search(`repo:ann/app is:pr`)).issueCount, 1);
+});
+
+test("a workflow's GITHUB_TOKEN uses GraphQL with its permissions, as over REST", async () => {
+  const workflow = "name: gh\non: push\npermissions:\n  contents: read\n  issues: read\njobs:\n  gh:\n    runs-on: [self-hosted, linux]\n    steps:\n      - run: gh issue list\n";
+  await rest("PUT", "/repos/ann/app/contents/.github/workflows/gh.yml", { message: "gh in CI", content: Buffer.from(workflow).toString("base64") });
+  const reg = await rest("POST", "/repos/ann/app/actions/runners/registration-token");
+  const runner = await rest("POST", "/repos/ann/app/actions/runners/register", { registration_token: reg.token, name: "graphql-e2e", labels: ["linux"] });
+  let claim;
+  for (const end = Date.now() + 60_000; !claim; ) {
+    const r = await fetch(`${base}/api/v3/repos/ann/app/actions/runners/claim`, { method: "POST", headers: { authorization: `Bearer ${runner.token}`, "content-type": "application/json" }, body: "{}" });
+    if (r.status === 200) claim = await r.json();
+    else if (Date.now() > end) assert.fail(`no job to claim: ${r.status} ${await r.text()}`);
+    else await new Promise((res) => setTimeout(res, 500));
+  }
+  try {
+    // The job starts (the runner reads its spec): its token gets the workflow's permissions.
+    const spec = await fetch(`${base}/runner/jobs/${claim.job_id}`, { headers: { authorization: `Bearer ${claim.token}` } });
+    assert.equal(spec.status, 200, await spec.clone().text());
+    // The repository and its issues: `gh repo view` and `gh issue list` in the job.
+    const d = await data(`query { repository(owner: "ann", name: "app") { nameWithOwner issues(first: 10) { totalCount } } }`, {}, claim.token);
+    assert.equal(d.repository.nameWithOwner, "ann/app");
+    assert.equal(typeof d.repository.issues.totalCount, "number");
+    // Pull requests need pull-requests: read, which this job doesn't have.
+    const prs = await gql(`query { repository(owner: "ann", name: "app") { pullRequests(first: 10) { totalCount } } }`, {}, claim.token);
+    assert.equal(prs.body.errors?.[0]?.type, "FORBIDDEN", JSON.stringify(prs.body));
+    assert.match(prs.body.errors[0].message, /pull-requests/);
+    // issues: read can't open an issue.
+    const opened = await gql(`mutation($input: CreateIssueInput!) { createIssue(input: $input) { issue { id } } }`, { input: { repositoryId: repoId, title: "from CI" } }, claim.token);
+    assert.equal(opened.body.errors?.[0]?.type, "FORBIDDEN", JSON.stringify(opened.body));
+    assert.match(opened.body.errors[0].message, /issues: write/);
+  } finally {
+    await fetch(`${base}/runner/jobs/${claim.job_id}/complete`, { method: "POST", headers: { authorization: `Bearer ${claim.token}`, "content-type": "application/json" }, body: JSON.stringify({ conclusion: "success", outputs: {} }) });
+  }
 });
 
 test("sign-in, privacy, limits and GitHub's error shape", async () => {

@@ -1,7 +1,7 @@
 import type { Env } from "../env.js";
 import { mcpChallenge } from "../auth/oauth.js";
 import type { Repo } from "../lib/directory.js";
-import { denied, readOnly, requestPermission, type JobPermissions } from "../lib/job-permissions.js";
+import { denied, readOnly, requestPermission, type JobPermissions, type Requirement } from "../lib/job-permissions.js";
 import { HttpError } from "../lib/util.js";
 import { errorRecord, recordServerError, requestId } from "../lib/server-errors.js";
 import { movedPath, movedStatus } from "../lib/redirects.js";
@@ -58,7 +58,7 @@ export const WHILE_IMPORTING = { whileImporting: true } as const;
 /** Paths whose reads show issues, pull requests or their comments (the web pages and the REST API). */
 const CONVERSATION_PATH = /\/(?:issues|pulls?|comments)(?:\/|$)/;
 
-export async function loadRepo(c: AppContext, owner: string, name: string, min: Role = "read", opts: { readOnlyPost?: boolean; whileArchived?: boolean; whileImporting?: boolean; follow?: boolean } = {}): Promise<{ repo: Repo; caller: Caller; stub: ReturnType<typeof repoStub>; moved: boolean }> {
+export async function loadRepo(c: AppContext, owner: string, name: string, min: Role = "read", opts: { readOnlyPost?: boolean; whileArchived?: boolean; whileImporting?: boolean; follow?: boolean; permission?: Requirement } = {}): Promise<{ repo: Repo; caller: Caller; stub: ReturnType<typeof repoStub>; moved: boolean }> {
   const dir = c.get("dir");
   const anonymous = c.get("principal").type === "anonymous";
   const reading = c.req.method === "GET" || c.req.method === "HEAD" || (opts.readOnlyPost && c.req.method === "POST") || c.get("readOnly") === true;
@@ -90,7 +90,8 @@ export async function loadRepo(c: AppContext, owner: string, name: string, min: 
   if (caller.permissions) {
     // A workflow's GITHUB_TOKEN: each kind of endpoint needs its permission (issues, contents, ...).
     // What anyone may read in a public repository stays readable with `permissions: { contents: none }`.
-    const req = requestPermission(c.req.method, c.req.path, min);
+    // `permission`: what an endpoint that isn't one REST path per resource (GraphQL) needs for this lookup.
+    const req = opts.permission ?? requestPermission(c.req.method, c.req.path, min);
     const reason = denied(caller.permissions as JobPermissions, req, isAppCaller(caller) ? "app" : "job");
     if (reason && !(repo.visibility === "public" && readOnly(req))) throw new HttpError(403, reason);
   }

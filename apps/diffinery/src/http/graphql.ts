@@ -8,6 +8,10 @@
  * statusCheckRollup`), so with this endpoint a Diffinery repository gets the same pull request and
  * CI chip a GitHub one does. See /docs/api/graphql.
  *
+ * The same endpoint answers the GitHub CLI's issue commands (`gh issue list`, `view`, `create`,
+ * `comment`, `close`, `reopen`, `edit`, `status`), and a workflow's GITHUB_TOKEN may use it with the
+ * same per-scope `permissions:` it has over REST.
+ *
  * Execution is lenient where GitHub is strict: a field Diffinery doesn't have is left out of the
  * answer (and named in `extensions.unsupported`) instead of failing the whole query, because gh
  * asks for many fields at once and most commands need only a few of them.
@@ -34,8 +38,10 @@ import type { Env } from "../env.js";
 import type { AppContext, AppVars } from "../auth/principal.js";
 import type { Account, Repo } from "../lib/directory.js";
 import { HttpError } from "../lib/util.js";
+import { denied, type JobPermissions, type PermissionScope, type Requirement } from "../lib/job-permissions.js";
+import { isAppCaller } from "../repo/token-policy.js";
 import { overLimit, RATE_LIMITS } from "../lib/rate-limit.js";
-import type { Caller, Role } from "../repo/types.js";
+import { atLeast, type Caller, type Role } from "../repo/types.js";
 import type { Check, Issue, Review } from "../repo/collab.js";
 import type { CommitStatus } from "../repo/statuses.js";
 import { hiddenAuthors, loadRepo, repoStub } from "./common.js";
@@ -134,6 +140,50 @@ function connection<T>(all: T[], args: Args, extra: Obj = {}) {
   };
 }
 
+type Page<T> = { items: T[]; total: number };
+
+/**
+ * first/last/after/before over a list the repository pages itself (`fetch(limit, offset)`), so a
+ * connection over thousands of issues reads only the page asked for. The total is read first only
+ * when `last` or `before` needs it.
+ */
+async function pagedConnection<T>(args: Args, fetch: (limit: number, offset: number) => Promise<Page<T>>, map: (x: T) => Obj): Promise<Obj> {
+  pageSize(args);
+  const after = offsetOf(args.after);
+  const before = offsetOf(args.before);
+  const first = typeof args.first === "number" ? args.first : null;
+  const last = typeof args.last === "number" ? args.last : null;
+  let start = after >= 0 ? after + 1 : 0;
+  let total: number | null = null;
+  if (last !== null || before >= 0) total = (await fetch(0, 0)).total;
+  let end = total ?? Number.MAX_SAFE_INTEGER;
+  if (before >= 0) end = Math.max(Math.min(before, end), start);
+  if (first !== null) end = Math.min(end, start + first);
+  if (last !== null) start = Math.max(start, end - last);
+  if (first === null && last === null) end = Math.min(end, start + LIMITS.pageSize);
+  const page = end > start ? await fetch(end - start, start) : { items: [] as T[], total: total ?? (await fetch(0, 0)).total };
+  total = page.total;
+  const slice = page.items.slice(0, Math.max(0, end - start));
+  const nodes = slice.map(map);
+  return {
+    totalCount: total,
+    nodes,
+    edges: nodes.map((node, i) => ({ node, cursor: cursorOf(start + i) })),
+    pageInfo: { hasNextPage: start + slice.length < total, hasPreviousPage: start > 0, startCursor: slice.length ? cursorOf(start) : null, endCursor: slice.length ? cursorOf(start + slice.length - 1) : null },
+  };
+}
+
+/** Every match, a page at a time (the repository answers at most 100 per call), up to GitHub's 1,000 search results. */
+async function everyIssue(stub: Stub, opts: Parameters<Stub["issues"]>[0]): Promise<Issue[]> {
+  const out: Issue[] = [];
+  for (let offset = 0; offset < 1000; offset += 100) {
+    const res = await stub.issues({ ...opts, limit: 100, offset });
+    out.push(...res.items);
+    if (res.items.length < 100 || out.length >= res.total) break;
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------- people
 
 type Person = { id: string; login: string; kind?: string | null; name?: string | null };
@@ -171,11 +221,26 @@ const PERMISSION: Record<Role, string> = { admin: "ADMIN", maintain: "MAINTAIN",
 
 type Loaded = { repo: Repo; caller: Caller; stub: Stub };
 
+/**
+ * A workflow job's or an app's token reads through GraphQL only what its permissions let it read
+ * over REST: the repository itself always, pull requests with pull-requests, issues with issues.
+ * Anyone may read a public repository's. (Changes are checked as each repository is loaded for
+ * one: see loadForWrite.)
+ */
+function need(l: Loaded, scopes: PermissionScope[]): void {
+  if (!l.caller.permissions || l.repo.visibility === "public") return;
+  const reason = denied(l.caller.permissions as JobPermissions, { scopes, access: "read" }, isAppCaller(l.caller) ? "app" : "job");
+  if (reason) throw new GraphQLError(reason, { extensions: { type: "FORBIDDEN" } });
+}
+
+const writes = (...scopes: PermissionScope[]): Requirement => ({ scopes, access: "write" });
+
 async function loadRepository(ctx: Ctx, owner: string, name: string): Promise<Loaded | null> {
   return once(ctx, `repo:${owner.toLowerCase()}/${name.toLowerCase()}`, async () => {
     if (++ctx.repos > LIMITS.repositories) throw new GraphQLError(`A query can look up at most ${LIMITS.repositories} repositories.`, { extensions: { type: "MAX_NODE_LIMIT_EXCEEDED" } });
     try {
-      const { repo, caller, stub } = await loadRepo(ctx.c, owner, name, "read", { follow: true });
+      // The repository's metadata: what any job token may read about its own repository.
+      const { repo, caller, stub } = await loadRepo(ctx.c, owner, name, "read", { follow: true, permission: { metadata: true } });
       return { repo, caller, stub };
     } catch (e) {
       const s = statusOf(e);
@@ -266,30 +331,60 @@ function repository(ctx: Ctx, l: Loaded): Obj {
     assignableUsers: async (args: Args) => connection(await people(ctx, l, args.query), args),
     mentionableUsers: async (args: Args) => connection(await people(ctx, l, args.query), args),
     labels: async (args: Args) => {
+      need(l, ["issues", "pull-requests"]);
       const q = typeof args.query === "string" ? args.query.toLowerCase() : "";
       const rows = await once(ctx, `labels:${repo.id}`, () => stub.labelRows());
       return connection(rows.filter((r) => !q || r.name.toLowerCase().includes(q)).map((r) => labelObj(l, r.name, r)), args);
     },
     label: async (args: Args) => {
+      need(l, ["issues", "pull-requests"]);
       const rows = await once(ctx, `labels:${repo.id}`, () => stub.labelRows());
       const r = rows.find((x) => x.name.toLowerCase() === String(args.name).toLowerCase());
       return r ? labelObj(l, r.name, r) : null;
     },
     milestones: async (args: Args) => {
+      need(l, ["issues", "pull-requests"]);
       const states = Array.isArray(args.states) ? (args.states as string[]) : [];
       const list = await stub.milestones(states.length === 1 ? (states[0] === "CLOSED" ? "closed" : "open") : "all");
       return connection(list.map((m) => milestoneObj(l, m)), args);
     },
     pullRequest: async (args: Args) => {
+      need(l, ["pull-requests"]);
       const n = args.number as number;
-      const issue = await issueOf(ctx, l, n).catch((e) => {
-        if (statusOf(e)?.status === 404) return null;
-        throw e;
-      });
+      const issue = await issueOrNull(ctx, l, n);
       if (!issue || issue.kind !== "pull") throw notFound(`Could not resolve to a PullRequest with the number of ${n}.`);
       return pullRequest(ctx, l, issue, self);
     },
+    issue: async (args: Args) => {
+      need(l, ["issues"]);
+      const n = args.number as number;
+      const issue = await issueOrNull(ctx, l, n);
+      if (!issue || issue.kind !== "issue") throw notFound(`Could not resolve to an Issue with the number of ${n}.`);
+      return issueObj(ctx, l, issue, self);
+    },
+    issueOrPullRequest: async (args: Args) => {
+      const n = args.number as number;
+      const issue = await issueOrNull(ctx, l, n);
+      if (!issue) throw notFound(`Could not resolve to an issue or pull request with the number of ${n}.`);
+      need(l, [issue.kind === "pull" ? "pull-requests" : "issues"]);
+      return issue.kind === "pull" ? pullRequest(ctx, l, issue, self) : issueObj(ctx, l, issue, self);
+    },
+    issues: async (args: Args) => {
+      need(l, ["issues"]);
+      const opts = await issueFilters(ctx, l, args);
+      if (!opts) return pagedConnection(args, async () => ({ items: [], total: 0 }), () => ({}));
+      const hide = await hiddenAuthors(ctx.c);
+      return pagedConnection(
+        args,
+        (limit, offset) => stub.issues({ ...opts, kind: "issue", limit, offset, hide }),
+        (i) => {
+          ctx.memo.set(`issue:${repo.id}:${i.number}`, Promise.resolve(i));
+          return issueObj(ctx, l, i, self);
+        },
+      );
+    },
     pullRequests: async (args: Args) => {
+      need(l, ["pull-requests"]);
       pageSize(args);
       const states = (args.states as string[] | null | undefined) ?? [];
       const want = new Set(states);
@@ -299,8 +394,7 @@ function repository(ctx: Ctx, l: Loaded): Obj {
       const sort = order?.field === "UPDATED_AT" ? "updated" : order?.field === "COMMENTS" ? "comments" : "created";
       // GitHub lists oldest first unless asked otherwise.
       const direction = order?.direction === "DESC" ? "desc" : "asc";
-      const res = await stub.issues({ kind: "pull", state, head: (args.headRefName as string) || undefined, base: (args.baseRefName as string) || undefined, labels, sort, direction, limit: 500, hide: await hiddenAuthors(ctx.c) });
-      let items = res.items;
+      let items = await everyIssue(stub, { kind: "pull", state, head: (args.headRefName as string) || undefined, base: (args.baseRefName as string) || undefined, labels, sort, direction, hide: await hiddenAuthors(ctx.c) });
       // "closed" holds both closed and merged pull requests: keep only the states asked for.
       if (want.size && state !== "all") items = items.filter((i) => want.has(pullState(i)));
       else if (want.size && !(want.has("CLOSED") && want.has("MERGED"))) items = items.filter((i) => want.has(pullState(i)));
@@ -318,9 +412,120 @@ const defaultHead = (ctx: Ctx, l: Loaded) => once(ctx, `head:${l.repo.id}`, () =
 const issueOf = (ctx: Ctx, l: Loaded, n: number): Promise<Issue> =>
   once(ctx, `issue:${l.repo.id}:${n}`, async () => (await l.stub.issue(n, await hiddenAuthors(ctx.c))).issue);
 
+const issueOrNull = (ctx: Ctx, l: Loaded, n: number): Promise<Issue | null> =>
+  issueOf(ctx, l, n).catch((e) => {
+    if (statusOf(e)?.status === 404) return null;
+    throw e;
+  });
+
 const pullState = (i: Issue): string => (i.pull?.merged ? "MERGED" : i.state === "open" ? "OPEN" : "CLOSED");
 
-// ---------------------------------------------------------------- pull requests
+/**
+ * Repository.issues' arguments as the repository's own list filters, or null when they can match
+ * nothing (a milestone or person that isn't there). `states`, `labels` (any of them, as on GitHub),
+ * `orderBy` and `filterBy` (assignee, createdBy, mentioned, labels, milestoneNumber, since, states).
+ */
+async function issueFilters(ctx: Ctx, l: Loaded, args: Args): Promise<Parameters<Stub["issues"]>[0] | null> {
+  const f = (args.filterBy ?? {}) as Record<string, unknown>;
+  const list = (v: unknown) => (Array.isArray(v) ? (v as string[]) : []);
+  const states = new Set(list(args.states).length ? list(args.states) : list(f.states));
+  const state = states.size === 1 ? (states.has("OPEN") ? "open" : "closed") : "all";
+  const anyLabels = [...new Set([...list(args.labels), ...list(f.labels)])];
+  const order = args.orderBy as { field?: string; direction?: string } | undefined;
+  const sort = order?.field === "UPDATED_AT" ? "updated" : order?.field === "COMMENTS" ? "comments" : "created";
+  // As GitHub: oldest first unless asked otherwise.
+  const direction = order?.direction === "DESC" ? "desc" : "asc";
+  const me = ctx.c.get("principal");
+  const who = (v: unknown) => (typeof v === "string" && v === "@me" && me.type === "account" ? me.account.login : v);
+  // assignee: a login, "*" for anyone, null for no one (as on GitHub).
+  const assignee = f.assignee === null ? "none" : typeof f.assignee === "string" ? String(who(f.assignee)) : undefined;
+  // milestoneNumber: a number, "*" for any, null for none. `milestone` is GitHub's older name for it.
+  const m = f.milestoneNumber !== undefined ? f.milestoneNumber : f.milestone;
+  let milestone: number | "none" | "*" | undefined;
+  if (m === null || m === "none") milestone = "none";
+  else if (m === "*") milestone = "*";
+  else if (typeof m === "string" && /^\d+$/.test(m)) milestone = Number(m);
+  else if (typeof m === "string") {
+    // A title, as `gh issue list --milestone` passes when it can.
+    const found = (await l.stub.milestones("all")).find((x) => x.title === m);
+    if (!found) return null;
+    milestone = found.number;
+  }
+  const mentioned = typeof f.mentioned === "string" ? String(who(f.mentioned)) : undefined;
+  return {
+    state,
+    anyLabels: anyLabels.length ? anyLabels : undefined,
+    author: typeof f.createdBy === "string" ? String(who(f.createdBy)) : undefined,
+    assignee,
+    mentioned,
+    milestone,
+    since: typeof f.since === "string" ? f.since : undefined,
+    sort,
+    direction,
+  };
+}
+
+// ---------------------------------------------------------------- issues and pull requests
+
+type CommentRow = { id: string; author: Person; body: string; createdAt: string; reviewId?: string | null; minimized?: { reason: string } | string | null };
+type Full = { issue: Issue; comments: CommentRow[]; reviews: Review[] };
+
+const association = (l: Loaded, login: string) => (login.toLowerCase() === l.repo.owner_login.toLowerCase() ? "OWNER" : "NONE");
+
+/** An issue's or pull request's conversation comments (review comments belong to their reviews). */
+function commentConnection(ctx: Ctx, l: Loaded, url: string, full: Full, args: Args): Obj {
+  return connection(
+    full.comments
+      .filter((cm) => !cm.reviewId)
+      .map((cm) => {
+        const minimized = typeof cm.minimized === "string" ? cm.minimized : (cm.minimized?.reason ?? null);
+        return { __typename: "IssueComment", id: nodeId("IssueComment", `${l.repo.id}/${cm.id}`), author: actor(ctx, cm.author), authorAssociation: association(l, cm.author.login), body: cm.body, createdAt: cm.createdAt, url: `${url}#issuecomment-${cm.id}`, includesCreatedEdit: false, isMinimized: !!minimized, minimizedReason: minimized, reactionGroups: NO_REACTIONS, viewerDidAuthor: viewerId(ctx) === cm.author.id };
+      }),
+    args,
+  );
+}
+
+const STATE_REASONS: Record<string, string> = { completed: "COMPLETED", not_planned: "NOT_PLANNED", reopened: "REOPENED", duplicate: "DUPLICATE" };
+
+function issueObj(ctx: Ctx, l: Loaded, i: Issue, repoObj: () => Obj): Obj {
+  const { repo, stub, caller } = l;
+  const url = `${repoHtml(ctx.base, repo.owner_login, repo.name)}/issues/${i.number}`;
+  const full = () => once(ctx, `full:${repo.id}:${i.number}`, async () => stub.issue(i.number, await hiddenAuthors(ctx.c))) as Promise<Full>;
+  return {
+    __typename: "Issue",
+    id: nodeId("Issue", `${repo.id}/${i.number}`),
+    databaseId: i.number,
+    number: i.number,
+    title: i.title,
+    body: i.body ?? "",
+    url,
+    resourcePath: `/${repo.owner_login}/${repo.name}/issues/${i.number}`,
+    state: i.state === "open" ? "OPEN" : "CLOSED",
+    stateReason: i.stateReason ? (STATE_REASONS[i.stateReason] ?? null) : null,
+    closed: i.state === "closed",
+    closedAt: i.closedAt,
+    createdAt: i.createdAt,
+    updatedAt: i.updatedAt,
+    locked: i.locked,
+    author: actor(ctx, i.author),
+    authorAssociation: association(l, i.author.login),
+    viewerCanUpdate: atLeast(caller.role, "triage") || viewerId(ctx) === i.author.id,
+    reactionGroups: NO_REACTIONS,
+    projectItems: (args: Args) => connection([], args),
+    repository: repoObj,
+    milestone: i.milestone ? milestoneObj(l, { ...i.milestone, description: null }) : null,
+    labels: async (args: Args) => {
+      const rows = await once(ctx, `labels:${repo.id}`, () => stub.labelRows());
+      const byName = new Map(rows.map((r) => [r.name, r]));
+      return connection(
+        i.labels.map((name) => labelObj(l, name, byName.get(name))),
+        args,
+      );
+    },
+    assignees: (args: Args) => connection(i.assignees.map((login) => userByLogin(ctx, login)), args),
+    comments: async (args: Args) => commentConnection(ctx, l, url, await full(), args),
+  };
+}
 
 function pullRequest(ctx: Ctx, l: Loaded, i: Issue, repoObj: () => Obj): Obj {
   const { repo, stub, caller } = l;
@@ -328,7 +533,7 @@ function pullRequest(ctx: Ctx, l: Loaded, i: Issue, repoObj: () => Obj): Obj {
   const html = repoHtml(ctx.base, repo.owner_login, repo.name);
   const url = `${html}/pull/${i.number}`;
   const key = `${repo.id}:${i.number}`;
-  const full = () => once(ctx, `full:${key}`, () => stub.issue(i.number, [])) as Promise<{ issue: Issue; comments: Array<{ id: string; author: Person; body: string; createdAt: string; reviewId?: string | null; minimized?: string | null }>; reviews: Review[] }>;
+  const full = () => once(ctx, `full:${key}`, () => stub.issue(i.number, [])) as Promise<Full>;
   const stats = () => once(ctx, `stats:${key}`, () => stub.pullStats(i.number));
   const review = () => once(ctx, `review:${key}`, () => stub.reviewState(i.number));
   const merge = () => once(ctx, `merge:${key}`, () => stub.mergeability(i.number, caller));
@@ -350,7 +555,7 @@ function pullRequest(ctx: Ctx, l: Loaded, i: Issue, repoObj: () => Obj): Obj {
             return { __typename: "BranchProtectionRule", id: nodeId("BranchProtectionRule", `${repo.id}/${name}`), pattern: name, requiredApprovingReviewCount: rules.requiredApprovals, requiresApprovingReviews: rules.requiredApprovals > 0, requiredStatusCheckContexts: required, requiresStatusChecks: required.length > 0, requiresStrictStatusChecks: false, requiresLinearHistory: rules.linearHistory };
           },
         };
-  const assoc = (login: string) => (login.toLowerCase() === repo.owner_login.toLowerCase() ? "OWNER" : "NONE");
+  const assoc = (login: string) => association(l, login);
   const reviewObj = (r: Review): Obj => ({ __typename: "PullRequestReview", id: nodeId("PullRequestReview", `${repo.id}/${r.id}`), author: actor(ctx, r.author), authorAssociation: assoc(r.author.login), body: r.body, includesCreatedEdit: false, reactionGroups: NO_REACTIONS, state: r.state, submittedAt: r.submittedAt, commit: r.commitId ? commit(ctx, l, r.commitId) : null });
   return {
     __typename: "PullRequest",
@@ -442,13 +647,7 @@ function pullRequest(ctx: Ctx, l: Loaded, i: Issue, repoObj: () => Obj): Obj {
       for (const r of (await full()).reviews) if (r.state !== "COMMENTED" || !latest.has(r.author.id)) latest.set(r.author.id, r);
       return connection([...latest.values()].map(reviewObj), args);
     },
-    comments: async (args: Args) =>
-      connection(
-        (await full()).comments
-          .filter((cm) => !cm.reviewId)
-          .map((cm) => ({ __typename: "IssueComment", id: nodeId("IssueComment", `${repo.id}/${cm.id}`), author: actor(ctx, cm.author), authorAssociation: assoc(cm.author.login), body: cm.body, createdAt: cm.createdAt, url: `${url}#issuecomment-${cm.id}`, includesCreatedEdit: false, isMinimized: !!cm.minimized, minimizedReason: cm.minimized ?? null, reactionGroups: NO_REACTIONS, viewerDidAuthor: viewerId(ctx) === cm.author.id })),
-        args,
-      ),
+    comments: async (args: Args) => commentConnection(ctx, l, url, await full(), args),
     files: async (args: Args) => {
       const res = await once(ctx, `files:${key}`, () => stub.pullFiles(i.number));
       const change: Record<string, string> = { added: "ADDED", deleted: "DELETED", modified: "MODIFIED" };
@@ -630,11 +829,11 @@ function decodeNodeId(id: string): { type: string; key: string } | null {
   }
 }
 
-/** A repository or pull request by node id, with the same access check as a lookup by name. */
+/** A repository, issue or pull request by node id, with the same access check as a lookup by name. */
 async function nodeById(ctx: Ctx, id: string): Promise<Obj | null> {
   const d = decodeNodeId(id);
-  if (!d || (d.type !== "Repository" && d.type !== "PullRequest")) return null;
-  const [repoId, num] = d.type === "PullRequest" ? d.key.split("/") : [d.key];
+  if (!d || (d.type !== "Repository" && d.type !== "PullRequest" && d.type !== "Issue")) return null;
+  const [repoId, num] = d.type === "Repository" ? [d.key] : d.key.split("/");
   const row = await ctx.c.get("dir").repoById(repoId!);
   if (!row) return null;
   const l = await loadRepository(ctx, row.owner_login, row.name);
@@ -642,39 +841,75 @@ async function nodeById(ctx: Ctx, id: string): Promise<Obj | null> {
   const repoObj = repository(ctx, l);
   if (d.type === "Repository") return repoObj;
   const issue = await issueOf(ctx, l, Number(num)).catch(() => null);
-  return issue?.kind === "pull" ? pullRequest(ctx, l, issue, () => repoObj) : null;
+  if (!issue || issue.kind !== (d.type === "Issue" ? "issue" : "pull")) return null;
+  need(l, [issue.kind === "pull" ? "pull-requests" : "issues"]);
+  return issue.kind === "pull" ? pullRequest(ctx, l, issue, () => repoObj) : issueObj(ctx, l, issue, () => repoObj);
 }
 
 /**
- * GitHub's issue search, for pull requests in one repository: `repo:` is required, and `is:`,
- * `state:`, `author:`, `assignee:`, `review-requested:`, `head:`, `base:`, `label:` and `draft:` narrow it.
+ * GitHub's issue search, in one repository: `repo:` is required, and `is:` (open, closed, merged,
+ * issue, pr), `type:`, `state:`, `author:`, `assignee:`, `mentions:`, `label:`, `milestone:`,
+ * `no:` (assignee, label, milestone), `head:`, `base:`, `review-requested:`, `draft:` and words
+ * (in the title or body) narrow it; `sort:` orders it. GitHub's advanced syntax parses too, for
+ * the AND of its terms (gh writes `( words ) qualifiers`).
  */
 async function search(ctx: Ctx, args: Args): Promise<Obj> {
   pageSize(args);
   const empty = () => ({ ...connection([], args), issueCount: 0, repositoryCount: 0, userCount: 0 });
   if (args.type !== "ISSUE" && args.type !== "ISSUE_ADVANCED") return empty();
   const q: Record<string, string[]> = {};
-  for (const m of String(args.query).matchAll(/(-?)([a-z-]+):("[^"]*"|\S+)/g)) if (!m[1]) (q[m[2]!] ??= []).push(m[3]!.replace(/^"|"$/g, ""));
+  const words: string[] = [];
+  for (const m of String(args.query).matchAll(/(-?)(?:([a-z-]+):("[^"]*"|[^\s()]+)|("[^"]*"|[^\s()]+))/g)) {
+    if (m[2]) {
+      if (!m[1]) (q[m[2]] ??= []).push(m[3]!.replace(/^"|"$/g, ""));
+    } else if (!m[1] && m[4] && !/^(AND|OR)$/.test(m[4])) words.push(m[4].replace(/^"|"$/g, "").toLowerCase());
+  }
   const viewer = ctx.c.get("principal");
   const me = viewer.type === "account" ? viewer.account.login : "";
   const who = (v: string | undefined) => (v === "@me" ? me : v);
   const [full] = q.repo ?? [];
-  if (!full || q.repo!.length > 1 || (q.is ?? []).includes("issue") || (q.type ?? []).includes("issue")) return empty();
+  if (!full || q.repo!.length > 1) return empty();
   const [owner, name] = full.split("/");
   const l = owner && name ? await loadRepository(ctx, owner, name) : null;
   if (!l) return empty();
-  const states = new Set([...(q.state ?? []), ...(q.is ?? []).filter((x) => ["open", "closed", "merged"].includes(x))]);
+  const is = new Set([...(q.is ?? []), ...(q.type ?? [])].map((x) => (x === "pull-request" || x === "pullrequest" ? "pr" : x)));
+  const kind = is.has("issue") && !is.has("pr") ? "issue" : is.has("pr") && !is.has("issue") ? "pull" : undefined;
+  need(l, kind === "issue" ? ["issues"] : kind === "pull" ? ["pull-requests"] : ["issues", "pull-requests"]);
+  const states = new Set([...(q.state ?? []), ...[...is].filter((x) => ["open", "closed", "merged"].includes(x))]);
   const state = states.size === 1 && states.has("open") ? "open" : states.size && !states.has("open") ? "closed" : "all";
-  const res = await l.stub.issues({ kind: "pull", state, author: who(q.author?.[0]), assignee: who(q.assignee?.[0]), labels: q.label, head: q.head?.[0], base: q.base?.[0], sort: "created", direction: "desc", limit: 500, hide: await hiddenAuthors(ctx.c) });
+  const no = new Set(q.no ?? []);
+  let milestone: number | "none" | undefined = no.has("milestone") ? "none" : undefined;
+  if (q.milestone?.[0]) {
+    const found = (await l.stub.milestones("all")).find((x) => x.title === q.milestone![0]);
+    if (!found) return empty();
+    milestone = found.number;
+  }
+  const sortBy = /^(created|updated|comments)(?:-(asc|desc))?$/.exec(q.sort?.[0] ?? "");
+  const all = await everyIssue(l.stub, {
+    kind,
+    state,
+    author: who(q.author?.[0]),
+    assignee: no.has("assignee") ? "none" : who(q.assignee?.[0]),
+    mentioned: who(q.mentions?.[0]),
+    labels: q.label,
+    milestone,
+    head: q.head?.[0],
+    base: q.base?.[0],
+    sort: (sortBy?.[1] as "created" | "updated" | "comments" | undefined) ?? "created",
+    direction: sortBy?.[2] === "asc" ? "asc" : "desc",
+    hide: await hiddenAuthors(ctx.c),
+  });
   const reviewer = who(q["review-requested"]?.[0])?.toLowerCase();
-  const items = res.items.filter((i) => {
+  const items = all.filter((i) => {
     if (states.has("merged") && !states.has("closed") && !i.pull?.merged) return false;
     if (q.draft?.[0] && String(!!i.pull?.draft) !== q.draft[0]) return false;
     if (reviewer && !i.pull?.requestedReviewers.some((r) => r.toLowerCase() === reviewer)) return false;
-    return true;
+    if (no.has("label") && i.labels.length) return false;
+    const text = `${i.title}\n${i.body ?? ""}`.toLowerCase();
+    return words.every((w) => text.includes(w));
   });
   const repoObj = repository(ctx, l);
-  return { ...connection(items.map((i) => pullRequest(ctx, l, i, () => repoObj)), args), issueCount: items.length, repositoryCount: 0, userCount: 0 };
+  return { ...connection(items.map((i) => (i.kind === "pull" ? pullRequest(ctx, l, i, () => repoObj) : issueObj(ctx, l, i, () => repoObj))), args), issueCount: items.length, repositoryCount: 0, userCount: 0 };
 }
 
 function root(ctx: Ctx): Obj {
@@ -709,10 +944,13 @@ function root(ctx: Ctx): Obj {
 
 // ---------------------------------------------------------------- mutations (the pull request ones gh uses)
 
-/** loadRepo for a change: the role the REST route for the same change needs. */
-async function loadForWrite(ctx: Ctx, owner: string, name: string, min: Role): Promise<Loaded> {
+/**
+ * loadRepo for a change: the role the REST route for the same change needs, and the permission a
+ * workflow's GITHUB_TOKEN needs for it (`permission`, as REST asks for the same change).
+ */
+async function loadForWrite(ctx: Ctx, owner: string, name: string, min: Role, permission: Requirement): Promise<Loaded> {
   try {
-    const { repo, caller, stub } = await loadRepo(ctx.c, owner, name, min, { follow: true });
+    const { repo, caller, stub } = await loadRepo(ctx.c, owner, name, min, { follow: true, permission });
     return { repo, caller, stub };
   } catch (e) {
     if (statusOf(e)?.status === 404) throw notFound(`Could not resolve to a Repository with the name '${owner}/${name}'.`);
@@ -720,24 +958,44 @@ async function loadForWrite(ctx: Ctx, owner: string, name: string, min: Role): P
   }
 }
 
-async function repoForWrite(ctx: Ctx, id: unknown, min: Role): Promise<Loaded> {
+async function repoForWrite(ctx: Ctx, id: unknown, min: Role, permission: Requirement): Promise<Loaded> {
   const d = decodeNodeId(String(id));
   const row = d?.type === "Repository" ? await ctx.c.get("dir").repoById(d.key) : null;
   if (!row) throw notFound(`Could not resolve to a node with the global id of '${id}'.`);
-  return loadForWrite(ctx, row.owner_login, row.name, min);
+  return loadForWrite(ctx, row.owner_login, row.name, min, permission);
 }
 
-async function pullForWrite(ctx: Ctx, id: unknown, min: Role = "read"): Promise<{ l: Loaded; number: number }> {
+/**
+ * The issue or pull request a change names by node id. `only` refuses the other kind, as GitHub's
+ * pull request mutations refuse an issue's id. Without a `permission`, a workflow's token needs
+ * issues or pull-requests write, whichever the node is.
+ */
+async function issueForWrite(ctx: Ctx, id: unknown, o: { min?: Role; permission?: Requirement; only?: "issue" | "pull" } = {}): Promise<{ l: Loaded; number: number }> {
   const d = decodeNodeId(String(id));
-  const [repoId, n] = d && (d.type === "PullRequest" || d.type === "Issue") ? d.key.split("/") : [];
+  const type = d?.type === "PullRequest" ? "pull" : d?.type === "Issue" ? "issue" : null;
+  const [repoId, n] = d && type && (!o.only || o.only === type) ? d.key.split("/") : [];
   const row = repoId ? await ctx.c.get("dir").repoById(repoId) : null;
   if (!row || !Number.isSafeInteger(Number(n))) throw notFound(`Could not resolve to a node with the global id of '${id}'.`);
-  return { l: await loadForWrite(ctx, row.owner_login, row.name, min), number: Number(n) };
+  const l = await loadForWrite(ctx, row.owner_login, row.name, o.min ?? "read", o.permission ?? writes(type === "pull" ? "pull-requests" : "issues"));
+  const found = await issueOrNull(ctx, l, Number(n));
+  // An id made for the other kind (an issue's number with a pull request's type) is no node at all.
+  if (!found || found.kind !== type) throw notFound(`Could not resolve to a node with the global id of '${id}'.`);
+  return { l, number: Number(n) };
 }
 
-/** What a label or assignee change returns: the pull request (issues aren't part of this API). */
-async function labelable(ctx: Ctx, l: Loaded, number: number): Promise<Obj | null> {
-  return (await issueOf(ctx, l, number)).kind === "pull" ? freshPull(ctx, l, number) : null;
+const pullForWrite = (ctx: Ctx, id: unknown, min: Role = "read", permission: Requirement = writes("pull-requests")) => issueForWrite(ctx, id, { min, permission, only: "pull" });
+
+/** What a label or assignee change returns: the issue or pull request as it is now. */
+async function labelable(ctx: Ctx, l: Loaded, number: number): Promise<Obj> {
+  return (await issueOf(ctx, l, number)).kind === "pull" ? freshPull(ctx, l, number) : freshIssue(ctx, l, number);
+}
+
+/** The issue as it is after a change. */
+async function freshIssue(ctx: Ctx, l: Loaded, number: number): Promise<Obj> {
+  for (const k of ["issue", "full"]) ctx.memo.delete(`${k}:${l.repo.id}:${number}`);
+  const issue = await issueOf(ctx, l, number);
+  const repoObj = repository(ctx, l);
+  return issueObj(ctx, l, issue, () => repoObj);
 }
 
 /** The pull request as it is after a change (this request's cached copies are dropped). */
@@ -805,7 +1063,7 @@ function mutations(ctx: Ctx): Obj {
   return {
     createPullRequest: async (args: Args) => {
       const inp = input(args);
-      const l = await repoForWrite(ctx, inp.repositoryId, "write");
+      const l = await repoForWrite(ctx, inp.repositoryId, "write", writes("pull-requests"));
       await creating(ctx);
       const head = String(inp.headRefName ?? "");
       const issue = await l.stub.createPull({ title: String(inp.title ?? ""), body: str(inp.body), head: head.includes(":") ? head.slice(head.indexOf(":") + 1) : head, base: str(inp.baseRefName), draft: inp.draft === true }, l.caller);
@@ -851,37 +1109,37 @@ function mutations(ctx: Ctx): Obj {
     },
     enablePullRequestAutoMerge: async (args: Args) => {
       const inp = input(args);
-      const { l, number } = await pullForWrite(ctx, inp.pullRequestId, "write");
+      const { l, number } = await pullForWrite(ctx, inp.pullRequestId, "write", writes("contents"));
       await l.stub.enableAutoMerge(number, { method: method(inp.mergeMethod), commitTitle: str(inp.commitHeadline), commitMessage: str(inp.commitBody), expectedHeadSha: str(inp.expectedHeadOid) }, l.caller);
       return payload(inp, { pullRequest: await freshPull(ctx, l, number), actor: root(ctx).viewer });
     },
     disablePullRequestAutoMerge: async (args: Args) => {
       const inp = input(args);
-      const { l, number } = await pullForWrite(ctx, inp.pullRequestId, "write");
+      const { l, number } = await pullForWrite(ctx, inp.pullRequestId, "write", writes("contents"));
       await l.stub.disableAutoMerge(number, l.caller);
       return payload(inp, { pullRequest: await freshPull(ctx, l, number), actor: root(ctx).viewer });
     },
     mergePullRequest: async (args: Args) => {
       const inp = input(args);
-      const { l, number } = await pullForWrite(ctx, inp.pullRequestId, "write");
+      const { l, number } = await pullForWrite(ctx, inp.pullRequestId, "write", writes("contents"));
       await l.stub.mergePull(number, { method: method(inp.mergeMethod) as "merge" | "squash" | "rebase" | undefined, title: str(inp.commitHeadline), message: str(inp.commitBody), expectedHeadSha: str(inp.expectedHeadOid) }, l.caller);
       return payload(inp, { pullRequest: await freshPull(ctx, l, number), actor: root(ctx).viewer });
     },
     addComment: async (args: Args) => {
       const inp = input(args);
-      const { l, number } = await pullForWrite(ctx, inp.subjectId);
+      const { l, number } = await issueForWrite(ctx, inp.subjectId, { permission: writes("issues", "pull-requests") });
       const body = String(inp.body ?? "");
       if (!body.trim()) throw new GraphQLError("Body can't be blank.", { extensions: { type: "UNPROCESSABLE" } });
       await creating(ctx);
       const cm = await l.stub.addComment(number, body, l.caller);
       const html = repoHtml(ctx.base, l.repo.owner_login, l.repo.name);
       const issue = await issueOf(ctx, l, number);
-      const node = { __typename: "IssueComment", id: nodeId("IssueComment", `${l.repo.id}/${cm.id}`), author: actor(ctx, cm.author), authorAssociation: "NONE", body: cm.body, createdAt: cm.createdAt, url: `${html}/${issue.kind === "pull" ? "pull" : "issues"}/${number}#issuecomment-${cm.id}`, includesCreatedEdit: false, isMinimized: false, minimizedReason: null, reactionGroups: NO_REACTIONS, viewerDidAuthor: true };
-      return payload(inp, { commentEdge: { cursor: cursorOf(0), node }, subject: issue.kind === "pull" ? await freshPull(ctx, l, number) : null });
+      const node = { __typename: "IssueComment", id: nodeId("IssueComment", `${l.repo.id}/${cm.id}`), author: actor(ctx, cm.author), authorAssociation: association(l, cm.author.login), body: cm.body, createdAt: cm.createdAt, url: `${html}/${issue.kind === "pull" ? "pull" : "issues"}/${number}#issuecomment-${cm.id}`, includesCreatedEdit: false, isMinimized: false, minimizedReason: null, reactionGroups: NO_REACTIONS, viewerDidAuthor: true };
+      return payload(inp, { commentEdge: { cursor: cursorOf(0), node }, subject: await labelable(ctx, l, number) });
     },
     addLabelsToLabelable: async (args: Args) => {
       const inp = input(args);
-      const { l, number } = await pullForWrite(ctx, inp.labelableId);
+      const { l, number } = await issueForWrite(ctx, inp.labelableId, { permission: writes("issues", "pull-requests") });
       const current = await issueOf(ctx, l, number);
       const add = await labelNamesFor(ctx, l, Array.isArray(inp.labelIds) ? inp.labelIds : []);
       await l.stub.updateIssue(number, { labels: [...new Set([...current.labels, ...add])] }, l.caller);
@@ -889,7 +1147,7 @@ function mutations(ctx: Ctx): Obj {
     },
     removeLabelsFromLabelable: async (args: Args) => {
       const inp = input(args);
-      const { l, number } = await pullForWrite(ctx, inp.labelableId);
+      const { l, number } = await issueForWrite(ctx, inp.labelableId, { permission: writes("issues", "pull-requests") });
       const current = await issueOf(ctx, l, number);
       const drop = new Set(await labelNamesFor(ctx, l, Array.isArray(inp.labelIds) ? inp.labelIds : []));
       await l.stub.updateIssue(number, { labels: current.labels.filter((x) => !drop.has(x)) }, l.caller);
@@ -897,18 +1155,56 @@ function mutations(ctx: Ctx): Obj {
     },
     addAssigneesToAssignable: async (args: Args) => {
       const inp = input(args);
-      const { l, number } = await pullForWrite(ctx, inp.assignableId);
+      const { l, number } = await issueForWrite(ctx, inp.assignableId, { permission: writes("issues", "pull-requests") });
       const current = await issueOf(ctx, l, number);
       await l.stub.updateIssue(number, { assignees: [...new Set([...current.assignees, ...(await loginsFor(ctx, inp.assigneeIds))])] }, l.caller);
       return payload(inp, { assignable: await labelable(ctx, l, number) });
     },
     removeAssigneesFromAssignable: async (args: Args) => {
       const inp = input(args);
-      const { l, number } = await pullForWrite(ctx, inp.assignableId);
+      const { l, number } = await issueForWrite(ctx, inp.assignableId, { permission: writes("issues", "pull-requests") });
       const current = await issueOf(ctx, l, number);
       const drop = new Set(await loginsFor(ctx, inp.assigneeIds));
       await l.stub.updateIssue(number, { assignees: current.assignees.filter((x) => !drop.has(x)) }, l.caller);
       return payload(inp, { assignable: await labelable(ctx, l, number) });
+    },
+    createIssue: async (args: Args) => {
+      const inp = input(args);
+      const l = await repoForWrite(ctx, inp.repositoryId, "read", writes("issues"));
+      if (Array.isArray(inp.projectIds) && inp.projectIds.length) throw new GraphQLError("Projects aren't supported.", { extensions: { type: "UNPROCESSABLE" } });
+      const title = String(inp.title ?? "");
+      if (!title.trim()) throw new GraphQLError("Title can't be blank.", { extensions: { type: "UNPROCESSABLE" } });
+      const labels = Array.isArray(inp.labelIds) ? await labelNamesFor(ctx, l, inp.labelIds) : undefined;
+      const assignees = Array.isArray(inp.assigneeIds) ? await loginsFor(ctx, inp.assigneeIds) : undefined;
+      await creating(ctx);
+      const issue = await l.stub.createIssue({ title, body: str(inp.body), labels, assignees }, l.caller);
+      // As over REST, a milestone from someone without triage access is left off.
+      if (inp.milestoneId && atLeast(l.caller.role, "triage")) await setMilestone(ctx, l, issue.number, inp.milestoneId);
+      return payload(inp, { issue: await freshIssue(ctx, l, issue.number) });
+    },
+    updateIssue: async (args: Args) => {
+      const inp = input(args);
+      const { l, number } = await issueForWrite(ctx, inp.id, { only: "issue" });
+      if (Array.isArray(inp.projectIds) && inp.projectIds.length) throw new GraphQLError("Projects aren't supported.", { extensions: { type: "UNPROCESSABLE" } });
+      const state = inp.state === "OPEN" ? "open" : inp.state === "CLOSED" ? "closed" : undefined;
+      const labels = Array.isArray(inp.labelIds) ? await labelNamesFor(ctx, l, inp.labelIds) : undefined;
+      const assignees = Array.isArray(inp.assigneeIds) ? await loginsFor(ctx, inp.assigneeIds) : undefined;
+      if (inp.title !== undefined || inp.body !== undefined || state || labels || assignees) await l.stub.updateIssue(number, { title: str(inp.title), body: str(inp.body), state, labels, assignees }, l.caller);
+      if (inp.milestoneId !== undefined) await setMilestone(ctx, l, number, inp.milestoneId);
+      return payload(inp, { issue: await freshIssue(ctx, l, number), actor: root(ctx).viewer });
+    },
+    closeIssue: async (args: Args) => {
+      const inp = input(args);
+      const { l, number } = await issueForWrite(ctx, inp.issueId, { only: "issue" });
+      const reason = { COMPLETED: "completed", NOT_PLANNED: "not_planned", DUPLICATE: "duplicate" }[String(inp.stateReason ?? "COMPLETED")] ?? "completed";
+      await l.stub.updateIssue(number, { state: "closed", stateReason: reason }, l.caller);
+      return payload(inp, { issue: await freshIssue(ctx, l, number) });
+    },
+    reopenIssue: async (args: Args) => {
+      const inp = input(args);
+      const { l, number } = await issueForWrite(ctx, inp.issueId, { only: "issue" });
+      await l.stub.updateIssue(number, { state: "open" }, l.caller);
+      return payload(inp, { issue: await freshIssue(ctx, l, number) });
     },
     requestReviews: async (args: Args) => {
       const inp = input(args);

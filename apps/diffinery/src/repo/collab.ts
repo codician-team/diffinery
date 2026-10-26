@@ -260,7 +260,11 @@ export class Collab {
       q?: string;
       // GitHub list filters (REST `issues` and `pulls` query parameters).
       labels?: string[];
+      /** Any of these labels (GraphQL's `labels`); `labels` needs all of them (REST's). */
+      anyLabels?: string[];
       assignee?: string;
+      /** Mentioned as @login in the body or a comment (GraphQL's `filterBy.mentioned`, search's `mentions:`). */
+      mentioned?: string;
       milestone?: number | "none" | "*";
       since?: string;
       head?: string;
@@ -300,6 +304,20 @@ export class Collab {
     for (const l of opts.labels ?? []) {
       where.push("EXISTS (SELECT 1 FROM json_each(labels) WHERE value = ?)");
       args.push(l);
+    }
+    if (opts.anyLabels?.length) {
+      where.push("EXISTS (SELECT 1 FROM json_each(labels) WHERE value IN (SELECT value FROM json_each(?)))");
+      args.push(JSON.stringify(opts.anyLabels));
+    }
+    if (opts.mentioned !== undefined) {
+      // @login with no letter, digit or underscore before it and no login character after it
+      // (so @ann doesn't match @anna or an email address). Logins are letters, digits and hyphens.
+      if (!/^[A-Za-z0-9-]+$/.test(opts.mentioned)) where.push("0");
+      else {
+        const pattern = `*[^a-z0-9_]@${opts.mentioned.toLowerCase()}[^a-z0-9-]*`;
+        where.push("(lower(' ' || body || ' ') GLOB ? OR EXISTS (SELECT 1 FROM comments c WHERE c.number = issues.number AND lower(' ' || c.body || ' ') GLOB ?))");
+        args.push(pattern, pattern);
+      }
     }
     if (opts.assignee === "none") where.push("assignees = '[]'");
     else if (opts.assignee === "*") where.push("assignees != '[]'");

@@ -250,7 +250,7 @@ jobs:
             });
 ```
 
-`github.graphql` fails: Diffinery's [GraphQL API](/docs/reference/graphql-api) answers personal and agent tokens, not a job's token. REST calls to endpoints Diffinery doesn't have get a JSON `404 Not Found`. See [the REST API reference](/docs/reference/rest-api) for the endpoints Diffinery has.
+`github.graphql` works for what Diffinery's [GraphQL API](/docs/reference/graphql-api) answers (repositories, issues, pull requests and CI), with the job token and its `permissions:`. REST calls to endpoints Diffinery doesn't have get a JSON `404 Not Found`. See [the REST API reference](/docs/reference/rest-api) for the endpoints Diffinery has.
 
 ## Other actions
 
@@ -298,7 +298,7 @@ A version or repository that doesn't exist on GitHub fails with `Unable to resol
 
 ### Actions that call the GitHub API
 
-Actions built on `@actions/github` or Octokit read `GITHUB_API_URL` and `GITHUB_SERVER_URL`, which point at Diffinery, and authenticate with the job token. Diffinery's REST API uses GitHub's paths, JSON shapes, `Link` header pagination and error format, so calls to endpoints Diffinery has work (see [REST API](/docs/reference/rest-api)), within the job's `permissions:` (see [GITHUB_TOKEN and permissions](#github_token-and-permissions)). Calls to the GraphQL API fail, because it doesn't accept a job's token yet.
+Actions built on `@actions/github` or Octokit read `GITHUB_API_URL` and `GITHUB_SERVER_URL`, which point at Diffinery, and authenticate with the job token. Diffinery's REST API uses GitHub's paths, JSON shapes, `Link` header pagination and error format, so calls to endpoints Diffinery has work (see [REST API](/docs/reference/rest-api)), within the job's `permissions:` (see [GITHUB_TOKEN and permissions](#github_token-and-permissions)). The same goes for the [GraphQL API](/docs/reference/graphql-api), for the issues, pull requests and CI it answers, so `gh` works in a job with `GH_TOKEN: ${{ github.token }}`.
 
 ### Actions that use the cache or artifact services
 
@@ -387,7 +387,7 @@ Work through this list for each workflow you move from GitHub. Most workflows ne
 6. Check what each job does with `GITHUB_TOKEN`. In a new repository the default token only reads, so give jobs that push, tag, comment, label or merge the `permissions:` they need, or have an admin set the repository default to write (see [GITHUB_TOKEN permissions](/docs/actions/workflow-permissions)). Jobs that change workflow files, or that open or approve pull requests without the repository allowing it, need a personal or agent token from a secret.
 7. Give `actions/checkout` of another private repository a token from a secret.
 8. Recreate your environments, their branch policies, secrets and variables through the REST API (see [Environments](/docs/actions/environments)), and set required reviewers by Diffinery login (GitHub's numeric ids and teams don't carry over).
-9. Replace `github.graphql` calls in `actions/github-script` with REST calls.
+9. Check `github.graphql` calls in `actions/github-script`: queries about issues, pull requests and CI work; replace others with REST calls.
 10. Replace `ghcr.io` with your instance's host (`diffinery.com` here) in image names and logins; see [Container registry](/docs/packages/container-registry#migrating-from-ghcrio).
 11. Replace hard-coded `github.com` and `api.github.com` URLs with `${{ github.server_url }}` and `${{ github.api_url }}`.
 12. Update OIDC trust policies in your cloud accounts to the Diffinery issuer and subject format.

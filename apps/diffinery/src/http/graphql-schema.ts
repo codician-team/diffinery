@@ -3,8 +3,9 @@
  * /api/graphql. Names, types and enum values are GitHub's, so the GitHub CLI and tools built on it
  * (Claude Code's pull request badge, `gh pr view`, `gh pr checks`, `gh pr list`, `gh pr status`,
  * `gh pr create`, `gh pr merge`, `gh pr ready`, `gh pr comment`) read and change Diffinery as a
- * GitHub Enterprise Server host. The mutations are the pull request ones gh uses; everything else
- * changes through the REST API.
+ * GitHub Enterprise Server host, and `gh issue list`, `view`, `create`, `comment`, `close`, `reopen`,
+ * `edit` and `status` work on its issues. The mutations are the pull request and issue ones gh uses;
+ * everything else changes through the REST API.
  */
 export const SCHEMA_SDL = /* GraphQL */ `
 """Ids from the REST API, which can be wider than GraphQL's 32-bit Int (GitHub types these as Int)."""
@@ -22,7 +23,9 @@ type Mutation {
   addComment(input: AddCommentInput!): AddCommentPayload
   addLabelsToLabelable(input: AddLabelsToLabelableInput!): AddLabelsToLabelablePayload
   closePullRequest(input: ClosePullRequestInput!): ClosePullRequestPayload
+  closeIssue(input: CloseIssueInput!): CloseIssuePayload
   convertPullRequestToDraft(input: ConvertPullRequestToDraftInput!): ConvertPullRequestToDraftPayload
+  createIssue(input: CreateIssueInput!): CreateIssuePayload
   createPullRequest(input: CreatePullRequestInput!): CreatePullRequestPayload
   disablePullRequestAutoMerge(input: DisablePullRequestAutoMergeInput!): DisablePullRequestAutoMergePayload
   enablePullRequestAutoMerge(input: EnablePullRequestAutoMergeInput!): EnablePullRequestAutoMergePayload
@@ -30,10 +33,43 @@ type Mutation {
   mergePullRequest(input: MergePullRequestInput!): MergePullRequestPayload
   removeAssigneesFromAssignable(input: RemoveAssigneesFromAssignableInput!): RemoveAssigneesFromAssignablePayload
   removeLabelsFromLabelable(input: RemoveLabelsFromLabelableInput!): RemoveLabelsFromLabelablePayload
+  reopenIssue(input: ReopenIssueInput!): ReopenIssuePayload
   reopenPullRequest(input: ReopenPullRequestInput!): ReopenPullRequestPayload
   requestReviews(input: RequestReviewsInput!): RequestReviewsPayload
+  updateIssue(input: UpdateIssueInput!): UpdateIssuePayload
   updatePullRequest(input: UpdatePullRequestInput!): UpdatePullRequestPayload
 }
+
+input CreateIssueInput {
+  assigneeIds: [ID!]
+  body: String
+  clientMutationId: String
+  issueTemplate: String
+  labelIds: [ID!]
+  milestoneId: ID
+  projectIds: [ID!]
+  repositoryId: ID!
+  title: String!
+}
+type CreateIssuePayload { clientMutationId: String, issue: Issue }
+
+input UpdateIssueInput {
+  assigneeIds: [ID!]
+  body: String
+  clientMutationId: String
+  id: ID!
+  labelIds: [ID!]
+  milestoneId: ID
+  projectIds: [ID!]
+  state: IssueState
+  title: String
+}
+type UpdateIssuePayload { actor: Actor, clientMutationId: String, issue: Issue }
+
+input CloseIssueInput { clientMutationId: String, duplicateIssueId: ID, issueId: ID!, stateReason: IssueClosedStateReason }
+type CloseIssuePayload { clientMutationId: String, issue: Issue }
+input ReopenIssueInput { clientMutationId: String, issueId: ID! }
+type ReopenIssuePayload { clientMutationId: String, issue: Issue }
 
 input CreatePullRequestInput {
   baseRefName: String!
@@ -102,13 +138,13 @@ type IssueCommentEdge { cursor: String!, node: IssueComment }
 type AddCommentPayload { clientMutationId: String, commentEdge: IssueCommentEdge, subject: Node }
 
 input AddLabelsToLabelableInput { clientMutationId: String, labelableId: ID!, labelIds: [ID!]! }
-type AddLabelsToLabelablePayload { clientMutationId: String, labelable: PullRequest }
+type AddLabelsToLabelablePayload { clientMutationId: String, labelable: Labelable }
 input RemoveLabelsFromLabelableInput { clientMutationId: String, labelableId: ID!, labelIds: [ID!]! }
-type RemoveLabelsFromLabelablePayload { clientMutationId: String, labelable: PullRequest }
+type RemoveLabelsFromLabelablePayload { clientMutationId: String, labelable: Labelable }
 input AddAssigneesToAssignableInput { clientMutationId: String, assignableId: ID!, assigneeIds: [ID!]! }
-type AddAssigneesToAssignablePayload { clientMutationId: String, assignable: PullRequest }
+type AddAssigneesToAssignablePayload { clientMutationId: String, assignable: Assignable }
 input RemoveAssigneesFromAssignableInput { clientMutationId: String, assignableId: ID!, assigneeIds: [ID!]! }
-type RemoveAssigneesFromAssignablePayload { clientMutationId: String, assignable: PullRequest }
+type RemoveAssigneesFromAssignablePayload { clientMutationId: String, assignable: Assignable }
 
 input RequestReviewsInput {
   clientMutationId: String
@@ -128,15 +164,15 @@ type Query {
   user(login: String!): User
   "Request budget, reported as GitHub does. Diffinery limits requests per account rather than by query cost."
   rateLimit(dryRun: Boolean = false): RateLimit
-  "A repository or pull request by its global id."
+  "A repository, issue or pull request by its global id."
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
-  "Pull requests in one repository (the query needs a repo: qualifier), as \`gh pr status\` asks for them."
+  "Issues or pull requests in one repository (the query needs a repo: qualifier), as \`gh pr status\` and \`gh issue list --search\` ask for them."
   search(query: String!, type: SearchType!, first: Int, last: Int, after: String, before: String): SearchResultItemConnection!
 }
 
 enum SearchType { ISSUE ISSUE_ADVANCED REPOSITORY USER DISCUSSION }
-union SearchResultItem = PullRequest
+union SearchResultItem = Issue | PullRequest
 type SearchResultItemEdge { cursor: String!, node: SearchResultItem }
 type SearchResultItemConnection {
   edges: [SearchResultItemEdge]
@@ -172,6 +208,14 @@ type PageInfo {
 }
 
 interface Node { id: ID! }
+
+interface Labelable {
+  labels(first: Int, last: Int, after: String, before: String): LabelConnection
+}
+
+interface Assignable {
+  assignees(first: Int, last: Int, after: String, before: String): UserConnection!
+}
 
 interface Actor {
   avatarUrl(size: Int): URI!
@@ -232,6 +276,19 @@ enum RepositoryPermission { ADMIN MAINTAIN WRITE TRIAGE READ }
 enum RepositoryVisibility { PRIVATE PUBLIC INTERNAL }
 enum PullRequestState { OPEN CLOSED MERGED }
 enum IssueState { OPEN CLOSED }
+enum IssueStateReason { COMPLETED DUPLICATE NOT_PLANNED REOPENED }
+enum IssueClosedStateReason { COMPLETED DUPLICATE NOT_PLANNED }
+input IssueFilters {
+  assignee: String
+  createdBy: String
+  labels: [String!]
+  mentioned: String
+  milestone: String
+  milestoneNumber: String
+  since: DateTime
+  states: [IssueState!]
+  viewerSubscribed: Boolean = false
+}
 enum OrderDirection { ASC DESC }
 enum IssueOrderField { CREATED_AT UPDATED_AT COMMENTS }
 input IssueOrder { field: IssueOrderField!, direction: OrderDirection! }
@@ -266,6 +323,9 @@ type Repository implements Node {
   id: ID!
   isArchived: Boolean!
   isEmpty: Boolean!
+  issue(number: Int!): Issue
+  issueOrPullRequest(number: Int!): IssueOrPullRequest
+  issues(first: Int, last: Int, after: String, before: String, states: [IssueState!], labels: [String!], orderBy: IssueOrder, filterBy: IssueFilters): IssueConnection!
   isFork: Boolean!
   isInOrganization: Boolean!
   isLocked: Boolean!
@@ -322,7 +382,44 @@ type PullRequestConnection {
 }
 type PullRequestEdge { cursor: String!, node: PullRequest }
 
-type PullRequest implements Node {
+union IssueOrPullRequest = Issue | PullRequest
+
+type IssueConnection {
+  edges: [IssueEdge]
+  nodes: [Issue]
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+type IssueEdge { cursor: String!, node: Issue }
+
+type Issue implements Node & Labelable & Assignable {
+  assignees(first: Int, last: Int, after: String, before: String): UserConnection!
+  author: Actor
+  authorAssociation: String!
+  body: String!
+  closed: Boolean!
+  closedAt: DateTime
+  comments(first: Int, last: Int, after: String, before: String): IssueCommentConnection!
+  createdAt: DateTime!
+  databaseId: BigInt
+  id: ID!
+  labels(first: Int, last: Int, after: String, before: String): LabelConnection
+  locked: Boolean!
+  milestone: Milestone
+  number: Int!
+  projectItems(first: Int, last: Int, after: String, before: String): ProjectV2ItemConnection!
+  reactionGroups: [ReactionGroup!]
+  repository: Repository!
+  resourcePath: URI!
+  state: IssueState!
+  stateReason: IssueStateReason
+  title: String!
+  updatedAt: DateTime!
+  url: URI!
+  viewerCanUpdate: Boolean!
+}
+
+type PullRequest implements Node & Labelable & Assignable {
   additions: Int!
   assignees(first: Int, last: Int, after: String, before: String): UserConnection!
   author: Actor

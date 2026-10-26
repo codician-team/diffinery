@@ -3,7 +3,7 @@ title: GitHub CLI and Claude Code
 description: Use gh with Diffinery repositories, and get Claude Code's pull request badge and CI status for them, by signing gh in to Diffinery once.
 ---
 
-The GitHub CLI (`gh`) works with Diffinery the way it works with a GitHub Enterprise Server: in a clone of a Diffinery repository, `gh pr create`, `gh pr view`, `gh pr checks`, `gh pr merge` and the other pull request commands talk to Diffinery. Claude Code uses the same setup to show the pull request of the branch you're on and its CI, because it finds pull requests through gh's sign-in. Both go through Diffinery's [GraphQL API](/docs/reference/graphql-api) and [REST API](/docs/reference/rest-api).
+The GitHub CLI (`gh`) works with Diffinery the way it works with a GitHub Enterprise Server: in a clone of a Diffinery repository, `gh pr create`, `gh pr view`, `gh pr checks`, `gh pr merge` and the other pull request commands talk to Diffinery, and so do `gh issue list`, `gh issue create` and the other issue commands. Claude Code uses the same setup to show the pull request of the branch you're on and its CI, because it finds pull requests through gh's sign-in. Both go through Diffinery's [GraphQL API](/docs/reference/graphql-api) and [REST API](/docs/reference/rest-api).
 
 ## Set it up
 
@@ -41,15 +41,31 @@ gh pr view --web
 gh pr checks --watch
 gh pr ready
 gh pr merge --auto --squash
+gh issue create --title "The parser drops comments" --label bug
+gh issue list --label bug
+gh issue close 42 --reason "not planned"
 ```
 
 | Works | Commands |
 | --- | --- |
-| Reading | `gh pr view` (with `--json`), `gh pr list`, `gh pr status`, `gh pr checks`, `gh pr diff`, `gh repo view`, `gh api` (REST and `gh api graphql`) |
-| Changing | `gh pr create` (with `--draft`, `--reviewer`, `--assignee`, `--label`), `gh pr edit`, `gh pr ready`, `gh pr comment`, `gh pr close`, `gh pr reopen`, `gh pr merge` (`--merge`, `--squash`, `--rebase`, `--auto`, `--disable-auto`) |
-| Not yet | Team reviewers, projects, and commands outside pull requests that need GraphQL, such as `gh issue` and `gh release` (use `gh api` with the REST paths) |
+| Reading | `gh pr view` (with `--json`), `gh pr list`, `gh pr status`, `gh pr checks`, `gh pr diff`, `gh issue list` (with `--label`, `--assignee`, `--author`, `--mention`, `--search`, `--state`), `gh issue view` (with `--comments` and `--json`), `gh issue status`, `gh repo view`, `gh label list`, `gh release list`, `gh api` (REST and `gh api graphql`) |
+| Changing | `gh pr create` (with `--draft`, `--reviewer`, `--assignee`, `--label`), `gh pr edit`, `gh pr ready`, `gh pr comment`, `gh pr close`, `gh pr reopen`, `gh pr merge` (`--merge`, `--squash`, `--rebase`, `--auto`, `--disable-auto`), `gh issue create` (with `--label`, `--assignee`, `--milestone`), `gh issue edit`, `gh issue comment`, `gh issue close` (with `--reason`), `gh issue reopen`, `gh label create` |
+| Not yet | Team reviewers, projects, `gh issue delete`, `lock`, `pin` and `transfer`. Use `gh api` with the REST paths for anything else. |
 
 gh changes things with your token's permissions and Diffinery's rules: branch protection, required checks and reviews, and the [agent guardrails](/docs/agents/overview) apply as they do on the web and over REST. `gh pr merge --auto` turns on Diffinery's auto-merge, which merges once the required checks pass. When nothing blocks the merge, gh merges at once.
+
+## gh in workflows
+
+Inside a Diffinery workflow, gh works with the job's own token, as with `GITHUB_TOKEN` on GitHub. It can do what the job's [`permissions:`](/docs/actions/workflow-permissions) allow: `gh issue list` needs `issues: read`, `gh pr comment` needs `pull-requests: write`, and so on.
+
+```yaml
+permissions:
+  issues: write
+steps:
+  - run: gh issue create --title "Nightly build failed" --body "See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+    env:
+      GH_TOKEN: ${{ github.token }}
+```
 
 ## Claude Code's pull request badge
 

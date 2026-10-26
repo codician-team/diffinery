@@ -76,7 +76,14 @@ export const apiRootJson = (c: AppContext) => c.json({ name: "Diffinery", api: "
 api.get("/", apiRootJson);
 // Imported when used: web/indexnow.ts reaches the docs, whose API reference imports this module.
 const indexNow = () => import("../web/indexnow.js");
-api.get("/meta", async (c) => c.json({ name: "Diffinery", oidc: !!c.env.OIDC_PRIVATE_KEY, runner_image: c.env.RUNNER_IMAGE ?? null, indexnow: await (await indexNow()).indexNowMeta(c.env) }));
+/**
+ * The GitHub Enterprise Server release whose API Diffinery's matches, as GHES reports it here. The
+ * GitHub CLI reads it to pick features: below 3.18 it can't search issues (`gh issue list --label`
+ * or `--search`) and without it `gh workflow run` stops; from 3.21 it would ask dispatches for the
+ * new run's details, which Diffinery doesn't answer yet.
+ */
+export const GHES_VERSION = "3.20.0";
+api.get("/meta", async (c) => c.json({ name: "Diffinery", installed_version: GHES_VERSION, oidc: !!c.env.OIDC_PRIVATE_KEY, runner_image: c.env.RUNNER_IMAGE ?? null, indexnow: await (await indexNow()).indexNowMeta(c.env) }));
 /** Site admin: the newest unexpected server errors (lib/server-errors.ts), and one by the request id its 5xx answer carried. */
 api.get("/diffinery/admin/errors", async (c) => {
   if (!requireAccount(c).site_admin) throw new HttpError(403, "site administrators only");

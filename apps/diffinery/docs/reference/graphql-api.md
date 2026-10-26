@@ -1,11 +1,11 @@
 ---
 title: GraphQL API
-description: The GitHub-shaped GraphQL endpoint at /api/graphql that the GitHub CLI and Claude Code use for pull requests and CI: what it answers, limits and errors.
+description: The GitHub-shaped GraphQL endpoint at /api/graphql that the GitHub CLI and Claude Code use for issues, pull requests and CI: what it answers, limits and errors.
 ---
 
-Diffinery answers GraphQL at `https://diffinery.com/api/graphql` with the part of GitHub's GraphQL schema that covers repositories, pull requests, reviews and CI. Type, field, argument and enum names are GitHub's, so tools written for GitHub's GraphQL API work unchanged for those queries. The main users are the GitHub CLI (`gh pr create`, `gh pr view`, `gh pr checks`, `gh pr status`, `gh pr merge` and the rest, see [GitHub CLI and Claude Code](/docs/agents/github-cli)) and Claude Code, which shows a session's pull request and its CI from it.
+Diffinery answers GraphQL at `https://diffinery.com/api/graphql` with the part of GitHub's GraphQL schema that covers repositories, issues, pull requests, reviews and CI. Type, field, argument and enum names are GitHub's, so tools written for GitHub's GraphQL API work unchanged for those queries. The main users are the GitHub CLI (`gh pr create`, `gh pr view`, `gh pr checks`, `gh issue list`, `gh issue create` and the rest, see [GitHub CLI and Claude Code](/docs/agents/github-cli)) and Claude Code, which shows a session's pull request and its CI from it.
 
-Everything else (issues, releases, Actions, settings and so on) is in the [REST API](/docs/reference/rest-api).
+Everything else (releases, Actions, settings and so on) is in the [REST API](/docs/reference/rest-api).
 
 ## Requests
 
@@ -22,9 +22,9 @@ curl https://diffinery.com/api/graphql \
 | --- | --- |
 | URL | `https://diffinery.com/api/graphql` |
 | Method | `POST` with `{"query": "...", "variables": {...}, "operationName": "..."}`. A `GET` answers `405`. |
-| Authentication | Required. A personal access token or agent token (`Authorization: Bearer dfy_...`, or `token dfy_...`), or a browser session. Without one the answer is `401`. A workflow job's token can't use it yet: in workflows, use the REST API. |
+| Authentication | Required. A personal access token or agent token (`Authorization: Bearer dfy_...`, or `token dfy_...`), a workflow job's token (`GITHUB_TOKEN`), or a browser session. Without one the answer is `401`. |
 | Token scopes | `read` is enough for queries. Mutations need `write`, like the REST calls that make the same change. |
-| Permissions | The same as over REST: a repository you can't see answers as if it didn't exist, and each mutation needs the role its REST equivalent needs. Branch protection, required checks, required reviews and the agent rules apply to merges here too. |
+| Permissions | The same as over REST: a repository you can't see answers as if it didn't exist, and each mutation needs the role its REST equivalent needs. Branch protection, required checks, required reviews and the agent rules apply to merges here too. A job's token reads and changes what its [`permissions:`](/docs/actions/workflow-permissions) allow: issues need `issues`, pull requests `pull-requests`, merging `contents`, and anyone may read a public repository's. |
 | Introspection | `__schema` and `__type` work, so you can read the whole schema with any GraphQL client. |
 | Subscriptions | Not supported. |
 
@@ -35,11 +35,13 @@ curl https://diffinery.com/api/graphql \
 | Field | What you get |
 | --- | --- |
 | `viewer` | The signed-in account. |
-| `repository(owner, name)` | A repository: its id, name, owner, visibility, default branch, merge methods, your permission, `pullRequest(number)`, `pullRequests(states, headRefName, baseRefName, labels, orderBy)`, `labels`, `milestones`, `assignableUsers` and `mentionableUsers`. A renamed repository is found by its old name. |
+| `repository(owner, name)` | A repository: its id, name, owner, visibility, default branch, merge methods, your permission, `issue(number)`, `issues(states, labels, orderBy, filterBy)`, `issueOrPullRequest(number)`, `pullRequest(number)`, `pullRequests(states, headRefName, baseRefName, labels, orderBy)`, `labels`, `milestones`, `assignableUsers` and `mentionableUsers`. A renamed repository is found by its old name. |
 | `user(login)` | A person or agent by login. |
-| `node(id)`, `nodes(ids)` | A repository or pull request by its global id (the `node_id` of the REST API). |
-| `search(query, type: ISSUE)` | Pull requests in one repository. The query needs a `repo:owner/name` qualifier and understands `is:pr`, `is:open`, `is:closed`, `is:merged`, `state:`, `author:`, `assignee:`, `review-requested:`, `head:`, `base:`, `label:` and `draft:`, with `@me` for yourself. This is what `gh pr status` sends. |
+| `node(id)`, `nodes(ids)` | A repository, issue or pull request by its global id (the `node_id` of the REST API). |
+| `search(query, type: ISSUE)` | Issues and pull requests in one repository (`ISSUE_ADVANCED` works too). The query needs a `repo:owner/name` qualifier and understands `is:issue`, `is:pr`, `type:`, `is:open`, `is:closed`, `is:merged`, `state:`, `author:`, `assignee:`, `mentions:`, `label:`, `milestone:`, `no:assignee`, `no:label`, `no:milestone`, `review-requested:`, `head:`, `base:`, `draft:`, `sort:` and words to find in the title or body, with `@me` for yourself. This is what `gh pr status` and `gh issue list --search` send. |
 | `rateLimit` | A budget in GitHub's shape. Diffinery limits requests per account (see [Limits](#limits)), not by query cost. |
+
+`issues` takes GitHub's `filterBy`: `assignee` (a login, `*` for anyone, `null` for no one), `createdBy`, `mentioned`, `labels`, `milestoneNumber` (a number, `*` or `null`), `since` and `states`. `labels` on `issues` matches issues with any of the labels, as on GitHub. An `Issue` has its number, title, body, state and `stateReason`, author, labels, assignees, milestone and comments.
 
 A `PullRequest` has its number, title, body, state, draft flag, author, branches (`baseRef` and `headRef`, with the branch's protection rule) and head commit, additions, deletions and changed files, labels, assignees, milestone, review requests, reviews and `latestReviews`, `reviewDecision`, comments, files, commits, `mergeable` and `mergeStateStatus`, auto-merge (`autoMergeRequest`) and `statusCheckRollup`.
 
@@ -51,14 +53,17 @@ A `PullRequest` has its number, title, body, state, draft flag, author, branches
 | --- | --- | --- |
 | `createPullRequest` | Opens a pull request, as a draft with `draft: true`. | `gh pr create` |
 | `updatePullRequest` | Changes the title, body, state, labels, assignees or milestone. The base branch can't change. | `gh pr edit` |
-| `addLabelsToLabelable`, `removeLabelsFromLabelable` | Adds or removes labels. | `gh pr edit --add-label`, `--remove-label` |
-| `addAssigneesToAssignable`, `removeAssigneesFromAssignable` | Adds or removes assignees. | `gh pr edit --add-assignee`, `--remove-assignee` |
+| `addLabelsToLabelable`, `removeLabelsFromLabelable` | Adds or removes labels on a pull request or issue. | `gh pr edit` and `gh issue edit` with `--add-label`, `--remove-label` |
+| `addAssigneesToAssignable`, `removeAssigneesFromAssignable` | Adds or removes assignees on a pull request or issue. | `gh pr edit` and `gh issue edit` with `--add-assignee`, `--remove-assignee` |
 | `requestReviews` | Asks people for a review. Team reviewers aren't supported. | `gh pr create --reviewer`, `gh pr edit --add-reviewer` |
 | `markPullRequestReadyForReview`, `convertPullRequestToDraft` | Moves a pull request out of draft or back into it. | `gh pr ready`, `gh pr ready --undo` |
-| `addComment` | Comments on a pull request. | `gh pr comment` |
+| `addComment` | Comments on a pull request or issue. | `gh pr comment`, `gh issue comment` |
 | `closePullRequest`, `reopenPullRequest` | Closes or reopens a pull request. | `gh pr close`, `gh pr reopen` |
 | `mergePullRequest` | Merges with `MERGE`, `SQUASH` or `REBASE`, if nothing blocks it. | `gh pr merge` |
 | `enablePullRequestAutoMerge`, `disablePullRequestAutoMerge` | Turns [auto-merge](/docs/collaboration/pull-requests) on or off. | `gh pr merge --auto`, `--disable-auto` |
+| `createIssue` | Opens an issue, with labels, assignees and a milestone if you have triage access. | `gh issue create` |
+| `updateIssue` | Changes an issue's title, body, state, labels, assignees or milestone. | `gh issue edit` |
+| `closeIssue`, `reopenIssue` | Closes an issue, as `COMPLETED`, `NOT_PLANNED` or `DUPLICATE`, or reopens it. | `gh issue close --reason`, `gh issue reopen` |
 
 ## Fields Diffinery doesn't have
 
@@ -94,4 +99,4 @@ Errors use GitHub's shape: a `message`, the `path` of the field, and a `type` su
 | Page size (`first`, `last`) | 100 |
 | Repositories in one query | 25 |
 
-Each request counts against your account's request limit like a REST call, and `createPullRequest` and `addComment` also count against the limit on creating things (60 a minute), as `POST /pulls` and comments do over REST. See [Rate limits](/docs/reference/rest-api#rate-limits).
+Each request counts against your account's request limit like a REST call, and `createPullRequest`, `createIssue` and `addComment` also count against the limit on creating things (60 a minute), as `POST /pulls`, `POST /issues` and comments do over REST. See [Rate limits](/docs/reference/rest-api#rate-limits).
