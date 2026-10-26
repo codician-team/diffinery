@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../env.js";
 import type { AppContext, AppVars } from "../auth/principal.js";
 import { HttpError } from "../lib/util.js";
-import { baseOf, ghRun, isoSeconds, nodeId, normalizeTopics, repoApi, repoHtml } from "./gh.js";
+import { baseOf, ghRun, isoSeconds, nodeId, normalizeTopics, repoApi, repoHtml, workflowNumber } from "./gh.js";
 import { intParam, jsonBody, loadTarget, repoParams } from "./ghctx.js";
 import { auditRepo, refuseAgent, WHILE_IMPORTING } from "./common.js";
 
@@ -65,7 +65,8 @@ misc.post(`${R}/dispatches`, async (c) => {
 async function findWorkflow(c: AppContext) {
   const { stub } = await load(c);
   const id = (c.req.param("workflow") ?? "");
-  const wf = (await stub.workflows()).find((w) => w.path === id || w.path.endsWith(`/${id}`));
+  const wfs = await stub.workflows();
+  const wf = wfs.find((w) => w.path === id || w.path.endsWith(`/${id}`)) ?? (/^\d+$/.test(id) ? wfs.find((w) => workflowNumber(w.path) === Number(id)) : undefined);
   if (!wf) throw new HttpError(404, "Not Found");
   return { stub, wf };
 }
@@ -76,14 +77,14 @@ misc.get(`${R}/actions/workflows/:workflow`, async (c) => {
   const { owner, repo } = repoParams(c);
   const now = isoSeconds(new Date().toISOString());
   return c.json({
-    id: wf.path,
+    id: workflowNumber(wf.path),
     node_id: nodeId("Workflow", `${owner}/${repo}/${wf.path}`),
     name: wf.name,
     path: wf.path,
     state: wf.errors.length ? "invalid" : "active",
     created_at: now,
     updated_at: now,
-    url: `${repoApi(b, owner, repo)}/actions/workflows/${encodeURIComponent(wf.path)}`,
+    url: `${repoApi(b, owner, repo)}/actions/workflows/${workflowNumber(wf.path)}`,
     html_url: `${repoHtml(b, owner, repo)}/blob/HEAD/${wf.path}`,
     badge_url: `${repoHtml(b, owner, repo)}/workflows/${encodeURIComponent(wf.name)}/badge.svg`,
     errors: wf.errors,

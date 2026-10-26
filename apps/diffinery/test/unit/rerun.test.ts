@@ -4,6 +4,7 @@ import { parseWorkflow, type Workflow } from "@diffinery/workflow-yaml";
 import { Actions, canonicalJson } from "../../src/repo/actions.js";
 import { REPO_SCHEMA, migrateRepoSchema } from "../../src/repo/schema.js";
 import { logKeys } from "../../src/lib/storage-keys.js";
+import { uuidNumber, uuidPattern, workflowNumber } from "../../src/http/gh.js";
 import { Runtime } from "../../src/repo/runtime.js";
 import { testD1 } from "./stubs/d1.js";
 import type { RepoDO } from "../../src/repo/RepoDO.js";
@@ -267,6 +268,8 @@ describe("re-running one job", () => {
     const logs = await f.actions.logs(kept.id);
     expect(logs).toMatchObject({ complete: true, lines: [{ text: "linted" }] });
     expect(f.actions.getJob(kept.id).carriedFrom).toBe(lint.id);
+    // gh asks by the REST API's numeric ids (http/gh.ts uuidNumber).
+    expect(await f.actions.logs(String(uuidNumber(kept.id)))).toEqual(logs);
   });
 
   it("lists the kept jobs' artifacts with the new attempt's", async () => {
@@ -286,6 +289,35 @@ describe("re-running one job", () => {
     // The failed leg ran again, so its first attempt's artifact isn't the new attempt's.
     expect(rt.runArtifacts(second.id).map((a) => a.name).sort()).toEqual(["lint-report", "passed-b"]);
     expect(rt.runArtifacts(first).map((a) => a.name).sort()).toEqual(["failed-b", "lint-report"]);
+    expect(rt.runArtifacts(String(uuidNumber(second.id))).map((a) => a.name).sort()).toEqual(["lint-report", "passed-b"]);
+  });
+});
+
+describe("the REST API's numeric run and job ids", () => {
+  it("are 16 digits that find the run or job again, while shorter numbers stay run numbers", async () => {
+    const f = fixture({ ".github/workflows/w.yml": WORKFLOW });
+    const first = await f.firstRun(failB);
+    const second = await f.actions.rerun(first, ADA, "failed");
+    const n = uuidNumber(first);
+    expect(String(n)).toMatch(/^\d{16}$/);
+    expect(uuidPattern(String(n))).not.toBeNull();
+    expect(f.actions.getRun(String(n)).id).toBe(first);
+    expect(f.actions.getRun(String(uuidNumber(second.id))).id).toBe(second.id);
+    // A run number is the latest attempt, as before.
+    expect(f.actions.getRun(String(second.number)).id).toBe(second.id);
+    expect(f.actions.jobs(String(n)).map((j) => j.id)).toEqual(f.jobs(first).map((j) => j.id));
+    const job = f.jobs(first)[0]!;
+    expect(f.actions.getJob(String(uuidNumber(job.id))).id).toBe(job.id);
+    expect(() => f.actions.getJob(String(uuidNumber(job.id) + 1))).toThrow(/job not found/);
+    expect(() => f.actions.getRun("9999999999999999")).toThrow(/run not found/);
+    expect(uuidPattern("123")).toBeNull();
+    expect(uuidPattern("abc")).toBeNull();
+  });
+
+  it("give workflows a stable number of their own", () => {
+    expect(workflowNumber(".github/workflows/ci.yml")).toBe(workflowNumber(".github/workflows/ci.yml"));
+    expect(workflowNumber(".github/workflows/ci.yml")).not.toBe(workflowNumber(".github/workflows/cd.yml"));
+    expect(Number.isSafeInteger(workflowNumber(".github/workflows/ci.yml"))).toBe(true);
   });
 });
 

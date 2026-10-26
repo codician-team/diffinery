@@ -26,7 +26,7 @@ import { actionsRest } from "./actions-runtime.js";
 import { compat } from "./compat.js";
 import { appsApi } from "./apps.js";
 import { isAppCaller } from "../repo/token-policy.js";
-import { baseOf, encPath, ghAutoMerge, ghCheckRun, ghComment, ghCommit, ghGitCommit, ghJob, ghRef, ghRun, ghFile, ghLabel, ghReview, ghReviewComment, ghUser, isoSeconds, nodeId, normalizeHomepage, numericId, pageOf, paginate, repoApi, repoHtml, setLinks } from "./gh.js";
+import { baseOf, encPath, ghAutoMerge, ghCheckRun, ghComment, ghCommit, ghGitCommit, ghJob, ghRef, ghRun, ghFile, ghLabel, ghReview, ghReviewComment, ghUser, isoSeconds, nodeId, normalizeHomepage, numericId, pageOf, paginate, repoApi, repoHtml, setLinks, uuidNumber, workflowNumber } from "./gh.js";
 import { decodePath, issueCtx, issuesOut, pullDetail, pullsOut, repoOut } from "./ghctx.js";
 
 /**
@@ -1080,13 +1080,17 @@ const runJson = (c: AppContext, owner: string, repo: string, r: RunInfo) => ghRu
 api.get("/repos/:owner/:repo/actions/workflows", async (c) => {
   const { stub } = await loadRepo(c, P(c).owner, P(c).repo);
   const wfs = await stub.workflows();
-  return c.json({ total_count: wfs.length, workflows: wfs.map((w) => ({ id: w.path, name: w.name, path: w.path, state: w.errors.length ? "invalid" : "active", errors: w.errors, triggers: w.triggers })) });
+  return c.json({ total_count: wfs.length, workflows: wfs.map((w) => ({ id: workflowNumber(w.path), name: w.name, path: w.path, state: w.errors.length ? "invalid" : "active", errors: w.errors, triggers: w.triggers })) });
 });
+// `run_id` is Diffinery's; `workflow_run_id` and `run_url` are what GitHub answers with `return_run_details`.
 api.post("/repos/:owner/:repo/actions/workflows/:workflow/dispatches", async (c) => {
   const { stub, caller } = await loadRepo(c, P(c).owner, P(c).repo, "write");
   const b = await body<{ ref: string; inputs?: Record<string, unknown> }>(c);
-  const run = await stub.dispatchWorkflow(decodeURIComponent(c.req.param("workflow")), b.ref, b.inputs ?? {}, caller);
-  return c.json({ run_id: run.id, html_url: `${c.env.PUBLIC_URL}/${P(c).owner}/${P(c).repo}/actions/runs/${run.id}` }, 201);
+  let workflow = decodeURIComponent(c.req.param("workflow"));
+  if (/^\d+$/.test(workflow)) workflow = (await stub.workflows()).find((w) => workflowNumber(w.path) === Number(workflow))?.path ?? workflow;
+  const run = await stub.dispatchWorkflow(workflow, b.ref, b.inputs ?? {}, caller);
+  const id = uuidNumber(run.id);
+  return c.json({ run_id: id, workflow_run_id: id, run_url: `${repoApi(baseOf(c), P(c).owner, P(c).repo)}/actions/runs/${id}`, html_url: `${c.env.PUBLIC_URL}/${P(c).owner}/${P(c).repo}/actions/runs/${run.id}` }, 201);
 });
 // Self-hosted runners poll this to pick up `runs-on: [self-hosted, ...]` jobs (see `diffinery runner`).
 // Only a registered runner claims, with its own token and the labels it registered with. A person's
@@ -1163,13 +1167,13 @@ for (const [path, scope] of [["rerun", "all"], ["rerun-failed-jobs", "failed"]] 
   api.post(`/repos/:owner/:repo/actions/runs/:id/${path}`, async (c) => {
     const { stub, caller } = await loadRepo(c, P(c).owner, P(c).repo, "write");
     const r = await stub.rerun(c.req.param("id"), caller, scope);
-    return c.json({ run_id: r.id }, 201);
+    return c.json({ run_id: uuidNumber(r.id) }, 201);
   });
 }
 api.post("/repos/:owner/:repo/actions/jobs/:id/rerun", async (c) => {
   const { stub, caller } = await loadRepo(c, P(c).owner, P(c).repo, "write");
   const r = await stub.rerunJob(c.req.param("id"), caller);
-  return c.json({ run_id: r.id }, 201);
+  return c.json({ run_id: uuidNumber(r.id) }, 201);
 });
 api.get("/repos/:owner/:repo/actions/jobs/:id", async (c) => {
   const { stub } = await loadRepo(c, P(c).owner, P(c).repo);

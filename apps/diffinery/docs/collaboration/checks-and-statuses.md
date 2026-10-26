@@ -249,7 +249,7 @@ The response of both requests is the check run:
     "annotations_url": "https://diffinery.com/api/v3/repos/acme/website/check-runs/31/annotations"
   },
   "name": "ci/external",
-  "check_suite": { "id": "app-ci-bot-9c4d8e2f1a0b3c5d7e9f2a4b6c8d0e1f3a5b7c9d" },
+  "check_suite": { "id": 6145803720560937 },
   "app": { "id": "ci-bot", "slug": "ci-bot", "node_id": "QXBwOmNpLWJvdA", "name": "ci-bot", "owner": null },
   "pull_requests": [],
   "run_id": null,
@@ -257,7 +257,7 @@ The response of both requests is the check run:
 }
 ```
 
-- `app` is the login of the account that reported the check run, or `diffinery-actions` for Actions. `run_id` and `job_id` are set only for Actions checks.
+- `app` is the login of the account that reported the check run, or `diffinery-actions` for Actions. `run_id` and `job_id` are set only for Actions checks: the `id`s of the workflow run and job behind it.
 - A check run is keyed by commit, name and reporter. Posting again with the same `head_sha` and `name` from the same account updates that check run (same `id`) instead of adding a second one.
 - Accounts whose login starts with `diffinery-actions` can't report check runs (`this account can't report check runs`).
 
@@ -276,7 +276,7 @@ Only the account that created a check run can update it. Anyone else, including 
 | `GET /repos/{owner}/{repo}/check-suites/{check_suite_id}` | One check suite |
 | `GET /repos/{owner}/{repo}/check-suites/{check_suite_id}/check-runs` | The check runs of a suite |
 
-Check suites are derived, not created: each Actions workflow run is one suite (its id is the run id), and each external reporter has one suite per commit (id `app-<login>-<sha>`). A suite is `completed` when all its check runs are, with conclusion `failure` if any of them failed, timed out, was cancelled or needs action, and `success` otherwise. You can't create or re-request suites, and commit statuses are not part of any suite.
+Check suites are derived, not created: each Actions workflow run is one suite (its id is the run's `id`), and each external reporter has one suite per commit, with a number of its own. A suite is `completed` when all its check runs are, with conclusion `failure` if any of them failed, timed out, was cancelled or needs action, and `success` otherwise. You can't create or re-request suites, and commit statuses are not part of any suite.
 
 ## Required checks
 

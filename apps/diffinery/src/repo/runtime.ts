@@ -1,4 +1,5 @@
 import type { Env } from "../env.js";
+import { uuidPattern } from "../http/gh.js";
 import { dropStaged, finalKey, runComposeStep, stagingPrefix, stepKeys, type BlobBucket, type ComposeStep } from "../lib/blob-store.js";
 import { READ_ALL, roleForPermissions, type JobPermissions } from "../lib/job-permissions.js";
 import { legacyArtifactKeys } from "../lib/storage-keys.js";
@@ -474,9 +475,12 @@ export class Runtime {
    * Finished, unexpired artifacts of a run (latest first), optionally by name or id;
    * with `includeExpired` (the REST API), expired ones too; with `legacy: false`,
    * not those uploaded by older runners.
-   * A numeric run id (github.run_id, the run number) covers all of the run's attempts.
+   * A numeric run id (github.run_id, the run number) covers all of the run's attempts; the REST
+   * API's 16-digit run id (http/gh.ts uuidNumber) is one attempt.
    */
   runArtifacts(runId: string, filter: { name?: string; id?: number; includeExpired?: boolean; legacy?: false } = {}): ArtifactEntry[] {
+    const pattern = uuidPattern(runId);
+    if (pattern) runId = this.sql.exec<{ id: string }>("SELECT id FROM runs WHERE id GLOB ? ORDER BY created_at DESC LIMIT 1", pattern).toArray()[0]?.id ?? "-";
     const numeric = /^\d+$/.test(runId);
     // An attempt also has the artifacts of the jobs a partial re-run kept from an earlier attempt, as on GitHub.
     const where = [

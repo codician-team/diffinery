@@ -21,6 +21,7 @@ import {
   utf8,
 } from "@diffinery/git-core";
 import type { Env } from "../env.js";
+import { numericId, uuidNumber, uuidPattern } from "../http/gh.js";
 import { scanForSecrets, type SecretHit } from "../git/secret-scan.js";
 import { ZipWriter, tarEnd, tarEntry, tarStart, zip, type ArchiveEntry } from "../lib/archive.js";
 import { R2Sink } from "../lib/r2-sink.js";
@@ -512,17 +513,28 @@ export class GitData {
 
   // ---------------------------------------------------------------- Actions extras
 
-  /** A run's logs as a zip with one text file per job (GET /actions/runs/:id/logs). */
+  /**
+   * A run's logs as a zip (GET /actions/runs/:id/logs), laid out like GitHub's: one text file per
+   * job, and a folder per job with a file per step (`build/1_Run tests.txt`), which `gh run view
+   * --log` shows each step's lines from.
+   */
   async runLogsZip(runId: string): Promise<Uint8Array> {
     const run = this.repo.actions.getRun(runId);
     const entries: ArchiveEntry[] = [];
+    const text = (lines: Array<{ t: string; text: string }>) => new TextEncoder().encode(lines.map((l) => `${l.t} ${l.text}`).join("\n") + (lines.length ? "\n" : ""));
     let total = 0;
     for (const [i, j] of run.jobs.entries()) {
       const { lines } = await this.repo.actions.logs(j.id);
-      const text = new TextEncoder().encode(lines.map((l) => `${l.t} ${l.text}`).join("\n") + (lines.length ? "\n" : ""));
-      total += text.length;
+      const all = text(lines);
+      total += all.length * 2;
       if (total > 24 * 1024 * 1024) break;
-      entries.push({ path: `${i + 1}_${j.name.replace(/[\\/:*?"<>|]+/g, "_").slice(0, 100)}.txt`, mode: "100644", content: text });
+      entries.push({ path: `${i + 1}_${j.name.replace(/[\\/:*?"<>|]+/g, "_").slice(0, 100)}.txt`, mode: "100644", content: all });
+      // gh finds a step's file by the job's name without "/" and ":", cut to 90 characters.
+      const dir = j.name.replace(/[\\/:*?"<>|]+/g, "").slice(0, 90);
+      for (const s of j.steps) {
+        const mine = lines.filter((l) => l.step === s.index);
+        entries.push({ path: `${dir}/${s.index + 1}_${s.name.replace(/[\\/:*?"<>|]+/g, "").slice(0, 100)}.txt`, mode: "100644", content: text(mine) });
+      }
     }
     return zip(entries, Math.floor(Date.parse(run.updatedAt) / 1000) || Math.floor(Date.now() / 1000));
   }
@@ -537,8 +549,13 @@ export class GitData {
 
   // ---------------------------------------------------------------- check runs and suites
 
-  /** A check run by GitHub's numeric id, Diffinery's own, or the Actions job that reports it (a job's `check_run_url`). */
+  /**
+   * A check run by GitHub's numeric id, Diffinery's own, or the Actions job that reports it: a job's
+   * `check_run_url`, or its REST id (http/gh.ts uuidNumber), which `gh run view` asks for annotations by.
+   */
   check(raw: string): Check {
+    const job = uuidPattern(raw);
+    if (job) raw = this.sql.exec<{ id: string }>("SELECT id FROM jobs WHERE id GLOB ? ORDER BY rowid DESC LIMIT 1", job).toArray()[0]?.id ?? raw;
     const row = /^\d{1,15}$/.test(raw)
       ? this.sql.exec<{ sha: string; id: string }>("SELECT sha, id FROM checks WHERE seq = ?", Number(raw)).toArray()[0]
       : (this.sql.exec<{ sha: string; id: string }>("SELECT sha, id FROM checks WHERE id = ?", raw).toArray()[0] ??
@@ -600,8 +617,11 @@ export class GitData {
     return this.check(c.id);
   }
 
-  /** Check suites, synthesised: one per workflow run, or per app for external check runs. */
-  checkSuites(sha: string): Array<{ id: string; app: string; headSha: string; status: string; conclusion: string | null; runs: Check[] }> {
+  /**
+   * Check suites, synthesised: one per workflow run, or per app for external check runs. `number` is
+   * the REST API's id: the run's (http/gh.ts uuidNumber), or a hash of the app suite's id.
+   */
+  checkSuites(sha: string): Array<{ id: string; number: number; app: string; headSha: string; status: string; conclusion: string | null; runs: Check[] }> {
     const groups = new Map<string, Check[]>();
     for (const c of this.repo.collab.checks(sha)) {
       const id = c.runId ?? `app-${c.app}-${sha}`;
@@ -610,11 +630,25 @@ export class GitData {
     return [...groups].map(([id, runs]) => {
       const done = runs.every((r) => r.status === "completed");
       const failed = runs.some((r) => ["failure", "timed_out", "cancelled", "action_required"].includes(r.conclusion ?? ""));
-      return { id, app: runs[0]!.app, headSha: sha, status: done ? "completed" : runs.some((r) => r.status === "in_progress") ? "in_progress" : "queued", conclusion: done ? (failed ? "failure" : "success") : null, runs };
+      return { id, number: suiteNumber(id), app: runs[0]!.app, headSha: sha, status: done ? "completed" : runs.some((r) => r.status === "in_progress") ? "in_progress" : "queued", conclusion: done ? (failed ? "failure" : "success") : null, runs };
     });
   }
 
+  /** A check suite by its id or its REST API number (`number` in checkSuites). */
   checkSuite(id: string): ReturnType<GitData["checkSuites"]>[number] {
+    if (/^\d{1,16}$/.test(id)) {
+      const run = uuidPattern(id);
+      const n = Number(id);
+      id =
+        (run && this.sql.exec<{ id: string }>("SELECT id FROM runs WHERE id GLOB ? ORDER BY created_at DESC LIMIT 1", run).toArray()[0]?.id) ||
+        // App suites have no table to look their number up in; external check runs are few.
+        this.sql
+          .exec<{ app: string; sha: string }>("SELECT DISTINCT app, sha FROM checks WHERE run_id IS NULL")
+          .toArray()
+          .map((r) => `app-${r.app}-${r.sha}`)
+          .find((k) => suiteNumber(k) === n) ||
+        id;
+    }
     const row = id.startsWith("app-")
       ? this.sql.exec<{ sha: string }>("SELECT sha FROM checks WHERE ? = 'app-' || app || '-' || sha LIMIT 1", id).toArray()[0]
       : this.sql.exec<{ sha: string }>("SELECT sha FROM checks WHERE run_id = ? LIMIT 1", id).toArray()[0];
@@ -622,4 +656,9 @@ export class GitData {
     if (!suite) throw new HttpError(404, "check suite not found");
     return suite;
   }
+}
+
+/** A check suite's REST API id: its workflow run's, or a hash of an app suite's `app-<app>-<sha>`. */
+function suiteNumber(id: string): number {
+  return id.startsWith("app-") ? numericId(id) : uuidNumber(id);
 }

@@ -103,17 +103,17 @@ function suiteJson(c: AppContext, s: Suite) {
   const b = baseOf(c);
   const { owner, repo } = repoParams(c);
   return {
-    id: s.id,
+    id: s.number,
     node_id: nodeId("CheckSuite", s.id),
     head_branch: null,
     head_sha: s.headSha,
     status: s.status,
     conclusion: s.conclusion,
-    url: `${repoApi(b, owner, repo)}/check-suites/${s.id}`,
+    url: `${repoApi(b, owner, repo)}/check-suites/${s.number}`,
     app: { id: s.app, slug: s.app, name: s.app },
     pull_requests: [],
     latest_check_runs_count: s.runs.length,
-    check_runs_url: `${repoApi(b, owner, repo)}/check-suites/${s.id}/check-runs`,
+    check_runs_url: `${repoApi(b, owner, repo)}/check-suites/${s.number}/check-runs`,
   };
 }
 

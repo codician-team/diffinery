@@ -44,13 +44,15 @@ gh pr merge --auto --squash
 gh issue create --title "The parser drops comments" --label bug
 gh issue list --label bug
 gh issue close 42 --reason "not planned"
+gh run list --workflow ci.yml
+gh run view --log-failed
 ```
 
 | Works | Commands |
 | --- | --- |
-| Reading | `gh pr view` (with `--json`), `gh pr list`, `gh pr status`, `gh pr checks`, `gh pr diff`, `gh issue list` (with `--label`, `--assignee`, `--author`, `--mention`, `--search`, `--state`), `gh issue view` (with `--comments` and `--json`), `gh issue status`, `gh repo view`, `gh label list`, `gh release list`, `gh api` (REST and `gh api graphql`) |
-| Changing | `gh pr create` (with `--draft`, `--reviewer`, `--assignee`, `--label`), `gh pr edit`, `gh pr ready`, `gh pr comment`, `gh pr close`, `gh pr reopen`, `gh pr merge` (`--merge`, `--squash`, `--rebase`, `--auto`, `--disable-auto`), `gh issue create` (with `--label`, `--assignee`, `--milestone`), `gh issue edit`, `gh issue comment`, `gh issue close` (with `--reason`), `gh issue reopen`, `gh label create` |
-| Not yet | Team reviewers, projects, `gh issue delete`, `lock`, `pin` and `transfer`. Use `gh api` with the REST paths for anything else. |
+| Reading | `gh pr view` (with `--json`), `gh pr list`, `gh pr status`, `gh pr checks`, `gh pr diff`, `gh issue list` (with `--label`, `--assignee`, `--author`, `--mention`, `--search`, `--state`), `gh issue view` (with `--comments` and `--json`), `gh issue status`, `gh run list`, `gh run view` (with `--job`, `--log`, `--log-failed` and `--json`), `gh run watch`, `gh workflow list`, `gh workflow view`, `gh repo view`, `gh label list`, `gh release list`, `gh api` (REST and `gh api graphql`) |
+| Changing | `gh pr create` (with `--draft`, `--reviewer`, `--assignee`, `--label`), `gh pr edit`, `gh pr ready`, `gh pr comment`, `gh pr close`, `gh pr reopen`, `gh pr merge` (`--merge`, `--squash`, `--rebase`, `--auto`, `--disable-auto`), `gh issue create` (with `--label`, `--assignee`, `--milestone`), `gh issue edit`, `gh issue comment`, `gh issue close` (with `--reason`), `gh issue reopen`, `gh run rerun` (with `--failed` and `--job`), `gh run cancel`, `gh workflow run` (with `--ref` and `-f` inputs), `gh label create` |
+| Not yet | Team reviewers, projects, `gh issue delete`, `lock`, `pin` and `transfer`, `gh run delete`, `gh workflow enable` and `disable`. Use `gh api` with the REST paths for anything else. |
 
 gh changes things with your token's permissions and Diffinery's rules: branch protection, required checks and reviews, and the [agent guardrails](/docs/agents/overview) apply as they do on the web and over REST. `gh pr merge --auto` turns on Diffinery's auto-merge, which merges once the required checks pass. When nothing blocks the merge, gh merges at once.
 

@@ -46,6 +46,33 @@ export function numericId(s: string): number {
   return ((a >>> 0) % 0x200000) * 0x100000000 + (b >>> 0) || 1;
 }
 
+/**
+ * GitHub's numeric id for a workflow run or job, whose Diffinery ids are UUIDs written as 32 hex
+ * digits. It keeps 52 of the UUID's random bits (the version digit skipped) above 10^15, so it
+ * always has 16 digits: shorter numbers stay run numbers (`github.run_id`, `diffinery run view 42`),
+ * and `uuidPattern` turns it back into a lookup. Anything else gets `numericId`'s hash.
+ */
+export function uuidNumber(id: string): number {
+  if (!/^[0-9a-f]{32}$/.test(id)) return numericId(id);
+  return UUID_NUMBERS + parseInt(id.slice(0, 12) + id[13], 16);
+}
+
+/** The SQLite GLOB that matches the ids `uuidNumber` maps to `raw`, or null when `raw` isn't such a number. */
+export function uuidPattern(raw: string): string | null {
+  if (!/^\d{16}$/.test(raw)) return null;
+  const n = Number(raw) - UUID_NUMBERS;
+  if (n < 0 || n >= 2 ** 52) return null;
+  const h = n.toString(16).padStart(13, "0");
+  return `${h.slice(0, 12)}?${h[12]}*`;
+}
+
+const UUID_NUMBERS = 1e15;
+
+/** A workflow's numeric id (GitHub's `workflow_id`): a hash of its path, which the API also takes. */
+export function workflowNumber(path: string): number {
+  return numericId(`workflow:${path}`);
+}
+
 export type Who = { id: string; login: string; kind?: string | null };
 
 export const userType = (kind?: string | null): "User" | "Organization" | "Bot" => (kind === "org" ? "Organization" : kind === "agent" || kind === "system" ? "Bot" : "User");
@@ -598,12 +625,12 @@ export function ghCheckRun(base: string, owner: string, repo: string, r: { id: s
     completed_at: isoSeconds(r.completedAt),
     output: { title: out.title ?? null, summary: out.summary ?? null, text: out.text ?? null, annotations_count: out.annotations?.length ?? 0, annotations_url: `${api}/check-runs/${id}/annotations` },
     name: r.name,
-    check_suite: { id: r.runId ?? `app-${r.app}-${r.sha}` },
+    check_suite: { id: r.runId ? uuidNumber(r.runId) : numericId(`app-${r.app}-${r.sha}`) },
     app: { id: r.app, slug: r.app, node_id: nodeId("App", r.app), name: r.app, owner: null },
     pull_requests: [],
     // Diffinery: the workflow run and job behind an Actions check.
-    run_id: r.runId,
-    job_id: r.jobId,
+    run_id: r.runId && uuidNumber(r.runId),
+    job_id: r.jobId && uuidNumber(r.jobId),
   };
 }
 
@@ -629,20 +656,24 @@ export type RunLike = {
   prNumber: number | null;
 };
 
-/** A workflow run: GitHub's fields plus Diffinery's `sha`/`ref` (what the run checked out) and `pull_request_number`. */
+/**
+ * A workflow run: GitHub's fields plus Diffinery's `sha`/`ref` (what the run checked out) and `pull_request_number`.
+ * Its `id`, `workflow_id` and `check_suite_id` are numbers, as clients like gh expect; the API takes them back too.
+ */
 export function ghRun(base: string, owner: string, repo: string, r: RunLike) {
   const api = repoApi(base, owner, repo);
-  const url = `${api}/actions/runs/${r.id}`;
+  const id = uuidNumber(r.id);
+  const url = `${api}/actions/runs/${id}`;
   return {
-    id: r.id,
+    id,
     node_id: nodeId("WorkflowRun", r.id),
     run_number: r.number,
     run_attempt: r.attempt,
     name: r.workflowName,
     display_title: r.title,
     path: r.workflowPath,
-    workflow_id: r.workflowPath,
-    check_suite_id: r.id,
+    workflow_id: workflowNumber(r.workflowPath),
+    check_suite_id: id,
     event: r.event,
     head_branch: r.headBranch,
     head_sha: r.headSha,
@@ -663,7 +694,7 @@ export function ghRun(base: string, owner: string, repo: string, r: RunLike) {
     artifacts_url: `${url}/artifacts`,
     cancel_url: `${url}/cancel`,
     rerun_url: `${url}/rerun`,
-    workflow_url: `${api}/actions/workflows/${encodeURIComponent(r.workflowPath)}`,
+    workflow_url: `${api}/actions/workflows/${workflowNumber(r.workflowPath)}`,
     previous_attempt_url: r.attempt > 1 ? `${url}/attempts/${r.attempt - 1}` : null,
     pull_requests: r.prNumber ? [{ number: r.prNumber, url: `${api}/pulls/${r.prNumber}` }] : [],
     pull_request_number: r.prNumber,
@@ -673,6 +704,7 @@ export function ghRun(base: string, owner: string, repo: string, r: RunLike) {
 export type JobLike = {
   id: string;
   runId: string;
+  carriedFrom?: string | null;
   name: string;
   status: string;
   conclusion: string | null;
@@ -683,25 +715,32 @@ export type JobLike = {
   steps: Array<{ index: number; name: string; status: string; conclusion?: string | null; startedAt?: string; completedAt?: string }>;
 };
 
-/** A job: GitHub's snake_case fields next to Diffinery's own (camelCase) ones, which the CLI and web UI read. */
+/**
+ * A job: GitHub's snake_case fields next to Diffinery's own (camelCase) ones, which the CLI and web UI read.
+ * `id`, `run_id` and `carriedFrom` are numbers like GitHub's ids (`runId` stays Diffinery's own id).
+ */
 export function ghJob<J extends JobLike>(base: string, owner: string, repo: string, run: RunLike, j: J) {
   const api = repoApi(base, owner, repo);
+  const id = uuidNumber(j.id);
+  const runId = uuidNumber(j.runId);
   return {
     ...j,
+    id,
+    carriedFrom: j.carriedFrom ? uuidNumber(j.carriedFrom) : null,
     // A job held by its environment's reviewers or wait timer is "waiting", as on GitHub.
     status: j.status === "approval" ? "waiting" : j.status,
-    run_id: j.runId,
-    run_url: `${api}/actions/runs/${j.runId}`,
+    run_id: runId,
+    run_url: `${api}/actions/runs/${runId}`,
     run_attempt: run.attempt,
     node_id: nodeId("Job", j.id),
     head_sha: run.headSha,
     head_branch: run.headBranch,
-    url: `${api}/actions/jobs/${j.id}`,
+    url: `${api}/actions/jobs/${id}`,
     html_url: `${repoHtml(base, owner, repo)}/actions/runs/${j.runId}/job/${j.id}`,
     started_at: isoSeconds(j.startedAt),
     completed_at: isoSeconds(j.completedAt),
     workflow_name: run.workflowName,
-    check_run_url: `${api}/check-runs/${j.id}`,
+    check_run_url: `${api}/check-runs/${id}`,
     labels: [] as string[],
     runner_name: j.runnerName ?? null,
     // Hosted runner size (large, medium, small, tiny); `usage` (from ...j) is what the job used of it.

@@ -20,7 +20,7 @@ import { Directory } from "../lib/directory.js";
 import { getFirst, headFirst, legacyArtifactKeys, legacyCacheKeys, logKeys } from "../lib/storage-keys.js";
 import { permissionsForJob, type JobPermissions } from "../lib/job-permissions.js";
 import { signRuntimeToken } from "../lib/runtime-auth.js";
-import { ghRepo, numericId } from "../http/gh.js";
+import { ghRepo, numericId, uuidPattern } from "../http/gh.js";
 import { HttpError, newId, noreplyEmail, now, randomToken, sha256 } from "../lib/util.js";
 import { localOnly } from "../auth/dev.js";
 import { egressFor, type Egress } from "../lib/egress.js";
@@ -875,17 +875,24 @@ export class Actions {
     return why;
   }
 
-  /** A run by id, or by its number (github.run_id; the latest attempt). */
+  /** A run by id, its REST API number (http/gh.ts uuidNumber), or its run number (github.run_id; the latest attempt). */
   private runRow(id: string): RunRow {
-    const r = /^\d+$/.test(id)
-      ? this.sql.exec<RunRow>("SELECT * FROM runs WHERE run_number = ? ORDER BY attempt DESC, created_at DESC LIMIT 1", Number(id)).toArray()[0]
-      : this.sql.exec<RunRow>("SELECT * FROM runs WHERE id = ?", id).toArray()[0];
+    const pattern = uuidPattern(id);
+    const r = pattern
+      ? this.sql.exec<RunRow>("SELECT * FROM runs WHERE id GLOB ? ORDER BY created_at DESC LIMIT 1", pattern).toArray()[0]
+      : /^\d+$/.test(id)
+        ? this.sql.exec<RunRow>("SELECT * FROM runs WHERE run_number = ? ORDER BY attempt DESC, created_at DESC LIMIT 1", Number(id)).toArray()[0]
+        : this.sql.exec<RunRow>("SELECT * FROM runs WHERE id = ?", id).toArray()[0];
     if (!r) throw new HttpError(404, "run not found");
     return r;
   }
 
+  /** A job by id or its REST API number (http/gh.ts uuidNumber). */
   private jobRow(id: string): JobRow {
-    const j = this.sql.exec<JobRow>("SELECT * FROM jobs WHERE id = ?", id).toArray()[0];
+    const pattern = uuidPattern(id);
+    const j = pattern
+      ? this.sql.exec<JobRow>("SELECT * FROM jobs WHERE id GLOB ? ORDER BY rowid DESC LIMIT 1", pattern).toArray()[0]
+      : this.sql.exec<JobRow>("SELECT * FROM jobs WHERE id = ?", id).toArray()[0];
     if (!j) throw new HttpError(404, "job not found");
     return j;
   }
@@ -940,7 +947,7 @@ export class Actions {
   async logs(jobId: string, afterSeq = -1): Promise<{ lines: Array<LogLine & { seq: number }>; complete: boolean }> {
     const j = this.jobRow(jobId);
     // A job a partial re-run kept from an earlier attempt shows the log of the job that ran.
-    if (j.carried_from) jobId = j.carried_from;
+    jobId = j.carried_from ?? j.id;
     const rows = this.sql.exec<LogLine & { seq: number }>("SELECT seq, t, step, text FROM logs WHERE job_id = ? AND seq > ? ORDER BY seq LIMIT 5000", jobId, afterSeq).toArray();
     if (rows.length === 0 && j.status === "completed") {
       const archived = await getFirst(this.env.BUCKET, logKeys(this.repo.meta.repoId, jobId));
