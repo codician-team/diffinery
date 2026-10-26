@@ -2373,6 +2373,12 @@ export class Actions {
     return this.jobRow(jobId);
   }
 
+  /** Throws unless `token` is the token of job `jobId` and the job is running (the shared action mirror's routes). */
+  async requireRunningJob(jobId: string, token: string): Promise<void> {
+    const job = await this.authJob(jobId, token);
+    if (job.status !== "in_progress") throw new HttpError(409, "job is not running");
+  }
+
   /** Claims for an OIDC id token; side-effect free (unlike runnerSpec). */
   async oidcClaims(jobId: string, token: string): Promise<{ allowed: boolean; github: Record<string, string> }> {
     const job = await this.authJob(jobId, token);

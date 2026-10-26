@@ -1558,6 +1558,9 @@ export class RepoDO extends DurableObject<Env> {
   artifactKeysFor(...a: Parameters<Actions["artifactKeysFor"]>) {
     return this.actions.artifactKeysFor(...a);
   }
+  requireRunningJob(...a: Parameters<Actions["requireRunningJob"]>) {
+    return this.actions.requireRunningJob(...a);
+  }
   artifactQuota() {
     return this.runtime.artifactQuota;
   }

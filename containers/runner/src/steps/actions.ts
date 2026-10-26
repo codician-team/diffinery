@@ -68,11 +68,25 @@ export async function loadActionMeta(dir: string): Promise<ActionMeta> {
   throw failure(`Can't find 'action.yml' or 'action.yaml' under '${dir}'. Did you forget to run actions/checkout before running your local action?`);
 }
 
-/** Downloads `owner/repo@ref` into the action cache and returns its root dir. */
+/** Where actions come from on GitHub, and the first retry's delay (tests point these at local servers and shorten it). */
+export const actionDownload = { codeload: "https://codeload.github.com", git: "https://github.com", backoffMs: 1000 };
+
+/** How long the tarball download waits for GitHub to answer before it counts as a failed attempt. */
+const ANSWER_TIMEOUT_MS = 60_000;
+/** How long the `git fetch` fallback may take. */
+const GIT_TIMEOUT_MS = 300_000;
+
+/**
+ * Downloads `owner/repo@ref` into the action cache and returns its root dir: from GitHub, and when
+ * GitHub fails, from the copy Diffinery keeps of every action jobs have used (lib/action-mirror.ts
+ * on the server). After a download from GitHub the runner tells Diffinery, which refreshes its copy
+ * by fetching the action from GitHub itself; the job doesn't wait for that.
+ */
 export async function downloadAction(job: JobRunner, io: StepIO, owner: string, repo: string, ref: string): Promise<string> {
   const dest = path.join(job.actionsDir, owner, repo, ref);
   if (existsSync(path.join(dest, ".diffinery-complete"))) return dest;
-  const tpl = process.env.DIFFINERY_ACTIONS_DOWNLOAD_URL ?? "https://codeload.github.com/{owner}/{repo}/tar.gz/{ref}";
+  const custom = process.env.DIFFINERY_ACTIONS_DOWNLOAD_URL;
+  const tpl = custom ?? `${actionDownload.codeload}/{owner}/{repo}/tar.gz/{ref}`;
   const url = tpl.replace("{owner}", owner).replace("{repo}", repo).replace("{ref}", encodeURIComponent(ref));
   job.logger.line(io.logIndex, `Download action repository '${owner}/${repo}@${ref}'`);
   const headers: Record<string, string> = { "user-agent": "diffinery-runner" };
@@ -80,36 +94,89 @@ export async function downloadAction(job: JobRunner, io: StepIO, owner: string, 
   if (ghToken && url.startsWith("https://codeload.github.com/")) headers.authorization = `token ${ghToken}`;
   let lastErr: unknown;
   for (let attempt = 0; attempt < 4; attempt++) {
-    if (attempt) await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+    if (attempt) await new Promise((r) => setTimeout(r, actionDownload.backoffMs * 2 ** attempt));
     try {
-      const res = await fetch(url, { headers, redirect: "follow" });
+      // A GitHub outage can leave connections hanging rather than refused.
+      const answered = new AbortController();
+      const timer = setTimeout(() => answered.abort(new Error(`no answer from ${new URL(url).host} in ${ANSWER_TIMEOUT_MS / 1000} s`)), ANSWER_TIMEOUT_MS);
+      const res = await fetch(url, { headers, redirect: "follow", signal: answered.signal }).finally(() => clearTimeout(timer));
       if (res.status === 404) throw failure(`Unable to resolve action '${owner}/${repo}@${ref}', repository or version not found`);
       if (res.status === 401 || res.status === 403) {
         lastErr = new Error(`HTTP ${res.status} downloading ${url}`);
         break;
       }
       if (!res.ok) throw new Error(`HTTP ${res.status} downloading ${url}`);
-      const buf = Buffer.from(await res.arrayBuffer());
-      const tmp = `${dest}.tmp-${process.pid}-${Date.now()}`;
-      await mkdir(tmp, { recursive: true });
-      const tarFile = `${tmp}.tar.gz`;
-      await writeFile(tarFile, buf);
-      const r = await exec("tar", ["-xzf", tarFile, "-C", tmp, "--strip-components=1"], { capture: true });
-      await rm(tarFile, { force: true });
-      if (r.exitCode !== 0) throw new Error(`Failed to extract action archive: ${r.stderr.trim()}`);
-      await rm(dest, { recursive: true, force: true });
-      await mkdir(path.dirname(dest), { recursive: true });
-      await rename(tmp, dest);
-      await writeFile(path.join(dest, ".diffinery-complete"), "");
+      await extractAction(dest, Buffer.from(await res.arrayBuffer()));
+      if (!custom) reportAction(job, owner, repo, ref);
       return dest;
     } catch (e) {
       if (e instanceof StepFailure) throw e;
       lastErr = e;
     }
   }
-  // The tarball endpoint can be unreachable (proxies, rate limits) while git still works.
-  if (!process.env.DIFFINERY_ACTIONS_DOWNLOAD_URL && (await cloneAction(dest, owner, repo, ref, ghToken))) return dest;
+  if (!custom) {
+    // The tarball endpoint can be unreachable (proxies, rate limits) while git still works.
+    if (await cloneAction(dest, owner, repo, ref, ghToken)) {
+      reportAction(job, owner, repo, ref);
+      return dest;
+    }
+    // GitHub is down: Diffinery's copy, if a job has used this action before.
+    const fetched = await mirroredAction(job, dest, owner, repo, ref);
+    if (fetched) {
+      const msg = `GitHub is unreachable (${errMsg(lastErr)}); using Diffinery's copy of '${owner}/${repo}@${ref}', downloaded from GitHub at ${fetched}`;
+      job.logger.line(io.logIndex, `##[warning]${msg}`);
+      job.addAnnotation(io.logIndex, { level: "warning", message: msg });
+      return dest;
+    }
+  }
   throw failure(`Failed to download action '${owner}/${repo}@${ref}': ${errMsg(lastErr)}`);
+}
+
+/** Unpacks a GitHub source tarball (one top-level directory) into `dest`. */
+async function extractAction(dest: string, tarball: Buffer): Promise<void> {
+  const tmp = `${dest}.tmp-${process.pid}-${Date.now()}`;
+  await mkdir(tmp, { recursive: true });
+  try {
+    const tarFile = `${tmp}.tar.gz`;
+    await writeFile(tarFile, tarball);
+    const r = await exec("tar", ["-xzf", tarFile, "-C", tmp, "--strip-components=1"], { capture: true });
+    await rm(tarFile, { force: true });
+    if (r.exitCode !== 0) throw new Error(`Failed to extract action archive: ${r.stderr.trim()}`);
+    await rm(dest, { recursive: true, force: true });
+    await mkdir(path.dirname(dest), { recursive: true });
+    await rename(tmp, dest);
+    await writeFile(path.join(dest, ".diffinery-complete"), "");
+  } catch (e) {
+    await rm(tmp, { recursive: true, force: true });
+    throw e;
+  }
+}
+
+/** Asks Diffinery to keep a fresh copy of an action this job got from GitHub. In the background: never fails or delays the job. */
+function reportAction(job: JobRunner, owner: string, repo: string, ref: string): void {
+  if (!job.api.online) return;
+  job.api.request("/action-mirror", { method: "POST", json: { owner, repo, ref }, retries: 0 }).then(
+    (res) => res.body?.cancel(),
+    () => {},
+  );
+}
+
+/** Diffinery's copy of the action, unpacked into `dest`: when it was downloaded from GitHub, or null when there is none. */
+async function mirroredAction(job: JobRunner, dest: string, owner: string, repo: string, ref: string): Promise<string | null> {
+  if (!job.api.online) return null;
+  try {
+    const q = new URLSearchParams({ owner, repo, ref });
+    const res = await job.api.request(`/action-mirror?${q}`, { retries: 2, allow: [404] });
+    if (res.status === 404) {
+      await res.body?.cancel();
+      return null;
+    }
+    const fetched = res.headers.get("x-diffinery-fetched-at") ?? "an earlier time";
+    await extractAction(dest, Buffer.from(await res.arrayBuffer()));
+    return fetched;
+  } catch {
+    return null;
+  }
 }
 
 /** Fetches `owner/repo@ref` (branch, tag or commit SHA) from github.com with git; false when that fails. */
@@ -121,10 +188,10 @@ async function cloneAction(dest: string, owner: string, repo: string, ref: strin
   const auth: Record<string, string> = token
     ? { GIT_CONFIG_COUNT: String(n + 1), [`GIT_CONFIG_KEY_${n}`]: "http.https://github.com/.extraheader", [`GIT_CONFIG_VALUE_${n}`]: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}` }
     : {};
-  const git = (args: string[]) => exec("git", args, { cwd: tmp, capture: true, env: { ...process.env, GIT_TERMINAL_PROMPT: "0", ...auth } });
+  const git = (args: string[]) => exec("git", args, { cwd: tmp, capture: true, timeoutMs: GIT_TIMEOUT_MS, env: { ...process.env, GIT_TERMINAL_PROMPT: "0", ...auth } });
   try {
     await mkdir(tmp, { recursive: true });
-    for (const args of [["init", "-q"], ["fetch", "-q", "--depth", "1", `https://github.com/${owner}/${repo}`, ref], ["checkout", "-q", "FETCH_HEAD"]]) {
+    for (const args of [["init", "-q"], ["fetch", "-q", "--depth", "1", `${actionDownload.git}/${owner}/${repo}`, ref], ["checkout", "-q", "FETCH_HEAD"]]) {
       if ((await git(args)).exitCode !== 0) throw new Error(args[0]);
     }
     await rm(path.join(tmp, ".git"), { recursive: true, force: true });

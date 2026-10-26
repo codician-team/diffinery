@@ -18,7 +18,7 @@ Diffinery runs GitHub Actions workflow files with the same syntax, triggers, exp
 | `actions/checkout`, `actions/setup-node`, `actions/setup-python`, `actions/setup-go` | Built into the runner for speed; the real action runs for versions or inputs the built-in doesn't cover | [Built-in actions](#built-in-actions) |
 | `actions/cache`, `actions/upload-artifact`, `actions/download-artifact` | Built into the runner, sharing storage and formats with the official actions, which also work | [Caching and artifacts](/docs/actions/caching-and-artifacts) |
 | `actions/github-script` | Supported (the real action runs) | [actions/github-script](#actionsgithub-script) |
-| Other JavaScript, composite and Docker actions | Supported, downloaded from GitHub, with the cache and artifact runtime services | [Other actions](#other-actions) |
+| Other JavaScript, composite and Docker actions | Supported, downloaded from GitHub, with the cache and artifact runtime services. Diffinery keeps a copy of each one jobs use, for when GitHub is down | [Other actions](#other-actions) |
 | Job containers and service containers | Supported | [Docker in workflows](/docs/actions/docker) |
 | Reusable workflows | Supported, except a matrix on the calling job | [Reusable workflows](/docs/actions/reusable-workflows) |
 | Secrets and variables | Repository, organization and environment secrets and variables | [Secrets and variables](/docs/actions/secrets-and-variables) |
@@ -255,7 +255,7 @@ jobs:
 
 ## Other actions
 
-Any other `uses: owner/repo[/path]@ref` (and a built-in action the built-in doesn't cover) is downloaded from GitHub (`codeload.github.com`, or with `git` from `github.com` when that endpoint can't be reached) when the step runs and executed according to its `action.yml` or `action.yaml`.
+Any other `uses: owner/repo[/path]@ref` (and a built-in action the built-in doesn't cover) is downloaded from GitHub (`codeload.github.com`, or with `git` from `github.com` when that endpoint can't be reached) when the step runs and executed according to its `action.yml` or `action.yaml`. If GitHub can't be reached at all, the runner uses the copy Diffinery keeps; see [When GitHub is down](#when-github-is-down).
 
 ### JavaScript actions
 
@@ -290,6 +290,28 @@ Actions with `runs.using: docker` are supported, with `runs.image` set to a `Doc
 ```
 
 `ACTIONS_READ_TOKEN` is a personal or agent token with read access to `acme/my-action`, stored as a secret, because the job token can't read other private repositories. If `acme/my-action` is public, leave `token` out: the job token can read public repositories.
+
+### When GitHub is down
+
+Diffinery keeps its own copy of every public action that jobs on Diffinery download, so jobs keep running through a GitHub outage:
+
+1. The runner always downloads the action from GitHub first, as above, so a job gets the same code it would get on GitHub.
+2. After the download, Diffinery fetches the same archive from `codeload.github.com` itself and stores it. Copies are refreshed when a job uses them: a tag or branch (`@v4`, `@main`) once it is a day old, a commit SHA once a week. Copies that jobs stop using are deleted after about a month.
+3. When GitHub fails (the download and the `git` fallback both fail, for example with `HTTP 503`, a refused connection or no answer in 60 seconds), the runner downloads Diffinery's copy instead. The step logs a warning, also shown as an annotation on the run:
+
+   ```
+   GitHub is unreachable (HTTP 503 downloading https://codeload.github.com/<owner>/<repo>/tar.gz/<ref>); using Diffinery's copy of '<owner>/<repo>@<ref>', downloaded from GitHub at <time>
+   ```
+
+Diffinery only stores what it downloaded from GitHub itself, never what a runner sends, so no job can change the action other repositories run. Copies are shared by all repositories, like the public actions they hold. During an outage, a tag or branch runs the version Diffinery last fetched, which can be up to a day older than GitHub's (pin a commit SHA to rule that out). The first job that ever uses an action needs GitHub, and so do actions in private GitHub repositories and archives larger than 256 MB.
+
+These still depend on GitHub while it is down:
+
+- Anything a step or an action downloads from GitHub at run time, such as release assets from `github.com/<owner>/<repo>/releases/download/...` or `raw.githubusercontent.com` files. Diffinery doesn't proxy or cache those. To keep a job independent of them, cache what you download with `actions/cache` (stored on Diffinery, so a cache hit doesn't touch GitHub).
+- `actions/setup-python` for a version other than the preinstalled Python 3.12: the builds come from GitHub's `actions/python-versions` releases.
+- Container images on `ghcr.io`.
+
+These don't need GitHub: the code itself (checked out from Diffinery), `actions/cache` and artifacts (stored on Diffinery), the [built-in](#built-in-actions) `actions/setup-node` (the preinstalled Node.js 22, or `nodejs.org`) and `actions/setup-go` (`go.dev`), and the tools preinstalled on hosted runners.
 
 ### Unsupported action runtimes
 

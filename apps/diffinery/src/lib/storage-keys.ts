@@ -14,6 +14,7 @@
  * | `archives/`          | zipball/tarball cache (rebuilt on a miss)   | deleted after 30 days     |
  * | `exports/`           | account exports (accounts/export.ts)        | deleted after 8 days      |
  * | `events/`            | the event archive                           | deleted after 400 days    |
+ * | `action-mirror/`     | copies of the GitHub actions jobs use       | deleted after 30 days     |
  *
  * Every prefix also aborts multipart uploads left unfinished for a day.
  *
@@ -26,6 +27,9 @@
  */
 
 export const STAGING_ROOT = "actions-staging/";
+
+/** Diffinery's copies of the GitHub actions jobs use, shared by every repository (lib/action-mirror.ts). */
+export const ACTION_MIRROR_ROOT = "action-mirror/";
 
 /** A push body staged in R2 (see {@link pushBodyKey}). */
 export type SpilledBody = { spilled: string; size: number };

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { JobSpec, StepSpec } from "@diffinery/shared";
 import { apiBaseFor, runAgentJob } from "../src/agent.js";
 import type { JobRunner } from "../src/job.js";
+import { actionDownload } from "../src/steps/actions.js";
 import { makeSpec, startFakeApi, tmp, type FakeApi } from "./helpers.js";
 
 let api: FakeApi;
@@ -415,6 +416,47 @@ fs.appendFileSync(process.env.GITHUB_STATE, "saved=state-" + process.env["INPUT_
     } finally {
       if (prev === undefined) delete process.env.DIFFINERY_ACTIONS_DOWNLOAD_URL;
       else process.env.DIFFINERY_ACTIONS_DOWNLOAD_URL = prev;
+      await new Promise<void>((r) => server.close(() => r()));
+      rmSync(src, { recursive: true, force: true });
+    }
+  });
+
+  it("reports actions it got from GitHub, and uses Diffinery's copy when GitHub is down", async () => {
+    const src = tmp("mirror-action-");
+    mkdirSync(path.join(src, "tools-abc123"), { recursive: true });
+    writeFileSync(path.join(src, "tools-abc123/action.yml"), "name: hello\nruns:\n  using: node20\n  main: main.js\n");
+    writeFileSync(path.join(src, "tools-abc123/main.js"), 'console.log("action ran:", process.env.GITHUB_ACTION_REPOSITORY, process.env.GITHUB_ACTION_REF);');
+    const tarball = path.join(src, "a.tgz");
+    execFileSync("tar", ["-czf", tarball, "-C", src, "tools-abc123"]);
+    // A fake codeload that serves acme/up and is down for everything else.
+    const hits: string[] = [];
+    const server = createServer((req, res) => {
+      hits.push(req.url ?? "");
+      if (req.url === "/acme/up/tar.gz/v1") {
+        res.writeHead(200, { "content-type": "application/gzip" });
+        res.end(readFileSync(tarball));
+      } else {
+        res.writeHead(503);
+        res.end();
+      }
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+    const prev = { ...actionDownload };
+    Object.assign(actionDownload, { codeload: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, git: "http://127.0.0.1:9", backoffMs: 1 });
+    api.mirror.set("acme/down@v2", readFileSync(tarball));
+    try {
+      const c = await run(makeSpec(api, [{ uses: "acme/up@v1" }, { uses: "acme/down@v2" }, { uses: "acme/gone@v3" }]));
+      expect(api.logText(0)).toContain("action ran: acme/up v1");
+      expect(api.logText(1)).toContain("using Diffinery's copy of 'acme/down@v2', downloaded from GitHub at 2026-10-25T12:00:00.000Z");
+      expect(api.logText(1)).toContain("action ran: acme/down v2");
+      expect(hits.filter((h) => h === "/acme/down/tar.gz/v2")).toHaveLength(4); // GitHub first, with its retries
+      expect(c.conclusion).toBe("failure");
+      expect(c.failure?.step).toBe(2);
+      expect(c.failure?.message).toContain("Failed to download action 'acme/gone@v3': HTTP 503");
+      // Only what came from GitHub is reported (Diffinery then fetches it from GitHub itself).
+      expect(api.mirrorReports).toEqual(["acme/up@v1"]);
+    } finally {
+      Object.assign(actionDownload, prev);
       await new Promise<void>((r) => server.close(() => r()));
       rmSync(src, { recursive: true, force: true });
     }

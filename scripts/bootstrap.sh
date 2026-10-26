@@ -70,7 +70,8 @@ LIFECYCLE='{"rules":[
   {"id":"actions-staging-1d","enabled":true,"conditions":{"prefix":"actions-staging/"},"deleteObjectsTransition":{"condition":{"type":"Age","maxAge":86400}}},
   {"id":"archives-30d","enabled":true,"conditions":{"prefix":"archives/"},"deleteObjectsTransition":{"condition":{"type":"Age","maxAge":2592000}}},
   {"id":"exports-8d","enabled":true,"conditions":{"prefix":"exports/"},"deleteObjectsTransition":{"condition":{"type":"Age","maxAge":691200}}},
-  {"id":"events-400d","enabled":true,"conditions":{"prefix":"events/"},"deleteObjectsTransition":{"condition":{"type":"Age","maxAge":34560000}}}
+  {"id":"events-400d","enabled":true,"conditions":{"prefix":"events/"},"deleteObjectsTransition":{"condition":{"type":"Age","maxAge":34560000}}},
+  {"id":"action-mirror-30d","enabled":true,"conditions":{"prefix":"action-mirror/"},"deleteObjectsTransition":{"condition":{"type":"Age","maxAge":2592000}}}
 ]}'
 # Applied on every deploy; a failure stops it, since a wrong rule can delete data.
 RESULT="$(cf PUT "/r2/buckets/diffinery-data/lifecycle" "$LIFECYCLE")"

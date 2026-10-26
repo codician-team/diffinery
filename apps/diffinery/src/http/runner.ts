@@ -7,6 +7,7 @@ import { signEs256 } from "../lib/jwt.js";
 import { BodyTooLarge, putStream, sized, type BlobBucket } from "../lib/blob-store.js";
 import { getFirst, headFirst } from "../lib/storage-keys.js";
 import { HttpError } from "../lib/util.js";
+import { mirrorKey, parseActionRef, refreshMirror, type MirrorBucket } from "../lib/action-mirror.js";
 import { parseRunnerInfo } from "../repo/actions.js";
 import { CACHE_LIMIT_BYTES } from "../repo/runtime.js";
 import { repoStub } from "./common.js";
@@ -128,6 +129,33 @@ runner.get("/runner/jobs/:jobId/artifacts/:name", async (c) => {
   const obj = await getFirst(c.env.BUCKET, await repoStub(c.env, repoId).artifactKeysFor(jobId, token, c.req.param("name")));
   if (!obj) throw new HttpError(404, "artifact not found");
   return new Response(obj.body, { headers: { "content-type": "application/gzip" } });
+});
+
+// ---- Diffinery's copies of GitHub actions, for when GitHub is down (lib/action-mirror.ts)
+
+/** The runner downloaded this action from GitHub: keep a recent copy of it. */
+runner.post("/runner/jobs/:jobId/action-mirror", async (c) => {
+  const jobId = c.req.param("jobId");
+  const { token, repoId } = jobAuth(c.req.raw, jobId);
+  const action = parseActionRef((await c.req.json().catch(() => ({}))) as Record<string, unknown>);
+  if (!action) throw new HttpError(422, "invalid action");
+  await repoStub(c.env, repoId).requireRunningJob(jobId, token);
+  const work = refreshMirror(c.env.BUCKET as unknown as MirrorBucket, action);
+  // The runner doesn't wait for this: its job can end, and drop the request, before a large action is stored.
+  c.executionCtx.waitUntil(work);
+  return c.json({ result: await work });
+});
+
+/** GitHub failed: the stored copy of an action, and when it was fetched from GitHub. */
+runner.get("/runner/jobs/:jobId/action-mirror", async (c) => {
+  const jobId = c.req.param("jobId");
+  const { token, repoId } = jobAuth(c.req.raw, jobId);
+  const action = parseActionRef({ owner: c.req.query("owner"), repo: c.req.query("repo"), ref: c.req.query("ref") });
+  if (!action) throw new HttpError(422, "invalid action");
+  await repoStub(c.env, repoId).requireRunningJob(jobId, token);
+  const obj = await c.env.BUCKET.get(mirrorKey(action));
+  if (!obj) throw new HttpError(404, "no copy of this action");
+  return new Response(obj.body, { headers: { "content-type": "application/gzip", "content-length": String(obj.size), "x-diffinery-fetched-at": obj.uploaded.toISOString() } });
 });
 
 // ---- OIDC id tokens (actions/core getIDToken compatible: GET ?audience= → { value })

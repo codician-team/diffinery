@@ -26,6 +26,9 @@ export interface FakeApi {
   /** Fail the next N log POSTs with 503 (to test retries). */
   failLogs: number;
   specs: Map<string, JobSpec>;
+  /** Diffinery's copies of actions, by `owner/repo@ref`, and the actions the runner reported downloading from GitHub. */
+  mirror: Map<string, Buffer>;
+  mirrorReports: string[];
   close(): Promise<void>;
   logText(step?: number): string;
   lastReport(index: number): StepReport | undefined;
@@ -47,6 +50,8 @@ export async function startFakeApi(token = "job-token-123"): Promise<FakeApi> {
     requests: [],
     failLogs: 0,
     specs: new Map(),
+    mirror: new Map(),
+    mirrorReports: [],
     close: async () => {},
     logText(step?: number) {
       return this.logs
@@ -195,6 +200,17 @@ export async function startFakeApi(token = "job-token-123"): Promise<FakeApi> {
     if (sub === "/complete" && req.method === "POST") {
       api.completion = JSON.parse(body.toString()) as JobCompletion;
       return json(200, {});
+    }
+    if (sub === "/action-mirror" && req.method === "POST") {
+      const a = JSON.parse(body.toString()) as { owner: string; repo: string; ref: string };
+      api.mirrorReports.push(`${a.owner}/${a.repo}@${a.ref}`);
+      return json(200, { result: "stored" });
+    }
+    if (sub === "/action-mirror" && req.method === "GET") {
+      const copy = api.mirror.get(`${u.searchParams.get("owner")}/${u.searchParams.get("repo")}@${u.searchParams.get("ref")}`);
+      if (!copy) return json(404, { message: "no copy of this action" });
+      res.writeHead(200, { "content-type": "application/gzip", "x-diffinery-fetched-at": "2026-10-25T12:00:00.000Z" });
+      return res.end(copy);
     }
     if (sub === "/oidc") return json(200, { value: `oidc-for-${u.searchParams.get("audience")}` });
     return json(404, {});
