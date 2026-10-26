@@ -91,6 +91,7 @@ What's different about the hosted image:
 - Jobs run as `root`. `sudo` is installed and needs no password, as on GitHub, so `sudo` in commands keeps working.
 - The apt package lists are removed. Run `apt-get update` before `apt-get install`.
 - Every job starts in a fresh container. Nothing carries over between jobs except caches and artifacts.
+- `/dev/kvm` is available, so the Android emulator and other KVM tools run with hardware acceleration. The image has no udev, so leave out the "Enable KVM" udev step that GitHub's Android guides add, and install the emulator's X libraries first. See [Hardware virtualization (KVM)](/docs/actions/runners#hardware-virtualization-kvm).
 
 On self-hosted runners, `runner.os` is always `Linux`, and the setup actions download Linux builds, even on a macOS machine. See [Self-hosted runners](/docs/actions/runners#self-hosted-runners).
 

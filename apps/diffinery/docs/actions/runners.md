@@ -66,6 +66,7 @@ Each job on a hosted runner gets its own container on [Cloudflare Containers](ht
 | Architecture | `linux/amd64` (`runner.arch` is `X64`) |
 | Operating system | Ubuntu 24.04 (`runner.os` is `Linux`) |
 | User | `root`. `sudo` is installed and needs no password, so `sudo apt-get install ...` works as on GitHub |
+| Virtualization | `/dev/kvm` is available, for the Android emulator, QEMU and other KVM tools. See [Hardware virtualization (KVM)](#hardware-virtualization-kvm) |
 | Network | Outbound internet access (only HTTP and HTTPS on instances that set [`EGRESS=web`](/docs/reference/limits#egress)); no inbound connections |
 | Workspace | `/workspace/<repository name>` (`GITHUB_WORKSPACE`) |
 | Temp directory | `/workspace/_temp` (`RUNNER_TEMP`) |
@@ -152,6 +153,43 @@ steps:
 **Go and Java start installing as the job begins.** When a job has an `actions/setup-go` step (v4 to v6) or an `actions/setup-java` step (v2 to v5, `distribution: temurin`, a major version such as `java-version: 21`), and the version is written in the workflow or comes from `matrix`, `inputs` or `vars`, the runner starts downloading and extracting that toolchain as the job begins, while earlier steps such as checkout run. The setup step then finds it in the tool cache instead of downloading it. If it's still being installed when the step starts, the step logs `Waiting for Go 1.23, which the runner started installing as the job began` and continues once it's there. The runner installs the same release the action would pick, checks it against its published SHA-256, and puts it where the action looks (`setup-java` reports `Resolved Java ... from tool-cache`, as it does on GitHub's runners), so nothing else about the step changes. Jobs without these steps don't pay for any of this. Versions read from a file (`go-version-file`, `java-version-file`), other Java distributions, and jobs that run in a `container:` install the usual way.
 
 > **Note:** Jobs run as `root`, and `sudo` runs commands without asking for a password, as on GitHub's runners. The image ships without apt package lists, so run `sudo apt-get update` before `sudo apt-get install ...`.
+
+### Hardware virtualization (KVM)
+
+Hosted runners have `/dev/kvm`, so jobs can start virtual machines with hardware acceleration: the Android emulator, QEMU with `-enable-kvm`, Firecracker and other KVM tools. Jobs run as `root`, so `/dev/kvm` is usable without changing its permissions.
+
+For Android emulator tests with `reactivecircus/android-emulator-runner`, two things differ from GitHub's image:
+
+- **Leave out the "Enable KVM" step** that writes `/etc/udev/rules.d/99-kvm4all.rules` and runs `udevadm`. The image has no udev, so that step fails with `tee: /etc/udev/rules.d/99-kvm4all.rules: No such file or directory`, and it isn't needed when the job runs as root.
+- **Install the emulator's libraries** before it starts. GitHub's image has them; this one doesn't, and without them the emulator exits with `error while loading shared libraries: libX11.so.6`.
+
+```yaml
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Emulator libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libx11-6 libx11-xcb1 libxcb1 libpulse0 libgl1 libegl1 libnss3 \
+            libxcomposite1 libxcursor1 libxdamage1 libxi6 libxtst6 libxrandr2 libxkbfile1 libasound2t64 libdbus-1-3 \
+            libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libfontconfig1 libfreetype6
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          script: ./gradlew connectedCheck
+```
+
+Measured on 2026-10-26 on a large hosted runner: an Android 11 (API 30, x86_64) emulator booted in 37 seconds, and `emulator -accel-check` reported `KVM (version 12) is installed and usable.` Installing the libraries took about 17 seconds. `packages: platform-tools` keeps `setup-android` from asking for the old `tools` package, which its default list includes and which the current SDK no longer has (`Warning: Failed to find package 'tools'`).
 
 ### Docker on hosted runners
 
