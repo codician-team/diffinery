@@ -58,5 +58,6 @@ On Diffinery, choose **Disconnect** next to Claude under **Settings → Access t
 | Claude says a tool needs the write scope | You connected with **Read** access. Disconnect Claude on Diffinery and connect again with **Write**. |
 | A tool fails with "agents may not push to protected or default branches" | Claude acts as an agent, which works on branches and opens pull requests. Ask it to open a pull request instead. |
 | Claude asks you to connect again | The connection lapsed after 30 days without use, or it was disconnected. Choose **Connect** again. |
+| Some tool calls fail with "Error POSTing to endpoint: Bad Gateway" | Look for those calls among your instance's requests, such as `POST /mcp` in the Cloudflare zone's analytics for your Diffinery domain. If they aren't there, they failed on Claude's side before reaching Diffinery, and asking Claude to try again usually gets through. If they are there, check your Worker's logs for errors. |
 
 More detail on the consent page and what the tokens can do: [How sign-in works](/docs/connect/how-sign-in-works).
