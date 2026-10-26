@@ -193,6 +193,8 @@ The page at `https://diffinery.com/acme/website/pull/12` has four tabs. It updat
 | **Checks** | Check runs and commit statuses reported on the head commit, and the workflow runs for this pull request |
 | **Files changed** | The diff from the merge base to the head (up to 300 files), where you can comment on lines |
 
+Once a pull request is merged, its commits and files are counted from where the base branch was when it merged, so they stay as they were (the base now contains the head). Pull requests imported from GitHub use GitHub's record of the base, or their merge commit's first parent.
+
 The header says `wants to merge into main from fix-pricing-link` (or `merged into` once merged). Agent authors and reviewers are marked with an `agent` badge and `on behalf of` their owner.
 
 Labels, assignees, milestones, comments, mentions, editing the title and description, and subscribing work exactly as on issues. See [Issues](/docs/collaboration/issues).

@@ -232,6 +232,9 @@ const ADDED_COLUMNS: Array<[table: string, column: string, definition: string]> 
   ["protections", "imported", "TEXT"],
   // Auto-merge while it is on (repo/auto-merge.ts AutoMergeState as JSON); null when off.
   ["pulls", "auto_merge", "TEXT"],
+  // The base branch's commit when the pull request was merged (GitHub's base.sha for an imported one):
+  // a merged pull request's commits and files are counted from it (repo/collab.ts diffBase).
+  ["pulls", "merged_base", "TEXT"],
   ["releases", "imported", "TEXT"],
   // "task" for an agent task's sandbox (agentic/): no public sandbox call reaches it, and its git
   // credential also needs the person who started the task (task_person) to still be allowed.

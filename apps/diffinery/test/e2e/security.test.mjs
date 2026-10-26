@@ -1744,6 +1744,9 @@ test("security: an agent's commits stay agent code when a person pushes on top, 
   // An agent's pull request needs a person's approval before a person merges it.
   await ok("POST", `${R}/pulls/${pr.number}/reviews`, { event: "APPROVE" });
   await ok("PUT", `${R}/pulls/${pr.number}/merge`, { merge_method: "merge" });
+  // Merged with a merge commit, main now contains the head, and the pull request still lists its two commits.
+  assert.deepEqual((await ok("GET", `${R}/pulls/${pr.number}/commits`)).map((c) => c.commit.message.trim()), ["ci", "notes"]);
+  assert.deepEqual([...(await ok("GET", `${R}/pulls/${pr.number}/files`)).map((f) => f.filename)].sort(), [".github/workflows/ci.yml", "notes.txt"]);
   assert.deepEqual(await secretsOfNextJob(), ["DEPLOY", "DIFFINERY_TOKEN", "GITHUB_TOKEN"]);
   // A person's new branch from there has no agent commits of its own.
   const tip = (await ok("GET", `${R}/branches/main`)).commit.sha;

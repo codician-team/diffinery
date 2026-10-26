@@ -511,6 +511,14 @@ test("objects of every size: read back, compared and used as delta bases", async
   git(src, ["push", "-q", "origin", "main"]);
   const cmp = await ok("GET", `/repos/${owner}/sizes/compare/${first}...main`);
   assert.equal(cmp.files.length, sizes.length);
+  // Relative refs, as git takes them.
+  for (const spec of ["main~1...main", "main^...main", "main~...HEAD", `${first}...main~0`]) {
+    const rel = await ok("GET", `/repos/${owner}/sizes/compare/${spec}`);
+    assert.deepEqual([rel.base_commit.sha, rel.total_commits, rel.files.length], [first, 1, sizes.length], spec);
+  }
+  assert.equal((await ok("GET", `/repos/${owner}/sizes/commits/main~1`)).sha, first);
+  assert.equal((await api("GET", `/repos/${owner}/sizes/compare/main~2...main`)).status, 404, "past the first commit");
+  assert.equal((await api("GET", `/repos/${owner}/sizes/compare/main^2...main`)).status, 404, "no second parent");
   await ok("GET", `/repos/${owner}/sizes/commits/main`);
   const clone = join(work, "sizes-clone");
   git(work, ["clone", "-q", `${base}/${owner}/sizes.git`, clone]);
@@ -2825,6 +2833,10 @@ test("import from GitHub: git data, issues and pull requests with their numbers,
   assert.equal(p2.merge_commit_sha, fx.mergeSha);
   assert.equal(p2.head.ref, "feature");
   assert.equal(p2.head.sha, fx.featureSha);
+  // Its commits and files are counted from where main was when it merged, not from main now (which contains it).
+  assert.deepEqual([p2.commits, p2.changed_files], [1, 1]);
+  assert.deepEqual((await ok("GET", `/repos/${owner}/imported-app/pulls/2/commits`)).map((c) => c.sha), [fx.featureSha]);
+  assert.deepEqual((await ok("GET", `/repos/${owner}/imported-app/pulls/2/files`)).map((f) => f.filename), ["feature.txt"]);
   const reviews = await ok("GET", `/repos/${owner}/imported-app/pulls/2/reviews`);
   assert.deepEqual(reviews.map((r) => [r.user.login, r.state, r.body]), [["github:bob", "APPROVED", "Looks good"]]);
   const lineComments = await ok("GET", `/repos/${owner}/imported-app/pulls/2/comments`);

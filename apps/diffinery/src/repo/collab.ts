@@ -55,6 +55,7 @@ export type PullRow = {
   merged_at: string | null;
   merged_by: string | null;
   merge_commit: string | null;
+  merged_base?: string | null;
   requested_reviewers: string;
   intent: string | null;
   auto_merge: string | null;
@@ -707,12 +708,28 @@ export class Collab {
     return out;
   }
 
+  /**
+   * The commit a pull request's commits and files are counted from: its base branch, or for a merged
+   * one, where the base branch was when it merged (afterwards the base contains the head, and nothing
+   * would be left). Pull requests merged before that was kept use their merge commit's first parent.
+   */
+  private async diffBase(p: PullRow): Promise<string | null> {
+    if (p.merged) {
+      const store = this.repo.store;
+      if (p.merged_base && (await readCommit(store, p.merged_base).catch(() => null))) return p.merged_base;
+      if (p.merge_commit && p.merge_commit !== p.head_sha) {
+        const parent = (await readCommit(store, p.merge_commit).catch(() => null))?.parents[0];
+        if (parent) return parent;
+      }
+    }
+    return this.repo.getRef(`refs/heads/${p.base_ref}`);
+  }
+
   async pullFiles(number: number) {
     const p = this.pullRow(number);
-    const baseSha = this.repo.getRef(`refs/heads/${p.base_ref}`) ?? p.head_sha;
-    const head = p.merged && p.merge_commit ? p.head_sha : p.head_sha;
-    const mb = await mergeBase(this.repo.store, baseSha, head);
-    return { mergeBase: mb, headSha: head, ...(await this.repo.diff(mb, head)) };
+    const baseSha = (await this.diffBase(p)) ?? p.head_sha;
+    const mb = await mergeBase(this.repo.store, baseSha, p.head_sha);
+    return { mergeBase: mb, headSha: p.head_sha, ...(await this.repo.diff(mb, p.head_sha)) };
   }
 
   /**
@@ -721,7 +738,7 @@ export class Collab {
    */
   async pullStats(number: number): Promise<{ additions: number; deletions: number; changedFiles: number }> {
     const p = this.pullRow(number);
-    const baseSha = this.repo.getRef(`refs/heads/${p.base_ref}`) ?? p.head_sha;
+    const baseSha = (await this.diffBase(p)) ?? p.head_sha;
     const key = `${number}:${baseSha}:${p.head_sha}`;
     const hit = this.statsCache.get(key);
     if (hit) return hit;
@@ -768,7 +785,7 @@ export class Collab {
 
   async pullCommits(number: number) {
     const p = this.pullRow(number);
-    const baseSha = this.repo.getRef(`refs/heads/${p.base_ref}`);
+    const baseSha = await this.diffBase(p);
     const mb = baseSha ? await mergeBase(this.repo.store, baseSha, p.head_sha) : null;
     const stop = new Set<string>();
     if (mb) for (const c of await walkCommits(this.repo.store, [mb], { limit: 100000 })) stop.add(c.oid);
@@ -1089,7 +1106,7 @@ export class Collab {
     const r = this.row(number);
     const baseRef = `refs/heads/${p.base_ref}`;
     const t = now();
-    this.sql.exec("UPDATE pulls SET merged = 1, merged_at = ?, merged_by = ?, merge_commit = ?, auto_merge = NULL WHERE number = ?", t, caller.login, newSha, number);
+    this.sql.exec("UPDATE pulls SET merged = 1, merged_at = ?, merged_by = ?, merge_commit = ?, merged_base = ?, auto_merge = NULL WHERE number = ?", t, caller.login, newSha, baseSha, number);
     if (this.repo.queue.isQueued(number)) this.repo.queue.schedule(p.base_ref);
     this.sql.exec("UPDATE issues SET state = 'closed', state_reason = 'merged', closed_at = ?, updated_at = ? WHERE number = ?", t, t, number);
     this.repo.social.record(number, "merged", caller, { commit_id: newSha });

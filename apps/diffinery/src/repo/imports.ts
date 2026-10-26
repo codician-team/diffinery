@@ -113,11 +113,11 @@ export class RepoImports {
       if (i.pull) {
         const p = i.pull;
         this.sql.exec(
-          `INSERT INTO pulls (number, head_ref, head_repo_id, head_sha, base_ref, draft, merged, merged_at, merged_by, merge_commit, requested_reviewers, imported)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO pulls (number, head_ref, head_repo_id, head_sha, base_ref, draft, merged, merged_at, merged_by, merge_commit, merged_base, requested_reviewers, imported)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(number) DO UPDATE SET head_ref = excluded.head_ref, head_repo_id = excluded.head_repo_id, head_sha = excluded.head_sha, base_ref = excluded.base_ref, draft = excluded.draft,
              merged = excluded.merged, merged_at = excluded.merged_at, merged_by = COALESCE(excluded.merged_by, pulls.merged_by),
-             merge_commit = excluded.merge_commit, requested_reviewers = excluded.requested_reviewers, imported = excluded.imported
+             merge_commit = excluded.merge_commit, merged_base = excluded.merged_base, requested_reviewers = excluded.requested_reviewers, imported = excluded.imported
            WHERE pulls.imported = excluded.imported`,
           i.number,
           p.headRef,
@@ -130,6 +130,7 @@ export class RepoImports {
           p.mergedAt,
           p.mergedBy,
           p.mergeCommit,
+          p.baseSha ?? null,
           JSON.stringify(p.requestedReviewers),
           importId,
         );

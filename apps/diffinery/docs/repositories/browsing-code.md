@@ -270,7 +270,7 @@ When both sides are branches, the head has new commits, and you have write acces
 
 Click **Create pull request**. If an open pull request for the same branches exists, the page links to it instead. If the head has no new commits, it says "There isn't anything to compare." See [Pull requests](/docs/collaboration/pull-requests).
 
-The API returns the same comparison: `GET /api/v3/repos/acme/website/compare/main...feature/login` (three dots, base first).
+The API returns the same comparison: `GET /api/v3/repos/acme/website/compare/main...feature/login` (three dots, base first). Either side can be a branch, a tag, a commit SHA (full or abbreviated) or any of these with git's ancestry suffixes: `main~3` (three first parents back), `main^` (the first parent) or `HEAD^2` (a merge's second parent), for example `/compare/main~1...main`.
 
 ## Command palette
 

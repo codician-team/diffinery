@@ -174,6 +174,8 @@ export interface ImportedIssue {
     mergedAt: string | null;
     mergedBy: string | null;
     mergeCommit: string | null;
+    /** GitHub's `base.sha` of a merged pull request: the base branch's commit its commits and files are counted from. */
+    baseSha: string | null;
     requestedReviewers: string[];
   };
 }
@@ -263,6 +265,7 @@ export function mapPull(p: GhPull, sourceFullName: string, people: People): Impo
       mergedAt: p.merged_at ?? null,
       mergedBy: merged && p.merged_by ? people.login(p.merged_by) : null,
       mergeCommit: merged ? (p.merge_commit_sha ?? null) : null,
+      baseSha: merged ? (p.base.sha ?? null) : null,
       requestedReviewers: p.state === "open" ? (p.requested_reviewers ?? []).map((r) => people.login(r)) : [],
     },
   };

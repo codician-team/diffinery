@@ -571,6 +571,23 @@ export class RepoDO extends DurableObject<Env> {
   /** Resolve a branch, tag, full ref, HEAD or (abbreviated) SHA to a commit SHA. */
   async resolve(rev: string | undefined | null): Promise<string | null> {
     const r = rev && rev.length ? rev : "HEAD";
+    // Ancestry suffixes, as git takes them: `main~2` (first parents back), `HEAD^2` (the second parent), `v1.0^`.
+    // Ref names can't hold `~` or `^`, so whatever is before the first one names the commit.
+    const at = r.search(/[~^]/);
+    if (at > 0) {
+      const ops = r.slice(at);
+      if (!/^([~^]\d{0,4})+$/.test(ops)) return null;
+      let oid = await this.resolve(r.slice(0, at));
+      for (const [, op, n] of ops.matchAll(/([~^])(\d*)/g)) {
+        const count = n === "" ? 1 : Number(n);
+        for (let i = 0; oid && i < (op === "~" ? count : 1); i++) {
+          if (op === "^" && count === 0) break;
+          const parents: string[] = (await readCommit(this.store, oid).catch(() => null))?.parents ?? [];
+          oid = (op === "~" ? parents[0] : parents[count - 1]) ?? null;
+        }
+      }
+      return oid;
+    }
     let oid: string | null = null;
     if (r === "HEAD") oid = this.getRef(this.headRef);
     else if (isOid(r)) oid = this.store.has(r) ? r : null;
