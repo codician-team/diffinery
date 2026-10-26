@@ -409,7 +409,7 @@ Diffinery limits requests per minute to stop floods and scripted abuse:
 
 | What | Limit | Counted by |
 | --- | --- | --- |
-| Sign-in, passkey registration, invitation and sign-in links, open sign-up (`POST /signup`, `POST /signup/verify`), security reports (`POST /security/report`), early access requests, confirmations and removals (`POST /early-access`, `/early-access/confirm`, `/early-access/remove`, `/early-access/remove/confirm`) | 20 a minute | IP address |
+| Sign-in, passkey registration, invitation and sign-in links, open sign-up (`POST /signup`, `POST /signup/verify`), security reports (`POST /security/report`), early access requests, confirmations and removals (`POST /early-access`, `/early-access/confirm`, `/early-access/remove`, `/early-access/remove/confirm`), contact messages and their confirmations (`POST /contact`, `/contact/confirm`) | 20 a minute | IP address |
 | Anything else without signing in (web pages, API, git) | 300 a minute | IP address |
 | Anything with a session or token (web, API, MCP, git) | 2,000 a minute | Account |
 | Creating repositories, organizations, forks, issues, pull requests, releases, comments, reviews and reports, and MCP tools that change something | 60 a minute | Account |

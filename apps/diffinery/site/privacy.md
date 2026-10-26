@@ -46,6 +46,7 @@ diffinery.com sets only cookies it needs to work. None are used for advertising 
 ## Forms anyone can use
 
 - **Early access requests** (`/early-access`): the email address you give and, if you fill them in, your name, company, what you'd use Diffinery for and where you host code today. Unconfirmed requests are deleted after 7 days; confirmed ones are kept until a site administrator deletes the request, and you can delete yours yourself at any time. To enforce daily limits, we keep a hashed form of your IP address and of the email address you typed for one day. Details: [Early access](/docs/accounts/early-access).
+- **Contact messages** (`/contact`): your name, the email address you give (or your account's, if you're signed in), the topic and your message, and a note our site administrators may add about how they answered. Only diffinery.com's site administrators can read messages, and we use them only to reply. If you aren't signed in, your message waits until you confirm your address with the link we email you; unconfirmed messages are deleted after 7 days, unread. Messages marked as spam are deleted after 30 days, and answered ones 365 days after we mark them handled. For daily limits, we keep a hashed form of your IP address and of the email address you typed for one day. Details: [Contact form](/docs/admin/contact-form).
 - **Security reports** (`/security/report`): what you write, and the email address you give for a reply if you aren't signed in. Only diffinery.com's site administrators can read reports.
 - People who aren't signed in pass a **Cloudflare Turnstile** check on these forms, which Cloudflare runs using signals from your browser.
 
@@ -79,6 +80,7 @@ We don't sell or rent personal data, and we don't share it for advertising.
 | Job logs | 90 days |
 | Workflow artifacts | 1 to 90 days, as the workflow sets (90 by default) |
 | Account data exports | 7 days |
+| Contact messages | 7 days unconfirmed; 30 days once marked spam; 365 days after they are answered |
 | Audit log | 2 years |
 | Database backups | 30 days of point-in-time recovery |
 | Username of a deleted account | Not reusable for 90 days |
@@ -105,4 +107,4 @@ We'll update this page when what we do changes and change the date at the top. I
 
 ## Contact
 
-Codician, **hi@codician.com**. Security reports: [diffinery.com/security/report](/security/report).
+Codician, **hi@codician.com**, or the [contact form](/contact). Security reports: [diffinery.com/security/report](/security/report).

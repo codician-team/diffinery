@@ -91,6 +91,7 @@ export interface Outgoing {
   html: string;
   text: string;
   headers: Record<string, string>;
+  replyTo?: { name: string; email: string } | string;
 }
 
 /** Render a job for one recipient: the message plus the headers mail clients use for threading and unsubscribing. */
@@ -143,6 +144,7 @@ export async function buildMessage(env: Env, job: MailJob, to: { email: string; 
     html: toHtml(email, ctx),
     text: toText(email, ctx),
     headers,
+    ...(email.replyTo ? { replyTo: email.replyTo.name ? { name: clean(email.replyTo.name), email: email.replyTo.email } : email.replyTo.email } : {}),
   };
 }
 

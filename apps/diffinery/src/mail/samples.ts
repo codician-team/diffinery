@@ -94,6 +94,13 @@ export function sampleJobs(pub: string, to: Recipient, me: string, repo = "acme/
     item("early-access-waiting", "Early access: already on the list", { kind: "early_access_known", reason: "early_access", data: { variant: "waiting", since: at } }),
     item("early-access-invited", "Early access: already invited", { kind: "early_access_known", reason: "early_access", data: { variant: "invited", since: at } }),
     item("early-access-account", "Early access: already has an account", { kind: "early_access_known", reason: "early_access", data: { variant: "account", since: at } }),
+    item("contact-confirm", "Contact: confirm the message", { kind: "contact_confirm", reason: "contact", data: { url: `${pub}/contact/confirm#sample`, expiresAt: exp, topic: "A question about Diffinery" } }),
+    item("contact-received", "Contact: copy for a signed-in sender", { kind: "contact_received", reason: "account", data: { id: "0123456789abcdef0123456789abcdef", topic: "Running my own Diffinery", message: "Hi! We'd like to run Diffinery for our 40 repositories.\n\nDoes it work with a custom domain on a Cloudflare zone we already have?" } }),
+    item("contact-message", "Contact: new message for site administrators", {
+      kind: "contact_message",
+      reason: "admin",
+      data: { id: "0123456789abcdef0123456789abcdef", name: "Rivera Kim", email: "rivera@example.com", login: null, topic: "Partnerships and integrations", message: "Hello,\n\nWe build a code review tool and would like to list Diffinery as a supported forge. Who should we talk to?\n\nThanks, Rivera" },
+    }),
     item("security-report", "Security report", { kind: "security_report", reason: "admin", data: { id: "0123456789abcdef0123456789abcdef", summary: "Stored XSS in release notes" } }),
     item("org-member", "Organization membership", { kind: "org_membership", reason: "account", data: { org: repo.split("/")[0]!, role: "admin", previous: "member", by: "diffy-dev" } }),
     item("repo-access", "Repository access", { kind: "repo_access", reason: "account", data: { repo, role: "write", previous: null } }),

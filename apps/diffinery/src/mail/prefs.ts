@@ -12,7 +12,7 @@ export interface NotificationPrefs {
   actions: { web: boolean; email: boolean; failuresOnly: boolean };
   /** Repositories created, deleted, or access granted to you. */
   repos: { email: boolean };
-  /** Organization membership, accepted invitations and (for admins) access requests. */
+  /** Organization membership, accepted invitations and (for admins) access requests and contact messages. */
   orgs: { email: boolean };
   /** Also email me about my own comments and changes (GitHub's "Include your own updates"). */
   ownActivity: boolean;

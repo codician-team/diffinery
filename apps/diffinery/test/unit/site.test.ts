@@ -39,7 +39,7 @@ const types = (g: Array<Record<string, unknown>>) => g.map((x) => x["@type"]);
 const prose = (md: string) => md.replace(/^```[\s\S]*?^```/gm, "").replace(/`[^`\n]*`/g, "");
 
 /** Paths outside /docs and the site pages that the site may link to. */
-const OTHER_PATHS = [/^\/$/, /^\/llms(-full)?\.txt$/, /^\/early-access$/, /^\/status$/, /^\/security\/report$/, /^\/\.well-known\/security\.txt$/, /^\/docs\/api\/openapi\.json$/];
+const OTHER_PATHS = [/^\/$/, /^\/llms(-full)?\.txt$/, /^\/early-access$/, /^\/contact$/, /^\/status$/, /^\/security\/report$/, /^\/\.well-known\/security\.txt$/, /^\/docs\/api\/openapi\.json$/];
 
 function linkProblems(md: string): string[] {
   const problems: string[] = [];

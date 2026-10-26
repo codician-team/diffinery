@@ -17,7 +17,9 @@ export type Block =
   | { callout: Inline[]; tone: "info" | "warn" | "danger" }
   | { code: string }
   | { items: Array<{ mark: "ok" | "fail" | "skip" | "dot"; text: Inline[]; url?: string }> }
-  | { quote: Inline[] };
+  | { quote: Inline[] }
+  /** Plain text exactly as someone typed it, lines kept, never read as Markdown or HTML. */
+  | { plain: string };
 
 export interface Email {
   subject: string;
@@ -35,6 +37,8 @@ export interface Email {
   thread?: string;
   /** Main link (also "View it on Diffinery" in the footer). */
   url?: string;
+  /** Where the recipient's reply goes, when it isn't to us (a contact message's confirmed sender). */
+  replyTo?: { email: string; name?: string };
 }
 
 export interface RenderCtx {
@@ -129,6 +133,8 @@ function blockHtml(b: Block, ctx: RenderCtx): string {
   if ("code" in b)
     return `<pre class="md" style="margin:0 0 16px;padding:12px 14px;border-radius:8px;background:${C.codeBg};font-family:${MONO};font-size:12.5px;line-height:1.55;color:${C.fg};white-space:pre-wrap;overflow-wrap:anywhere">${esc(b.code)}</pre>`;
   if ("quote" in b) return `<div class="muted" style="margin:0 0 16px;padding:2px 0 2px 14px;border-left:3px solid ${C.border};color:${C.fg2};font-size:14px;line-height:1.6">${inlineHtml(b.quote)}</div>`;
+  if ("plain" in b)
+    return `<div class="md box" style="margin:0 0 16px;padding:14px 16px;border:1px solid ${C.border};border-radius:8px;font-size:14px;line-height:1.6;color:${C.fg};white-space:pre-wrap;overflow-wrap:anywhere">${esc(b.plain)}</div>`;
   const marks = { ok: ["✓", C.tones.green![1]], fail: ["✕", C.tones.red![1]], skip: ["–", C.fg3], dot: ["•", C.fg3] } as const;
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="box" style="margin:0 0 16px;border:1px solid ${C.border};border-radius:8px;border-collapse:separate">${b.items
     .map(
@@ -146,6 +152,7 @@ function blockText(b: Block): string {
   if ("callout" in b) return `! ${inlineText(b.callout)}`;
   if ("code" in b) return b.code.split("\n").map((l) => `    ${l}`).join("\n");
   if ("quote" in b) return `> ${inlineText(b.quote)}`;
+  if ("plain" in b) return b.plain.split("\n").map((l) => `> ${l}`.trimEnd()).join("\n");
   const marks = { ok: "[ok]", fail: "[failed]", skip: "[skipped]", dot: "-" };
   return b.items.map((it) => `${marks[it.mark]} ${inlineText(it.text)}${it.url ? ` <${it.url}>` : ""}`).join("\n");
 }
@@ -167,6 +174,7 @@ export const REASON_TEXT: Record<Reason, string> = {
   account: "You are receiving this because you have a Diffinery account.",
   signup: "You are receiving this because someone asked to create a Diffinery account with this email address. If it wasn't you, you can ignore this email.",
   early_access: "You are receiving this because someone asked for early access to Diffinery with this email address. If it wasn't you, you can ignore this email.",
+  contact: "You are receiving this because someone sent a message through Diffinery's contact form with this email address. If it wasn't you, you can ignore this email.",
   digest: "You are receiving this because you turned on the morning digest in your notification settings.",
 };
 
@@ -840,6 +848,54 @@ export function compose(job: MailJob, pub: string, login?: string, mailFrom?: st
         ],
         url: `${pub}/settings/admin`,
       };
+    case "contact_confirm": {
+      // Nothing typed into the form: the address isn't confirmed yet, so this must not carry anyone's words.
+      const d = job.data;
+      return {
+        subject: "[Diffinery] Confirm your message to the Diffinery team",
+        preheader: `Confirm before ${day(d.expiresAt)} and it goes to the team. Nothing is sent without it.`,
+        eyebrow: { text: "Contact", tone: "blue" },
+        title: ["Confirm your message"],
+        blocks: [
+          { p: ["Thanks for writing to us. We received a message sent with this email address through the contact form, under the topic ", { b: d.topic }, ". Confirm that it's yours and it goes to the team, who reply to this address."] },
+          { button: { label: "Confirm my message", url: d.url } },
+          { p: ["The link works once and expires ", at(d.expiresAt), ". If you didn't write to us, ignore this email: the message is never read and is deleted after a week. Please don't reply to this email; replies aren't read."], muted: true },
+        ],
+        url: d.url,
+      };
+    }
+    case "contact_received": {
+      const d = job.data;
+      return {
+        subject: "[Diffinery] We got your message",
+        preheader: `Topic: ${d.topic}. The team replies to this address.`,
+        eyebrow: { text: "Contact", tone: "green" },
+        title: ["We got your message"],
+        blocks: [
+          { p: ["Thanks for writing to us. The team reads every message and replies to this address. Here is a copy of what you sent, under the topic ", { b: d.topic }, ":"] },
+          { plain: d.message },
+          { p: ["Reference ", { code: d.id }, ". Please don't reply to this email; replies aren't read. To add something, send another message."], muted: true },
+        ],
+      };
+    }
+    case "contact_message": {
+      const d = job.data;
+      const url = `${pub}/settings/admin/contact/${d.id}`;
+      return {
+        subject: `[Diffinery] Contact: ${d.topic} from ${d.name}`,
+        preheader: d.message.replace(/\s+/g, " ").slice(0, 140),
+        eyebrow: { text: "Contact message", tone: "blue" },
+        title: ["New message from ", { b: d.name }],
+        blocks: [
+          { kv: [["From", d.login ? [d.name, " (", { b: user(d.login) }, ")"] : d.name], ["Email", d.email], ["Topic", d.topic], ["When", at(job.at)]] },
+          { plain: d.message },
+          { button: { label: "Open in Diffinery", url } },
+          { p: [`Reply to this email to answer ${d.email} from your own mailbox, then mark the message handled in Site administration → Contact messages. The address ${d.login ? "belongs to the sender's account" : "was confirmed through an emailed link"}.`], muted: true },
+        ],
+        url,
+        replyTo: { email: d.email, name: d.name },
+      };
+    }
     case "security_report": {
       // Only the summary: the details stay in Diffinery, behind a site administrator's sign-in.
       const url = `${pub}/settings/admin/security-reports/${job.data.id}`;

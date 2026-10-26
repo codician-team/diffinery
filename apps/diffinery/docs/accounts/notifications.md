@@ -52,7 +52,7 @@ Every email belongs to one group. Security and account emails always send; you c
 | Watching | Everything else in repositories you watch with **All activity** | Yes | On |
 | Actions | Workflow runs you started (failed runs only, unless you turn off **Only failed runs**), and scheduled runs in repositories you watch | Yes | On, failures only |
 | Repositories | Repositories created or deleted in your organizations (for owners and admins), your own new repositories, and repository access granted, changed or removed | Yes | On |
-| Organizations | Your organization role added, changed or removed (with who did it), invitations you sent being accepted, and access requests (for site administrators) | Yes | On |
+| Organizations | Your organization role added, changed or removed (with who did it), invitations you sent being accepted, and access requests and contact messages (for site administrators) | Yes | On |
 | Morning digest | [Today](/docs/agents/today) by email, once a day at the hour you choose | Yes | Off |
 
 ## Notification settings
@@ -229,6 +229,8 @@ Every email has an HTML and a plain-text version and these headers, which you ca
 | `admin` | You are an administrator (of the organization, repository or instance). |
 | `account` | You have a Diffinery account (account and membership changes). |
 | `signup` | Someone asked to create an account with this address through open sign-up (the sign-up code). |
+| `early_access` | Someone asked for [early access](/docs/accounts/early-access) with this address. |
+| `contact` | Someone sent a message through the [contact form](/docs/admin/contact-form) with this address (the confirmation link). |
 | `digest` | You turned on the morning digest in your notification settings. |
 
 ## When Diffinery stops emailing you
@@ -268,6 +270,8 @@ The **Kind** column is the `X-Diffinery-Kind` header. Site administrators can pr
 | `early_access_confirm` | `[Diffinery] Confirm your early access request` | Account | `early_access` | Someone asked for [early access](/docs/accounts/early-access) with this address: the link that confirms the request. Sent to the address typed, not to an account. |
 | `early_access_known` | `[Diffinery] We already have your early access request`, `You're already invited` or `You already have a Diffinery account` | Account | `early_access` | Someone asked for early access again with an address whose request is already confirmed, declined or invited, or that belongs to an active account |
 | `early_access_remove` | `[Diffinery] Remove your early access request` | Account | `early_access` | Someone asked to remove the early access request for this address: the link that deletes it |
+| `contact_confirm` | `[Diffinery] Confirm your message to the Diffinery team` | Account | `contact` | Someone who isn't signed in sent a message through the [contact form](/docs/admin/contact-form) with this address: the link that confirms it. Sent to the address typed. It never repeats what was typed. |
+| `contact_received` | `[Diffinery] We got your message` | Account | `account` | You sent a message through the contact form while signed in: a copy, with its reference |
 | `invite` | `@diffy invited you to join the acme organization on Diffinery` | Account | `invitation` | Someone invited your email address (organization, repository or instance), or your username (organization or repository; the button is **View invitation** and opens **Settings → Invitations**) |
 | `welcome` | `Welcome to Diffinery, @diffy` | Account | `account` | You created your account from an invite or through open sign-up |
 | `signup_code` | `[Diffinery] Your sign-up code` | Account | `signup` | With [open sign-up](/docs/accounts/passkeys-and-sign-in#open-sign-up), someone asked for a code for an address without an account. The code is in the message, not the subject. |
@@ -279,6 +283,7 @@ The **Kind** column is the `X-Diffinery-Kind` header. Site administrators can pr
 | `digest` | `[Diffinery] Today: 2 need you, 3 merged` | Morning digest | `digest` | At the hour you chose, when something needs you or happened since the last one; or when you click **Send me my digest now** |
 | `invite_accepted` | `[Diffinery] @diffy accepted your invitation` | Organizations | `account` | Someone accepted an invite you created |
 | `access_request` | `[Diffinery] newcomer@example.com asked for access` | Organizations | `admin` | A person waiting for an invite requested access (sent to site administrators) |
+| `contact_message` | `[Diffinery] Contact: Press and media from Rivera Kim` | Organizations | `admin` | A [contact message](/docs/admin/contact-form) arrived, confirmed or from someone signed in (sent to every active site administrator). It holds the whole message, and its Reply-To is the sender, so replying answers them. |
 | `org_membership` | `[Diffinery] You're now a member of acme` | Organizations | `account` | Your organization role was added, changed or removed by an owner or admin. The email names who added you ("Added by") or who changed your role ("Changed by"). |
 | `repo_access` | `[acme/website] You now have write access to acme/website` | Repositories | `account` | Your collaborator role on a repository was added, changed or removed |
 | `repo_created` | `[acme/website] New private repository` | Repositories | `your_activity` or `admin` | You created a repository in the web UI (not when a token or script creates it), or someone created one in an organization where you are an owner or admin |

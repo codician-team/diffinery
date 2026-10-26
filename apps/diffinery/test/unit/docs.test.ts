@@ -43,7 +43,7 @@ function ids(md: string): Set<string> {
 }
 
 /** Paths outside /docs that pages may link to: real routes of the app. */
-const SITE_PATHS = [/^\/$/, /^\/llms(-full|-small)?\.txt$/, /^\/-\/cli\/diffinery\.mjs$/, /^\/settings(\/[\w/-]*)?$/, /^\/new$/, /^\/login$/, /^\/notifications$/, /^\/auth\/access$/, /^\/mcp$/, /^\/api\/v3(\/.*)?$/, /^\/\.well-known\/[\w.-]+$/, /^\/security\/report$/, /^\/early-access(\/remove)?$/, /^\/status$/, /^\/healthz$/];
+const SITE_PATHS = [/^\/$/, /^\/llms(-full|-small)?\.txt$/, /^\/-\/cli\/diffinery\.mjs$/, /^\/settings(\/[\w/-]*)?$/, /^\/new$/, /^\/login$/, /^\/notifications$/, /^\/auth\/access$/, /^\/mcp$/, /^\/api\/v3(\/.*)?$/, /^\/\.well-known\/[\w.-]+$/, /^\/security\/report$/, /^\/early-access(\/remove)?$/, /^\/contact$/, /^\/status$/, /^\/healthz$/];
 
 describe("docs pages", () => {
   it("has every page in the navigation, in order", () => {

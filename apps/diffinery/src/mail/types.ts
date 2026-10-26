@@ -22,6 +22,7 @@ export type Reason =
   | "account"
   | "signup"
   | "early_access"
+  | "contact"
   | "digest";
 
 /**
@@ -139,6 +140,15 @@ export type MailBody =
   | { kind: "early_access_remove"; data: { url: string; expiresAt: string } }
   | { kind: "early_access_known"; data: { variant: "waiting" | "invited" | "account"; since: string } }
   | { kind: "security_report"; data: { id: string; summary: string } }
+  /**
+   * The link that confirms a message sent at /contact by someone who isn't signed in (lib/contact.ts). Never carries
+   * what they typed. `topic` is the topic's label, from the form's fixed list.
+   */
+  | { kind: "contact_confirm"; data: { url: string; expiresAt: string; topic: string } }
+  /** A signed-in person's copy of the message they sent at /contact. */
+  | { kind: "contact_received"; data: { id: string; topic: string; message: string } }
+  /** A confirmed contact message, for each site administrator, with the sender as Reply-To. */
+  | { kind: "contact_message"; data: { id: string; name: string; email: string; login: string | null; topic: string; message: string } }
   | { kind: "org_membership"; data: { org: string; role: string | null; previous: string | null; by?: string } }
   | { kind: "repo_access"; data: { repo: string; role: string | null; previous: string | null } }
   | { kind: "repo_created"; data: { repo: string; creator: string; visibility: string; defaultBranch: string; description: string } }
@@ -189,12 +199,16 @@ export function categoryOf(job: Pick<MailJob, "kind" | "reason">): Category {
     case "early_access_confirm":
     case "early_access_known":
     case "early_access_remove":
+    // The sender's own confirmation link or copy of their message.
+    case "contact_confirm":
+    case "contact_received":
     // It is about the payer's own model spend, so it always sends.
     case "review_limit_reached":
     case "test":
       return "account";
     case "invite_accepted":
     case "access_request":
+    case "contact_message":
     case "org_membership":
       return "orgs";
     case "repo_access":

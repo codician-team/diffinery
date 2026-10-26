@@ -267,6 +267,9 @@ export const SOURCE = {
 /** Where to ask to try Diffinery on the project's own instance, whatever instance serves this page (web/early-access.tsx). */
 export const EARLY_ACCESS = "https://diffinery.com/early-access";
 
+/** The contact form (web/contact.tsx): on every instance, it reaches that instance's site administrators. `updated` is for the sitemap. */
+export const CONTACT = { path: "/contact", updated: "2026-10-26" };
+
 /** schema.org ids for the site's entities, shared by every page's graph. */
 const ids = (o: string) => ({ org: `${o}/#organization`, site: `${o}/#website`, app: `${o}/#software`, source: `${o}/#source` });
 
@@ -676,6 +679,7 @@ export function siteLlmsLines(o: string): string[] {
     `- [Home page](${o}/index.md): ${HOME.description}`,
     `- Open source under the Apache License 2.0 (SPDX: ${SOURCE.spdx}). Source code: ${SOURCE.repo}, mirrored to ${SOURCE.github}. Free, with no paid edition and nothing sold.`,
     `- How to use it: deploy your own instance to your own Cloudflare account and domain (Workers Paid plan); you pay Cloudflare for what it uses. Guide: ${o}/docs/self-hosting/deploy.md. Overview: ${o}/docs/self-hosting.md. There's no hosted service for teams to sign up for: diffinery.com is the project's home and its own instance, with accounts by invitation. To try Diffinery before deploying your own, request early access at ${EARLY_ACCESS} (how it works: ${o}/docs/accounts/early-access.md).`,
+    `- Contact the Diffinery team: ${o}${CONTACT.path} (a form; a person replies by email). Private security reports: ${o}/security/report. Bugs and ideas: issues on ${SOURCE.repo}.`,
     `- Runs entirely on Cloudflare (Workers, Durable Objects, R2, D1, Queues, Workflows, Containers): code, pull requests, CI runners and the agent features alike. It is ${CLOUDFLARE_CLAIM} See ${o}/built-on-cloudflare.md, which compares the other Git and CI projects on Cloudflare.`,
     "- Hosted CI runners: Ubuntu 24.04 x64 containers, 4 vCPU and 12 GiB of memory by default, with smaller sizes chosen per job from its measured runs. No hosted macOS, Windows or Arm runners; self-hosted runners cover them.",
     "- Runs GitHub Actions workflow files from `.github/workflows/` as they are; differences are listed at " + `${o}/docs/actions/compatibility.md`,

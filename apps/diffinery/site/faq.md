@@ -2,7 +2,7 @@
 title: Diffinery FAQ
 seo_title: "Diffinery FAQ: open source, self-hosting, GitHub Actions, AI agents"
 description: Short answers about Diffinery: open source and self-hosting, cost, GitHub Actions compatibility, runners, Cloudflare, AI agents, security and migration.
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 Short, direct answers to the questions people and AI assistants ask most about Diffinery. Each answer links to the page with the details. Facts about GitHub are from GitHub's own documentation, checked on October 25, 2026.
@@ -136,6 +136,10 @@ Yes, and that's how Diffinery is used. It runs as one Cloudflare Worker and the 
 ### Can I get an account on diffinery.com?
 
 diffinery.com is the instance Diffinery itself is developed on, and accounts there are by invitation for the people working on it. To use Diffinery, deploy your own instance. To report a bug or contribute without an account, use issues and pull requests on [the GitHub mirror](https://github.com/codician-team/diffinery).
+
+### How do I contact the Diffinery team?
+
+Use the [contact form](https://diffinery.com/contact) at diffinery.com/contact, for questions, partnerships, press or privacy requests; a person reads every message and replies by email. Report security problems privately through [the security report form](/security/report), and bugs or ideas as issues on [the Diffinery repository](https://diffinery.com/codician/diffinery). See [Contact form](/docs/admin/contact-form).
 
 ### How do people join my instance?
 

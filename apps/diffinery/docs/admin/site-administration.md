@@ -1,6 +1,6 @@
 ---
 title: Site administration
-description: Site administrators manage people and admins, handle abuse and security reports, suspend and delete accounts, stop Actions, post status incidents, oversee imports, and check the audit and email logs.
+description: Site administrators manage people, handle abuse and security reports and contact messages, suspend and delete accounts, stop Actions, post incidents, oversee imports, and check audit and email logs.
 ---
 
 Site administrators run a Diffinery instance. They decide who gets in, help people who lost their passkeys, handle private security reports, post incidents on the status page, and check the audit log and email delivery. This page covers who the site administrators are and each page in the **Site administration** group of **Settings**.
@@ -13,6 +13,7 @@ Site administrators have admin on every repository, can act as an owner of every
 | --- | --- | --- |
 | **People and invitations** | `/settings/admin` | Access requests, instance invitations, the list of users, account status and sign-in links |
 | **Early access** | `/settings/admin/early-access` | Requests from people without an invitation, to invite, decline or delete |
+| **Contact messages** | `/settings/admin/contact` | Messages from the contact form, to read, answer, mark handled or spam, and delete |
 | **Reports** | `/settings/admin/reports` | What people reported as abusive, to look at and resolve |
 | **Email** | `/settings/admin/email` | Email delivery status, the suppression list, template previews and the log of every email |
 | **Kill switches** | `/settings/admin/kill-switches` | Stop Actions and agent sandboxes for a repository, an account or the whole instance |
@@ -134,6 +135,10 @@ Both answer `204`. Anyone else gets `403 site administrators only`.
 ## Early access
 
 While the instance is invite-only, people without an invitation can ask for one at `/early-access`, and confirm their address with an emailed link. **Settings → Early access** (`/settings/admin/early-access`) lists the requests: **Confirmed** ones wait for you, with their count next to **Early access** in the sidebar and a reminder on **People and invitations**. **Invite** sends the usual instance invitation (see [Invites](#invites)), **Decline** emails nobody, and **Delete request** removes everything stored about a request. Each decision is in the audit log. See [Early access](/docs/accounts/early-access#for-site-administrators) for the whole page, the API and how the form is protected.
+
+## Contact messages
+
+Anyone can write to the site administrators at `/contact`, linked from every page's footer. People who aren't signed in pass Turnstile and confirm their address with an emailed link first. **Settings → Contact messages** (`/settings/admin/contact`) lists the messages: **New** ones wait for you, with their count next to **Contact messages** in the sidebar, and each one emails every site administrator with the sender as Reply-To. **Reply by email** opens your mail app, **Mark handled** and **Spam** sort them, a **Note** tells the other site administrators what happened, and **Delete message** removes everything stored about one. Each change is in the audit log. See [Contact form](/docs/admin/contact-form#for-site-administrators) for the whole page, the API and how the form is protected.
 
 ## Reports
 
@@ -415,7 +420,7 @@ Diffinery tells search engines about public pages that are added, change or go a
 
 What it covers:
 
-- **After each deploy**, the pages the deploy added, changed or removed: the home page, the product, comparison and company pages (`/features`, `/compare/github`, ...), every docs page, each of those pages' Markdown version (`/index.md`, `/compare/github.md`, `/docs/quickstart.md`, ...), `/llms.txt`, `/llms-full.txt`, and `/early-access` while the instance is invite-only. These are the pages in `/sitemap.xml` plus their Markdown versions. A deploy that changes no page's content submits nothing.
+- **After each deploy**, the pages the deploy added, changed or removed: the home page, the product, comparison and company pages (`/features`, `/compare/github`, ...), every docs page, each of those pages' Markdown version (`/index.md`, `/compare/github.md`, `/docs/quickstart.md`, ...), `/llms.txt`, `/llms-full.txt`, `/contact`, and `/early-access` while the instance is invite-only. These are the pages in `/sitemap.xml` plus their Markdown versions. A deploy that changes no page's content submits nothing.
 - **Every hour**, public repositories pushed since they were last submitted (their page, `/<owner>/<repo>`, as the sitemap lists it).
 - **Never** a private repository, a repository whose owner is suspended, or any page behind sign-in (settings, notifications, the API, sign-in pages). A repository is only submitted in the same check that found it public, so one made private in the meantime isn't sent, and it is forgotten. Removed site and docs pages are submitted once more, so search engines learn they are gone.
 

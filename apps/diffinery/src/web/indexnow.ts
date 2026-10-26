@@ -28,7 +28,7 @@ import type { Env } from "../env.js";
 import { hmacSha256 } from "../lib/crypto.js";
 import type { Directory } from "../lib/directory.js";
 import { sha256 } from "../lib/util.js";
-import { homeContent, homeMarkdown, sitePageMarkdown, sitePages } from "./site.js";
+import { CONTACT, homeContent, homeMarkdown, sitePageMarkdown, sitePages } from "./site.js";
 
 /**
  * Where submissions go, in order. IndexNow engines share what each one receives, so one accepted
@@ -104,6 +104,8 @@ export async function sitePageContents(env: Pick<Env, "PUBLIC_URL" | "SIGNUP">):
     pages.set(pageUrl(p.slug), `${p.section}\n${md}`);
     pages.set(markdownUrl(p.slug), md);
   }
+  // The contact form: its content is the code, so its last-changed date stands in for it.
+  pages.set(CONTACT.path, `contact form, updated ${CONTACT.updated}`);
   pages.set("/llms.txt", llmsTxt(o));
   pages.set("/llms-full.txt", llmsFullTxt(o));
   pages.set("/llms-small.txt", llmsSmallTxt(o));

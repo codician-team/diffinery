@@ -2,7 +2,7 @@
 title: About Diffinery
 seo_title: "About Diffinery: the git forge for people and AI agents"
 description: Why Diffinery exists, why it's open source, how it's built, how we check the claims on this site, and how to reach us.
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 Diffinery is a git forge and CI platform for teams where AI agents write a growing share of the code. Agents do the work through Git, pull requests and CI like everyone else; people see what the agents did, approve what needs them and follow the whole process. Diffinery runs entirely on Cloudflare, and it's open source under the Apache License 2.0: you deploy it to your own Cloudflare account and run it yourself.
@@ -40,6 +40,7 @@ Everything on this site is public and available as Markdown: add `.md` to any pa
 
 ## Contact
 
+- **Questions, partnerships, press and privacy requests:** the [contact form](https://diffinery.com/contact). A person reads every message and replies by email.
 - **Running your own instance:** [Deploy your own Diffinery](/docs/self-hosting/deploy).
 - **Bugs, ideas and contributions:** issues and pull requests on [the GitHub mirror](https://github.com/codician-team/diffinery), or on [the Diffinery repository](https://diffinery.com/codician/diffinery) if you have an account there.
 - **Security problems:** the private [report form](/security/report), as listed in [`/.well-known/security.txt`](/.well-known/security.txt).

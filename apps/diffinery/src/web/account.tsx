@@ -23,6 +23,7 @@ import type { FormData } from "./csrf.js";
 import { purgeAvatarCache, removeAvatar, setAvatar } from "../http/avatars.js";
 import { MAX_AVATAR_BYTES } from "../lib/image.js";
 import { gatherToday } from "../agentic/today.js";
+import { ContactMessages } from "../lib/contact.js";
 import { EarlyAccess } from "../lib/early-access.js";
 import { COLLAPSED_COOKIE, Rows, Section, TodayView, collapsedSections } from "../agentic/web.js";
 import { landingPage } from "./site.js";
@@ -158,7 +159,7 @@ function noteIcon(kind: string): string {
   if (kind.endsWith("comment")) return ICONS.comment;
   if (kind === "org_membership") return ICONS.org;
   if (kind === "repo_access") return ICONS.repo;
-  if (kind === "invitation" || kind === "early_access") return ICONS.envelope;
+  if (kind === "invitation" || kind === "early_access" || kind === "contact") return ICONS.envelope;
   return ICONS.bell;
 }
 
@@ -634,15 +635,27 @@ const AUTO_MERGE_METHODS = [
   { value: "rebase", label: "Rebase and merge" },
 ];
 
-export type SettingsTab = "profile" | "account" | "appearance" | "pull-requests" | "security" | "tokens" | "apps" | "installations" | "agents" | "model-access" | "orgs" | "invitations" | "notifications" | "email-address" | "blocked" | "linked" | "admin" | "reports" | "email" | "audit" | "kill-switches" | "errors" | "security-reports" | "status" | "early-access" | "search-engines";
+export type SettingsTab = "profile" | "account" | "appearance" | "pull-requests" | "security" | "tokens" | "apps" | "installations" | "agents" | "model-access" | "orgs" | "invitations" | "notifications" | "email-address" | "blocked" | "linked" | "admin" | "reports" | "email" | "audit" | "kill-switches" | "errors" | "security-reports" | "status" | "early-access" | "contact" | "search-engines";
 /** The site administration pages: they show when hosted compute is paused. */
-export const ADMIN_TABS: readonly SettingsTab[] = ["admin", "early-access", "reports", "email", "audit", "kill-switches", "errors", "security-reports", "status", "search-engines"];
+export const ADMIN_TABS: readonly SettingsTab[] = ["admin", "early-access", "contact", "reports", "email", "audit", "kill-switches", "errors", "security-reports", "status", "search-engines"];
 
 /** The number of confirmed early access requests waiting, next to Early access in the sidebar (lib/early-access.ts). */
 const EarlyAccessWaiting = async ({ db }: { db?: D1Database }) => {
   const n = db ? await new EarlyAccess(db).waiting().catch(() => 0) : 0;
   return n ? (
     <span class="badge blue" style="margin-left:6px" title={`${n} confirmed request${n === 1 ? "" : "s"} waiting`}>
+      {n}
+    </span>
+  ) : (
+    <></>
+  );
+};
+
+/** The number of new contact messages, next to Contact messages in the sidebar (lib/contact.ts). */
+const ContactWaiting = async ({ db }: { db?: D1Database }) => {
+  const n = db ? await new ContactMessages(db).waiting().catch(() => 0) : 0;
+  return n ? (
+    <span class="badge blue" style="margin-left:6px" title={`${n} new message${n === 1 ? "" : "s"}`}>
       {n}
     </span>
   ) : (
@@ -667,7 +680,7 @@ const EarlyAccessCallout = async ({ db }: { db: D1Database }) => {
   );
 };
 
-/** The Settings sidebar. `db` lets it show how many early access requests wait (site administrators only). */
+/** The Settings sidebar. `db` lets it show how many early access requests and contact messages wait (site administrators only). */
 export const SettingsNav: FC<{ me: Account; tab: SettingsTab; db?: D1Database }> = ({ me, tab, db }) => (
   <aside class="side vt-side">
     <section>
@@ -737,6 +750,10 @@ export const SettingsNav: FC<{ me: Account; tab: SettingsTab; db?: D1Database }>
             <a href="/settings/admin/early-access" class={tab === "early-access" ? "on" : ""}>
               Early access
               <EarlyAccessWaiting db={db} />
+            </a>
+            <a href="/settings/admin/contact" class={tab === "contact" ? "on" : ""}>
+              Contact messages
+              <ContactWaiting db={db} />
             </a>
             <a href="/settings/admin/reports" class={tab === "reports" ? "on" : ""}>
               Reports

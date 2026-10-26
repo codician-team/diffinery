@@ -179,7 +179,7 @@ async function notificationsPage(c: AppContext, me: Account): Promise<Response> 
               }
             />
             <PrefRow title="Repositories" hint="Repositories created or deleted in your organizations, and access granted to you." email={{ name: "repos.email", on: p.repos.email }} />
-            <PrefRow title="Organizations" hint="Your organization role, accepted invitations and access requests (for administrators)." email={{ name: "orgs.email", on: p.orgs.email }} />
+            <PrefRow title="Organizations" hint="Your organization role, accepted invitations, and access requests and contact messages (for administrators)." email={{ name: "orgs.email", on: p.orgs.email }} />
             <PrefRow title="Security and account" hint="New sign-ins, passkeys, tokens, agents, push protection, invitations and sign-in links." email={{ name: "security", on: true, locked: true }} />
           </tbody>
         </table>

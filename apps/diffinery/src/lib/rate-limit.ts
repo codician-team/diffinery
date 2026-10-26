@@ -10,7 +10,8 @@ import type { Principal } from "../auth/principal.js";
  *
  * - RL_AUTH: sign-in, passkey registration, invitation and sign-in links, open sign-up, private
  *   security reports (/security/report), early access requests and their confirmations
- *   (/early-access and its confirm and remove pages), CLI sign-ins (starting one, typing or approving a
+ *   (/early-access and its confirm and remove pages), contact messages and their confirmations
+ *   (/contact and /contact/confirm), CLI sign-ins (starting one, typing or approving a
  *   code), and MCP apps registering themselves for OAuth (/oauth/register), per IP address.
  * - RL_ANON: everything else from someone who isn't signed in, per IP address.
  * - RL_ACCOUNT: everything from a signed-in person, agent or personal token, per account; from an
@@ -35,7 +36,7 @@ export const RATE_PERIOD_S = 60;
 
 /** Paths that never count: health checks, avatars, and the Actions runtime and runners (their own credentials). */
 const EXEMPT = /^\/(?:healthz$|api\/avatars\/|twirp\/|_runtime\/|_apis\/|runner\/|-\/model\/)/;
-const AUTH = /^\/(?:auth\/passkey\/|invite\/|signin\/|login(?:$|\/)|signup(?:$|\/)|security\/report$|early-access(?:\/confirm|\/remove(?:\/confirm)?)?$|-\/cli\/device$|oauth\/register$)/;
+const AUTH = /^\/(?:auth\/passkey\/|invite\/|signin\/|login(?:$|\/)|signup(?:$|\/)|security\/report$|early-access(?:\/confirm|\/remove(?:\/confirm)?)?$|contact(?:\/confirm)?$|-\/cli\/device$|oauth\/register$)/;
 const CREATE: Array<[method: string, path: RegExp]> = [
   ["POST", /^\/api\/v3\/(?:user|orgs\/[^/]+)\/repos$/],
   ["POST", /^\/api\/v3\/(?:user\/orgs|admin\/organizations)$/],
@@ -97,7 +98,7 @@ export async function modelRateLimited(env: Env, personId: string): Promise<bool
 }
 
 const WHAT: Record<Bucket, string> = {
-  RL_AUTH: "sign-in attempts, security reports and early access requests from your network",
+  RL_AUTH: "sign-in attempts, security reports, early access requests and contact messages from your network",
   RL_ANON: "requests from your network without signing in",
   RL_ACCOUNT: "requests from your account",
   RL_CREATE: "new repositories, issues, pull requests and comments from your account",

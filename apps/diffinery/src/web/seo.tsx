@@ -12,7 +12,7 @@ import type { AppContext } from "../auth/principal.js";
 import type { WebApp } from "./ui.js";
 import { ICON_FILES } from "./icons.generated.js";
 import { docsSitemapEntries } from "../docs/web.js";
-import { siteSitemapEntries } from "./site.js";
+import { CONTACT, siteSitemapEntries } from "./site.js";
 import { indexNowKey } from "./indexnow.js";
 
 export const SITE = {
@@ -44,7 +44,7 @@ function file(name: string): Uint8Array<ArrayBuffer> | null {
 const CACHE = "public, max-age=604800";
 
 /** Paths that are never useful in search results. */
-const PRIVATE = /^\/(login|logout|auth|signin|signup|invite|settings|notifications|new|admin|request-access|early-access\/(?:confirm|remove)|-)(\/|$)/;
+const PRIVATE = /^\/(login|logout|auth|signin|signup|invite|settings|notifications|new|admin|request-access|early-access\/(?:confirm|remove)|contact\/confirm|-)(\/|$)/;
 
 export function registerSeo(web: WebApp): void {
   for (const name of Object.keys(ICON_FILES)) {
@@ -80,7 +80,7 @@ export function registerSeo(web: WebApp): void {
       "User-agent: *",
       "Content-Signal: search=yes, ai-input=yes, ai-train=yes",
       "Allow: /",
-      ...["/api/", "/mcp", "/runner/", "/auth/", "/login", "/signin", "/invite/", "/settings", "/notifications", "/new", "/admin", "/request-access", "/early-access/confirm", "/early-access/remove", "/-/", "/*.git/", "/*/raw/"].map((p) => `Disallow: ${p}`),
+      ...["/api/", "/mcp", "/runner/", "/auth/", "/login", "/signin", "/invite/", "/settings", "/notifications", "/new", "/admin", "/request-access", "/early-access/confirm", "/early-access/remove", "/contact/confirm", "/-/", "/*.git/", "/*/raw/"].map((p) => `Disallow: ${p}`),
       "",
       `Sitemap: ${origin}/sitemap.xml`,
       "",
@@ -105,6 +105,8 @@ export function registerSeo(web: WebApp): void {
       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
       // The home page, then the product, comparison and company pages (web/site.tsx).
       ...siteSitemapEntries().map((e) => url(`${origin}${e.path}`, e.updated)),
+      // The contact form (web/contact.tsx), for people and AI assistants looking for how to reach the team.
+      url(`${origin}${CONTACT.path}`, CONTACT.updated),
       ...docsSitemapEntries().map((e) => url(`${origin}${e.path}`, e.updated)),
       ...repos.map((r) => url(`${origin}/${encodeURIComponent(r.owner_login)}/${encodeURIComponent(r.name)}`, r.pushed_at ?? r.updated_at)),
       "</urlset>",

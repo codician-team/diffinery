@@ -204,7 +204,7 @@ function removalSentPage(c: AppContext, email: string): Response | Promise<Respo
 }
 
 /** Runs on the confirmation page: takes the token from the fragment (never sent to the server in a request line) into the form. */
-const CONFIRM_SCRIPT = `(function(){var f=document.getElementById("ea-confirm"),s=document.getElementById("ea-confirm-status");if(!f||!s)return;function go(){var t=location.hash.slice(1);if(!t){if(!f.elements.token.value){s.textContent="This link is incomplete. Open it again from the email, in full.";}return;}if(!/^[A-Za-z0-9_-]{20,100}$/.test(t)){s.textContent="This link is incomplete. Open it again from the email, in full.";f.style.display="none";return;}history.replaceState(null,"",location.pathname);f.elements.token.value=t;s.textContent="";f.style.display="";}go();addEventListener("hashchange",go);})();`;
+export const CONFIRM_SCRIPT = `(function(){var f=document.getElementById("ea-confirm"),s=document.getElementById("ea-confirm-status");if(!f||!s)return;function go(){var t=location.hash.slice(1);if(!t){if(!f.elements.token.value){s.textContent="This link is incomplete. Open it again from the email, in full.";}return;}if(!/^[A-Za-z0-9_-]{20,100}$/.test(t)){s.textContent="This link is incomplete. Open it again from the email, in full.";f.style.display="none";return;}history.replaceState(null,"",location.pathname);f.elements.token.value=t;s.textContent="";f.style.display="";}go();addEventListener("hashchange",go);})();`;
 
 function confirmPage(c: AppContext): Response | Promise<Response> {
   return render(
@@ -309,13 +309,14 @@ async function withAccounts(db: D1Database, rows: EarlyAccessRequest[]): Promise
 }
 
 /**
- * The checks every public form here makes before it does anything: Turnstile is configured, the
- * honeypot is empty, the timing stamp is genuine and the form wasn't sent faster than a person types
- * ("silent": answer as if it worked and keep nothing), and the Turnstile token is good.
+ * The checks every public form here (and the contact form, web/contact.tsx) makes before it does
+ * anything: Turnstile is configured (else 503 with `missing`), the honeypot is empty, the timing stamp
+ * is genuine and the form wasn't sent faster than a person types ("silent": answer as if it worked and
+ * keep nothing), and the Turnstile token is good.
  */
-async function guard(c: AppContext, f: FormData): Promise<"ok" | "silent"> {
+export async function guard(c: AppContext, f: FormData, missing = TURNSTILE_MISSING): Promise<"ok" | "silent"> {
   const mode = turnstileMode(c.env);
-  if (mode === "missing") throw new HttpError(503, TURNSTILE_MISSING);
+  if (mode === "missing") throw new HttpError(503, missing);
   const stamp = await checkStamp(c.env, f.s("stamp"));
   if (f.s("website") !== "" || stamp === "fast" || stamp === "bad") return "silent";
   if (stamp === "stale") throw new HttpError(422, "This form was open for a long time. Please check it and send it again.");
@@ -324,7 +325,7 @@ async function guard(c: AppContext, f: FormData): Promise<"ok" | "silent"> {
 }
 
 /** The honeypot, timing stamp and Turnstile widget every public form here carries. */
-const Protections: FC<{ stamp: string; siteKey?: string }> = ({ stamp, siteKey }) => (
+export const Protections: FC<{ stamp: string; siteKey?: string }> = ({ stamp, siteKey }) => (
   <>
     {/* A field people never see or fill in: a script filling every field gives itself away. */}
     <div class="ea-hp" aria-hidden="true">

@@ -29,6 +29,8 @@ Units: 1 KiB is 1,024 bytes, 1 MiB is 1,048,576 bytes, and 1 GB in the cache and
 | Early access requests | 10 per IP address, 3 emails per address and 500 emails in total, in 24 hours | The [early access](/docs/accounts/early-access) form and its removal form together. The 11th from one network answers `Too many requests from your network today`; past the other two the page looks the same and no email is sent. |
 | Early access links | 48 hours to confirm, 24 hours to remove, single use | Only the newest link sent to an address works. Unconfirmed requests are deleted 7 days after they were last sent. |
 | Early access fields | name 100, company or team 120, use 1,000 characters | Longer is refused, not cut. |
+| Contact messages | Without signing in: 10 per IP address, 3 emails per address and 300 emails in total, in 24 hours. Signed in: 20 per person in 24 hours | The [contact form](/docs/admin/contact-form). The 11th from one network answers `Too many messages from your network today`; past the other two the page looks the same and nothing is stored or sent. |
+| Contact message fields | name 100, message 10 to 5,000 characters with at most 5 links, note 2,000 characters | Longer is refused, not cut. Confirmation links work once, for 48 hours. Unconfirmed messages are deleted after 7 days, spam 30 days and handled messages 365 days after they were marked. |
 | Note on an access request | 500 characters | The note someone without an invite sends to site administrators. Up to 20 site administrators are emailed about each request. |
 
 ## Tokens

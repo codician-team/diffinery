@@ -121,6 +121,10 @@ export const ACCOUNT_SCOPES: Record<string, { scope: Scope; anyToken?: boolean; 
   "POST /diffinery/admin/early-access/{id}/invite": { scope: "admin" },
   "PATCH /diffinery/admin/early-access/{id}": { scope: "admin" },
   "DELETE /diffinery/admin/early-access/{id}": { scope: "admin" },
+  "GET /diffinery/admin/contact": { scope: "read" },
+  "GET /diffinery/admin/contact/{id}": { scope: "read" },
+  "PATCH /diffinery/admin/contact/{id}": { scope: "admin" },
+  "DELETE /diffinery/admin/contact/{id}": { scope: "admin" },
   "GET /diffinery/admin/status/incidents": { scope: "read" },
   "POST /diffinery/admin/status/incidents": { scope: "admin" },
   "POST /diffinery/admin/status/incidents/{id}/updates": { scope: "admin" },
@@ -1626,6 +1630,27 @@ export const API_DOCS: Record<string, OpDoc> = {
   "DELETE /diffinery/admin/early-access/{id}": {
     summary: "Delete an early access request",
     description: "Removes the request, for someone who asks for their data to be removed. An invitation already sent from it stays; revoke it separately. Recorded in the audit log as `early_access.delete`, without the request's content or address. 404 for anyone but a site administrator.",
+    access: "site-admin",
+    status: 204,
+  },
+  "GET /diffinery/admin/contact": {
+    summary: "List contact messages",
+    description:
+      "Messages sent through `/contact`, newest first: `id`, `state` (`unconfirmed` until the address follows the emailed link, then `new`, `handled` or `spam`), `email`, `name`, `topic` (`question`, `account`, `self-hosting`, `feedback`, `partnership`, `press`, `privacy` or `other`), `message`, `sender` (the login of a signed-in sender, or null), `confirmed_at`, `note`, `updated_by`, `handled_at`, `created_at`, `updated_at` and `html_url`. 404 for anyone but a site administrator. See [Contact form](/docs/admin/contact-form).",
+    access: "site-admin",
+    query: { state: ["string", "Only messages in this state: `new`, `handled`, `spam` or `unconfirmed`."], q: ["string", "Only messages whose address, name or text contains this."], per_page: ["integer", "At most this many (default 100, up to 500)."], page: ["integer", "Page number, from 1."] },
+  },
+  "GET /diffinery/admin/contact/{id}": { summary: "Get a contact message", description: "One message, as in the list. 404 when there is none, or for anyone but a site administrator.", access: "site-admin" },
+  "PATCH /diffinery/admin/contact/{id}": {
+    summary: "Mark a contact message handled or spam, or note it",
+    description:
+      "`handled` or `spam` marks it; `new` reopens it (as `unconfirmed` if its address never confirmed it). `note` sets the note for the other site administrators (an empty one clears it; leaving it out keeps it). Nobody is emailed. Recorded in the audit log as `contact.handle`, `contact.spam`, `contact.reopen` or `contact.note`. While a message from an address is `spam`, new messages from that address are dropped without an email. 404 for anyone but a site administrator.",
+    access: "site-admin",
+    body: { state: ["string", "`handled`, `spam`, or `new` to reopen it."], note: ["string", "For the other site administrators, up to 2,000 characters."] },
+  },
+  "DELETE /diffinery/admin/contact/{id}": {
+    summary: "Delete a contact message",
+    description: "Removes the message, for someone who asks for their data to be removed. Recorded in the audit log as `contact.delete`, without the message or its address. 404 for anyone but a site administrator.",
     access: "site-admin",
     status: 204,
   },

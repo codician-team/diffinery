@@ -476,7 +476,7 @@ const SiteFooter: FC<{ stars: number | null }> = ({ stars }) => (
       { title: "Product", links: [["/features", "Features"], ["/agents", "For AI agents"], ["/performance", "Performance"], ["/security", "Security"], ["/built-on-cloudflare", "Built on Cloudflare"], ["/open-source", "Open source"], ["/docs/migrate-from-github", "Migrate from GitHub"]] },
       { title: "Compare", links: [["/compare", "All comparisons"], ["/compare/github", "vs GitHub"], ["/compare/gitlab", "vs GitLab"], ["/compare/blacksmith", "vs Blacksmith"], ["/compare/depot", "vs Depot"]] },
       { title: "Resources", links: [["/docs", "Docs"], ["/docs/self-hosting", "Self-hosting"], ["/docs/guides", "Guides"], ["/docs/connect", "Connect AI apps"], ["/llms.txt", "llms.txt"], ["/status", "Status"], ["/docs/security/disclosure", "Report a vulnerability"]] },
-      { title: "Company", links: [["/about", "About"], ["/faq", "FAQ"], ["/blog", "Blog"], ["https://diffinery.com/codician/diffinery", "Source code"], [GITHUB_REPO, "GitHub mirror"], ["/privacy", "Privacy"]] },
+      { title: "Company", links: [["/about", "About"], ["/faq", "FAQ"], ["/blog", "Blog"], ["https://diffinery.com/codician/diffinery", "Source code"], [GITHUB_REPO, "GitHub mirror"], ["/contact", "Contact"], ["/privacy", "Privacy"]] },
     ].map((col) => (
       <nav aria-label={col.title}>
         <h2>{col.title}</h2>
@@ -619,6 +619,7 @@ async function renderPage(c: AppContext, opts: PageOpts, body: Child, watch?: Wa
                   <a href="/docs">Docs</a>
                   <a href="/docs/security/disclosure">Security</a>
                   <a href="/status">Status</a>
+                  <a href="/contact">Contact</a>
                 </nav>
               ) : (
                 <a href="/built-on-cloudflare">Runs entirely on Cloudflare</a>

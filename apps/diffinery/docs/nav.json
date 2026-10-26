@@ -127,6 +127,7 @@
     "pages": [
       "self-hosting",
       "admin/site-administration",
+      "admin/contact-form",
       "self-hosting/deploy",
       "self-hosting/configuration",
       "self-hosting/architecture",

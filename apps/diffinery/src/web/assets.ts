@@ -328,6 +328,8 @@ a.ea-eyebrow:hover{text-decoration:none;filter:brightness(1.08)}
 .ea-av.lg{width:48px;height:48px;font-size:20px}
 .ea-use{margin-top:6px;color:var(--fg);font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .ea-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+/* The contact form (web/contact.tsx): its card is taller than the heading, so the heading's row keeps its own height. */
+@media (min-width:901px){.ea.ct{grid-template-rows:auto 1fr}}
 @media (max-width:900px){.ea{grid-template-columns:1fr;grid-template-areas:"head" "card" "more";row-gap:24px;margin-top:24px}.ea h1{font-size:28px}.ea-list>li{flex-wrap:wrap}.ea-actions{width:100%;justify-content:flex-start;padding-left:42px}}
 .stats{display:flex;gap:18px;flex-wrap:wrap;color:var(--fg2);font-size:13px}
 .stats b{color:var(--fg)}

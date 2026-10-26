@@ -11,6 +11,7 @@ import { registerProject } from "../agentic/project-web.js";
 import { registerTerminals } from "../agentic/terminal-web.js";
 import { registerMailWeb } from "../mail/web.js";
 import { registerSecurityReports } from "./security-reports.js";
+import { registerContact } from "./contact.js";
 import { registerEarlyAccess } from "./early-access.js";
 import { registerStatus } from "./status.js";
 import { registerAuth } from "./auth.js";
@@ -80,6 +81,7 @@ registerPackages(web);
 registerMailWeb(web);
 registerSecurityReports(web);
 registerEarlyAccess(web);
+registerContact(web);
 // /status: before the /:owner catch-all.
 registerStatus(web);
 // Before registerAccount: its /:owner catch-all would otherwise swallow /imports, /new/import and /settings/linked-accounts.
