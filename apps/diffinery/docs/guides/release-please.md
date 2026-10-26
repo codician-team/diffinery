@@ -83,6 +83,7 @@ npx release-please github-release --repo-url acme/app --token "$DIFFINERY_TOKEN"
 | --- | --- |
 | `GitHub Actions is not permitted to create pull requests.` | Check **Allow GitHub Actions to create and approve pull requests** (step 2), or use a token of its own. |
 | `Resource not accessible by integration (the workflow's GITHUB_TOKEN needs permissions: ...)` | Add the `permissions:` from step 3 to the workflow or job. |
+| `release-please failed: Error updating ref heads/release-please--branches--...` (the API answered ``refusing to allow a GitHub App to create or update workflow `...` without `workflows` permission``) | A workflow file changed on the base branch while the release pull request was open. Rebuilding the release branch on the new base would change workflow files on it, which a job's `GITHUB_TOKEN` may never do on Diffinery. Merge or close the release pull request and delete its branch (the next run opens a fresh one), or give the action a [token of its own](#ci-on-the-release-pull-request). |
 | `Could not find commits for branch <name> - it likely does not exist.` | The branch in `target-branch` (or the default branch) doesn't exist, or the token can't read the repository. |
 | Changelog links go to github.com | Set `changelog-host` (CLI), or check that the action's `changelog-host` input isn't set to GitHub. |
 | `No commits for path: ., skipping` | Nothing since the last release follows Conventional Commits (`feat:`, `fix:`, `feat!:` and so on), so there's nothing to release. |
