@@ -21,6 +21,7 @@ import { SeoHead, SITE } from "./seo.js";
 import { avatarPath } from "../http/avatars.js";
 import { TURNSTILE_ORIGIN, TURNSTILE_SCRIPT } from "../auth/signup.js";
 import { imageProxy } from "../lib/camo.js";
+import { formatStars, GITHUB_REPO, githubStars } from "./github-stars.js";
 
 export type WebApp = Hono<{ Bindings: Env; Variables: AppVars }>;
 export type Stub = ReturnType<typeof repoStub>;
@@ -432,8 +433,30 @@ export function appearanceOf(c: AppContext): Appearance | null {
   return v === "light" || v === "dark" ? v : null;
 }
 
+/**
+ * "Star on GitHub", with the mirror's star count once the server knows it (web/github-stars.ts). A plain link to
+ * GitHub: no script, nothing loaded from GitHub. `compact` (the header) says only "Star", and only the logo and
+ * count on phones.
+ */
+export const StarButton: FC<{ stars: number | null; compact?: boolean; class?: string }> = ({ stars, compact, class: cls }) => {
+  const count = stars === null ? null : formatStars(stars);
+  const label = `Star Diffinery on GitHub${stars === null ? "" : ` (${stars.toLocaleString("en-US")} ${stars === 1 ? "star" : "stars"})`}`;
+  return (
+    <a href={GITHUB_REPO} class={`btn gh-star${compact ? " sm compact" : ""}${cls ? ` ${cls}` : ""}`} aria-label={label} title={label}>
+      {raw(ICONS.github)}
+      <span class="gh-star-label">{compact ? "Star" : "Star on GitHub"}</span>
+      {count ? (
+        <span class="gh-count">
+          {raw(ICONS.star)}
+          {count}
+        </span>
+      ) : null}
+    </a>
+  );
+};
+
 /** Links to the public site for visitors: every page reachable from every page, for people and crawlers. */
-const SiteFooter: FC = () => (
+const SiteFooter: FC<{ stars: number | null }> = ({ stars }) => (
   <div class="wrap foot-main">
     <div class="foot-brand">
       <a class="brand" href="/" aria-label="Diffinery home">
@@ -442,15 +465,18 @@ const SiteFooter: FC = () => (
       <p>
         <strong>{SITE.tagline}.</strong> Open-source repositories, pull requests and GitHub Actions–compatible CI for teams of people and AI agents, on your own Cloudflare account.
       </p>
-      <a href="/docs/self-hosting" class="btn sm">
-        Deploy your own
-      </a>
+      <div class="row">
+        <a href="/docs/self-hosting" class="btn sm">
+          Deploy your own
+        </a>
+        <StarButton stars={stars} compact />
+      </div>
     </div>
     {[
       { title: "Product", links: [["/features", "Features"], ["/agents", "For AI agents"], ["/performance", "Performance"], ["/security", "Security"], ["/built-on-cloudflare", "Built on Cloudflare"], ["/open-source", "Open source"], ["/docs/migrate-from-github", "Migrate from GitHub"]] },
       { title: "Compare", links: [["/compare", "All comparisons"], ["/compare/github", "vs GitHub"], ["/compare/gitlab", "vs GitLab"], ["/compare/blacksmith", "vs Blacksmith"], ["/compare/depot", "vs Depot"]] },
       { title: "Resources", links: [["/docs", "Docs"], ["/docs/self-hosting", "Self-hosting"], ["/docs/guides", "Guides"], ["/docs/connect", "Connect AI apps"], ["/llms.txt", "llms.txt"], ["/status", "Status"], ["/docs/security/disclosure", "Report a vulnerability"]] },
-      { title: "Company", links: [["/about", "About"], ["/faq", "FAQ"], ["/blog", "Blog"], ["https://diffinery.com/codician/diffinery", "Source code"], ["https://github.com/codician-team/diffinery", "GitHub mirror"], ["/privacy", "Privacy"]] },
+      { title: "Company", links: [["/about", "About"], ["/faq", "FAQ"], ["/blog", "Blog"], ["https://diffinery.com/codician/diffinery", "Source code"], [GITHUB_REPO, "GitHub mirror"], ["/privacy", "Privacy"]] },
     ].map((col) => (
       <nav aria-label={col.title}>
         <h2>{col.title}</h2>
@@ -477,6 +503,8 @@ async function renderPage(c: AppContext, opts: PageOpts, body: Child, watch?: Wa
   const p = c.get("principal");
   const me = p?.type === "account" ? p.account : null;
   const active = me?.status === "active";
+  // Visitors get a Star button in the header and footer; signed-in people's pages stay as they are.
+  const stars = active ? null : await githubStars(c);
   c.header("content-security-policy", csp(nonce, c, opts.turnstile, opts.formAction));
   c.header("x-frame-options", "DENY");
   c.header("x-content-type-options", "nosniff");
@@ -546,6 +574,7 @@ async function renderPage(c: AppContext, opts: PageOpts, body: Child, watch?: Wa
               <a href="/docs" title="Documentation">
                 Docs
               </a>
+              {active ? null : <StarButton stars={stars} compact class="nav-star" />}
               {active && me ? (
                 <>
                   <a href="/new" title="New repository">
@@ -581,7 +610,7 @@ async function renderPage(c: AppContext, opts: PageOpts, body: Child, watch?: Wa
           {raw(content)}
         </main>
         <footer class="site-foot">
-          {active ? null : <SiteFooter />}
+          {active ? null : <SiteFooter stars={stars} />}
           <div class="wrap">
             <div class="foot-bar">
               <span>© {new Date().getUTCFullYear()} Diffinery</span>

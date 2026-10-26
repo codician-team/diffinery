@@ -87,6 +87,13 @@ main.wrap{padding-top:20px;padding-bottom:60px}
 .foot-main+.wrap>.foot-bar{border-top:1px solid var(--border2)}.foot-bar nav{display:flex;flex-wrap:wrap;gap:20px}
 @media (max-width:1000px){.site-foot .foot-main{grid-template-columns:repeat(4,minmax(0,1fr));padding-top:44px}.foot-brand{grid-column:1/-1}.foot-brand p{max-width:520px}}
 @media (max-width:600px){.site-foot .foot-main{grid-template-columns:repeat(2,minmax(0,1fr));gap:32px 16px;padding-top:36px;padding-bottom:36px}.top nav a.nav-site{display:none}}
+/* "Star on GitHub" (StarButton in ui.tsx): GitHub's own shape, a label and a count split by a rule. */
+.btn.gh-star .gh-count{display:inline-flex;align-items:center;gap:3px;margin-left:4px;padding-left:9px;align-self:stretch;border-left:1px solid var(--border);color:var(--fg2);font-variant-numeric:tabular-nums}
+.btn.gh-star.sm .gh-count{margin-left:2px;padding-left:7px}
+.btn.gh-star .gh-count svg{width:12px;height:12px}
+.btn.gh-star:hover .gh-count{color:var(--fg)}
+.top nav .nav-star{margin:0 8px 0 6px}
+@media (max-width:600px){.top nav .nav-star{margin:0 6px 0 2px}.top nav .nav-star .gh-star-label{display:none}.top nav .nav-star .gh-count{margin-left:0;padding-left:5px}}
 /* Controls follow Kumo sizes: base 36px (buttons, inputs, selects), sm 26px. */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 12px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg);color:var(--fg);font:500 14px/1 var(--sans);cursor:pointer;white-space:nowrap;text-decoration:none!important;vertical-align:middle;flex:none}
 .btn svg{flex:none}

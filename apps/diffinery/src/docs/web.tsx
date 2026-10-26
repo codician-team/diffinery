@@ -21,7 +21,8 @@ import { isValidLogin, isValidName } from "../lib/util.js";
 import { fenceLangs, renderMarkdown } from "../web/markdown.js";
 import { fenceHighlighter } from "../web/highlight.js";
 import { ICONS } from "../web/assets.js";
-import { render, type WebApp } from "../web/ui.js";
+import { render, StarButton, type WebApp } from "../web/ui.js";
+import { githubStars } from "../web/github-stars.js";
 import { pluginZipFor } from "./claude-plugins.js";
 import { AGENT_SETUP_SH, CLAUDE_PLUGINS, CLI_BUNDLE, CLI_INSTALL_PS1, CLI_INSTALL_SH, CLI_SHA256, CLI_VERSION, DOCS_IMAGES, EDITOR_EXTENSION_SHA256, EDITOR_EXTENSION_VERSION, EDITOR_EXTENSION_VSIX_B64, EDITOR_INSTALL_PS1, EDITOR_INSTALL_SH, JETBRAINS_PLUGIN_DESCRIPTION, JETBRAINS_PLUGIN_SHA256, JETBRAINS_PLUGIN_SINCE_BUILD, JETBRAINS_PLUGIN_VERSION, JETBRAINS_PLUGIN_ZIP_B64 } from "./content.generated.js";
 import { allPages, getPage, headings, llmsFullTxt, llmsSmallTxt, llmsTxt, markdownUrl, nav, pageMarkdown, pageUrl, searchIndex, sectionLlmsFullTxt, sectionLlmsTxt, SLUGS, type Page } from "./pages.js";
@@ -99,6 +100,7 @@ async function docsPage(c: AppContext, p: Page | null, status = 200): Promise<Re
   const prev = i > 0 ? getPage(SLUGS[i - 1]!, o) : null;
   const next = i >= 0 && i < SLUGS.length - 1 ? getPage(SLUGS[i + 1]!, o) : null;
   const toc = p ? headings(p.markdown).filter((h) => h.level === 2 || p.markdown.length < 60_000) : [];
+  const stars = await githubStars(c);
   const body = (
     <div class="docs">
       <style>{raw(DOCS_CSS)}</style>
@@ -170,6 +172,10 @@ async function docsPage(c: AppContext, p: Page | null, status = 200): Promise<Re
             </ul>
           </>
         ) : null}
+        <div class="docs-star">
+          <p>Diffinery is open source. A star on GitHub helps other people find it.</p>
+          <StarButton stars={stars} compact />
+        </div>
       </aside>
     </div>
   );
@@ -390,6 +396,7 @@ main.wrap:has(.docs){padding-top:0}
 .docs-toc li a{display:block;padding:3px 0 3px 10px;border-left:2px solid var(--border2);color:var(--fg2);font-size:12.5px;line-height:1.4}
 .docs-toc li.l3 a{padding-left:22px}
 .docs-toc li a:hover{color:var(--fg);text-decoration:none}.docs-toc li a.on{color:var(--fg);border-left-color:var(--accent)}
+.docs-star{margin-top:22px;padding-top:16px;border-top:1px solid var(--border2)}.docs-star p{margin:0 0 10px;font-size:12.5px;line-height:1.5;color:var(--fg2)}
 .docs-mnav{display:none}
 @media (max-width:1180px){.docs{grid-template-columns:232px minmax(0,1fr);gap:32px}.docs-toc{display:none}}
 @media (max-width:820px){.docs{grid-template-columns:minmax(0,1fr);gap:0}.docs-side{display:none}

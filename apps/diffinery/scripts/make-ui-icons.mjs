@@ -63,6 +63,8 @@ const MAP = {
   flag: ["Flag", "regular"],
   prohibit: ["Prohibit", "regular"],
   eyeSlash: ["EyeSlash", "regular"],
+  github: ["GithubLogo", "fill"],
+  star: ["Star", "regular"],
 };
 
 const out = {};

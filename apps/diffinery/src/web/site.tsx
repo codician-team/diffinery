@@ -15,10 +15,11 @@ import type { AppContext } from "../auth/principal.js";
 import { SITE_NAV, SITE_PAGES } from "../docs/content.generated.js";
 import { imageProxy } from "../lib/camo.js";
 import { ICONS } from "./assets.js";
+import { GITHUB_REPO, githubStars } from "./github-stars.js";
 import { fenceHighlighter } from "./highlight.js";
 import { escapeHtml, fenceLangs, renderMarkdown } from "./markdown.js";
 import { SITE } from "./seo.js";
-import { render, type WebApp } from "./ui.js";
+import { render, StarButton, type WebApp } from "./ui.js";
 
 export interface SitePageInfo {
   /** URL path, e.g. "/compare/github". */
@@ -258,7 +259,7 @@ export const CLOUDFLARE_CLAIM =
 /** Where Diffinery's source lives, whatever instance serves this page, and its license. */
 export const SOURCE = {
   repo: "https://diffinery.com/codician/diffinery",
-  github: "https://github.com/codician-team/diffinery",
+  github: GITHUB_REPO,
   license: "https://www.apache.org/licenses/LICENSE-2.0",
   spdx: "Apache-2.0",
 };
@@ -371,8 +372,8 @@ const Cta: FC = () => (
 /** Inline Markdown (links and code) of a home page answer, as HTML. */
 const inline = (md: string) => renderMarkdown(md, { idPrefix: "" }).replace(/^<p>|<\/p>\s*$/g, "");
 
-/** The home page for visitors. */
-export const Landing: FC = () => (
+/** The home page for visitors. `stars` is the GitHub mirror's star count, left out where the page's copy is compared (homeContent). */
+export const Landing: FC<{ stars?: number | null }> = ({ stars }) => (
   <div class="mk">
     <style>{raw(MARKETING_CSS)}</style>
     <section class="hero">
@@ -383,6 +384,7 @@ export const Landing: FC = () => (
       <p>{HOME.lead}</p>
       <p class="row" style="justify-content:center">
         <Cta />
+        {stars === undefined ? null : <StarButton stars={stars} />}
       </p>
       <p class="muted small">
         Free, with nothing to buy: you run Diffinery on your own Cloudflare account. Want to try it first? <a href={EARLY_ACCESS}>Request early access</a> to diffinery.com. Source on <a href={SOURCE.repo}>Diffinery</a> and <a href={SOURCE.github}>GitHub</a>.
@@ -515,9 +517,10 @@ export const Landing: FC = () => (
 );
 
 /** The home page for signed-out visitors (registerAccount calls this for "/"). */
-export function landingPage(c: AppContext): Response | Promise<Response> {
+export async function landingPage(c: AppContext): Promise<Response> {
   const o = origin(c);
   if (wantsMarkdown(c)) return markdownResponse(c, homeMarkdown(o));
+  const stars = await githubStars(c);
   c.header("link", `<${o}/index.md>; rel="alternate"; type="text/markdown", <${o}/llms.txt>; rel="describedby"; type="text/plain"`);
   c.header("vary", "Accept");
   return render(
@@ -530,7 +533,7 @@ export function landingPage(c: AppContext): Response | Promise<Response> {
       jsonLd: [...entities(o), { "@type": "WebPage", "@id": `${o}/#webpage`, url: `${o}/`, name: HOME.title, description: HOME.description, isPartOf: { "@id": ids(o).site }, about: { "@id": ids(o).app }, dateModified: HOME_UPDATED, inLanguage: "en" }, ...faqPage(`${o}/`, HOME.faq)],
       head: <link rel="alternate" type="text/markdown" href="/index.md" title="Diffinery (Markdown)" />,
     },
-    <Landing />,
+    <Landing stars={stars} />,
   );
 }
 
@@ -566,6 +569,9 @@ function crumbs(p: SitePageInfo): Array<{ name: string; path: string }> {
 
 async function sitePageResponse(c: AppContext, p: SitePageInfo): Promise<Response> {
   const o = origin(c);
+  // The Open source page leads with where to get the source, and a Star button for the mirror.
+  const source = p.path === "/open-source";
+  const stars = source ? await githubStars(c) : null;
   const url = `${o}${p.path}`;
   const html = await pageHtml(c, p);
   const id = ids(o);
@@ -612,6 +618,14 @@ async function sitePageResponse(c: AppContext, p: SitePageInfo): Promise<Respons
         </nav>
         <h1>{p.title}</h1>
         <p class="mk-lead">{p.description}</p>
+        {source ? (
+          <p class="row mk-source">
+            <a class="btn" href={SOURCE.repo}>
+              {raw(ICONS.code)} View the source
+            </a>
+            <StarButton stars={stars} />
+          </p>
+        ) : null}
         <p class="mk-meta muted small">
           {isPost(p) && p.published && p.published !== p.updated ? (
             <>
@@ -724,6 +738,7 @@ export const MARKETING_CSS = `
 .mk-band p{margin:0 auto 14px;max-width:620px}
 .mk-page{max-width:880px;margin:0 auto}
 .mk-head{padding:28px 0 18px;border-bottom:1px solid var(--border2);margin-bottom:8px}
+.mk-source{margin:0 0 14px}
 .mk-head h1{font-size:36px;line-height:1.15;letter-spacing:-.025em;margin:8px 0 10px}
 .mk-crumbs{font-size:13px;min-height:18px}
 .mk-lead{font-size:18px;color:var(--fg2);margin:0 0 10px;line-height:1.55}

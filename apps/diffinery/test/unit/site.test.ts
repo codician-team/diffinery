@@ -11,7 +11,7 @@ import { slugify } from "../../src/web/markdown.js";
 import type { Env } from "../../src/env.js";
 import { DOCS_IMAGES } from "../../src/docs/content.generated.js";
 import { getPage, llmsFullTxt, llmsTxt } from "../../src/docs/pages.js";
-import { CLOUDFLARE_CLAIM, faqs, homeMarkdown, sitePage, sitePages } from "../../src/web/site.js";
+import { CLOUDFLARE_CLAIM, faqs, homeContent, homeMarkdown, sitePage, sitePages } from "../../src/web/site.js";
 import { RESERVED_LOGINS } from "../../src/lib/util.js";
 
 app.route("/", web);
@@ -177,6 +177,19 @@ describe("home page", () => {
 
   it("doesn't load the Kumo bundle, which only pages with islands use", async () => {
     expect(await (await get("/")).text()).not.toContain("/-/kumo/");
+  });
+
+  it("asks visitors to star the GitHub mirror with plain links, loading nothing from GitHub", async () => {
+    const stars = (html: string) => html.match(/<a href="https:\/\/github\.com\/codician-team\/diffinery" class="btn gh-star[^"]*"/g) ?? [];
+    const home = await (await get("/")).text();
+    // The header, the hero and the footer.
+    expect(stars(home)).toHaveLength(3);
+    expect(home).not.toMatch(/<script[^>]+src="https:\/\/[^"]*(github|shields)/);
+    expect(home).not.toMatch(/<img[^>]+src="https:\/\/(img\.shields\.io|api\.github\.com)/);
+    expect(stars(await (await get("/open-source")).text())).toHaveLength(3);
+    expect(stars(await (await get("/docs")).text())).toHaveLength(3);
+    // The copy IndexNow compares has no count, so a new star doesn't count as a changed page.
+    expect(await homeContent(ORIGIN)).not.toContain("gh-star");
   });
 
   it("is served as Markdown", async () => {

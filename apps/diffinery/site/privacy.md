@@ -2,7 +2,7 @@
 title: Privacy policy
 seo_title: "Privacy policy · Diffinery"
 description: What personal data diffinery.com and the Diffinery CLI, editor extensions and agent plugins handle, who processes it, and how long it is kept.
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 This policy covers **diffinery.com**, the website and Diffinery instance that Codician runs, and the Diffinery **CLI, editor extensions and AI-agent plugins** that Codician publishes. It explains what personal data they handle, why, who processes it, how long it is kept, and what you can ask of us.
@@ -27,6 +27,7 @@ Anyone can read diffinery.com's public pages, documentation and public repositor
 
 - **Cloudflare**, which hosts diffinery.com, processes your IP address, browser user agent and the pages you request to serve the site and protect it from attacks. Our request logs are kept for up to 7 days.
 - **No analytics or advertising.** There are no analytics scripts, tracking pixels or third-party marketing tools on diffinery.com.
+- **Star on GitHub buttons** are plain links. diffinery.com's server reads the star count from GitHub, so your browser contacts GitHub only if you follow one.
 
 ### Cookies
 

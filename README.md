@@ -2,6 +2,7 @@
 
 **The open-source GitHub and GitHub Actions alternative that runs entirely on Cloudflare.** Git hosting, pull requests, code review and drop-in GitHub Actions CI, with agent tasks, agent code review and plugins for Claude Code and Codex, built for teams of people and AI agents. Deploy it to your own Cloudflare account: no servers, no runner machines, nothing to patch.
 
+[![GitHub stars](https://img.shields.io/github/stars/codician-team/diffinery?style=flat&logo=github&label=stars)](https://github.com/codician-team/diffinery)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![GitHub Actions compatible](https://img.shields.io/badge/GitHub%20Actions-compatible-2088ff.svg)](https://diffinery.com/docs/actions/compatibility)
 [![Runs on Cloudflare Workers](https://img.shields.io/badge/runs%20on-Cloudflare%20Workers-f38020.svg)](https://diffinery.com/built-on-cloudflare)
@@ -21,7 +22,7 @@ Diffinery is built for the way software gets written with agents. Give an agent 
 - **Source:** [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery), where development, CI and deploys happen, mirrored to [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery).
 - **Documentation:** [diffinery.com/docs](https://diffinery.com/docs), also as Markdown and in [llms.txt](https://diffinery.com/llms.txt) and [llms-full.txt](https://diffinery.com/llms-full.txt) for AI assistants.
 
-If Diffinery is useful to you, a star on GitHub helps other people find it.
+If Diffinery is useful to you, [a star on GitHub](https://github.com/codician-team/diffinery) helps other people find it.
 
 ## Contents
 
