@@ -7,7 +7,8 @@ import { loadRepo } from "../http/common.js";
 import { HttpError, now } from "../lib/util.js";
 import { MailStore, isDigestHour, isTimeZone, mergePrefs, type WatchLevel } from "./prefs.js";
 import { sampleJobs } from "./samples.js";
-import { deliver, senderAddress } from "./send.js";
+import { deliver, mailTransport, senderAddress } from "./send.js";
+import { smtpLabel } from "./smtp.js";
 import { Suppressions } from "./suppression.js";
 import { adminSuppress, adminUnsuppress, sendDigestNow, sendTest, sendVerification, suppressionJson } from "./web.js";
 
@@ -176,7 +177,18 @@ mailApi.get("/diffinery/admin/email", async (c) => {
   siteAdmin(c, "read");
   const store = new MailStore(c.env.DB);
   const [day, last] = await Promise.all([store.counts(new Date(Date.now() - 86400_000).toISOString()), store.recent({ limit: 1 })]);
-  return c.json({ sending: !!c.env.EMAIL, queue: !!c.env.MAIL, from: senderAddress(c.env), event_intake: !!c.env.MAIL_EVENTS_SECRET, last_24h: day, last: last[0] ? { ...last[0], dev_copy: undefined } : null });
+  const t = mailTransport(c.env);
+  const smtp = t?.kind === "smtp" ? ("error" in t ? { url: null, error: t.error } : { url: smtpLabel(t.config), error: null }) : null;
+  return c.json({
+    sending: !!t && !(t.kind === "smtp" && "error" in t),
+    transport: t?.kind ?? null,
+    smtp,
+    queue: !!c.env.MAIL,
+    from: senderAddress(c.env),
+    event_intake: !!c.env.MAIL_EVENTS_SECRET,
+    last_24h: day,
+    last: last[0] ? { ...last[0], dev_copy: undefined } : null,
+  });
 });
 
 /**

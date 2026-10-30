@@ -22,7 +22,8 @@ Set under `vars` in `wrangler.jsonc`. All values are strings.
 | Variable | Production value in the repository | Required | What it does |
 | --- | --- | --- | --- |
 | `PUBLIC_URL` | `https://diffinery.com` | Yes | The canonical origin of the instance. See [PUBLIC_URL](#public_url). On deploy, `scripts/bootstrap.sh` replaces it with `https://$DIFFINERY_DOMAIN` (default `https://diffinery.com`), whatever `wrangler.jsonc` says. |
-| `MAIL_FROM` | `notifications@diffinery.com` | No | Sender address of every email. The display name is "Diffinery", or `<actor> (Diffinery)` for emails about someone's action. On deploy, `scripts/bootstrap.sh` replaces it with `notifications@$MAIL_DOMAIN` (default `notifications@$DIFFINERY_DOMAIN`). When empty, Diffinery sends from `notifications@<hostname of PUBLIC_URL>`. The domain must be onboarded to Email Sending. |
+| `MAIL_FROM` | `notifications@diffinery.com` | No | Sender address of every email. The display name is "Diffinery", or `<actor> (Diffinery)` for emails about someone's action. On deploy, `scripts/bootstrap.sh` replaces it with `notifications@$MAIL_DOMAIN` (default `notifications@$DIFFINERY_DOMAIN`). When empty, Diffinery sends from `notifications@<hostname of PUBLIC_URL>`. The domain must be onboarded to Email Sending, or, with `SMTP_URL`, be one your SMTP server lets you send from. |
+| `SMTP_URL` | Not set | No | The SMTP server email goes through when the Worker has no `EMAIL` binding, such as an instance outside Cloudflare: `smtps://<user>@<host>:465` or `smtp://<user>@<host>:587`. The password goes in the `SMTP_PASSWORD` secret. See [SMTP](#smtp). |
 | `BOOTSTRAP_ADMINS` | Empty (set on deploy) | For the first sign-in | Emails (case-insensitive) that become site administrators. On deploy, `scripts/bootstrap.sh` sets it from the `BOOTSTRAP_ADMINS` environment variable, else keeps the deployed Worker's list. See [BOOTSTRAP_ADMINS](#bootstrap_admins). |
 | `ACCESS_TEAM_DOMAIN` | Empty (filled in on deploy) | For email sign-in | Your Cloudflare Zero Trust team domain, like `example.cloudflareaccess.com`. Used to fetch the Access signing keys and to check the token issuer. |
 | `ACCESS_AUD` | Empty (filled in on deploy) | For email sign-in | The audience tag of the Access application that guards `/auth/access`. |
@@ -160,6 +161,39 @@ The deploy's API token needs **Account → Turnstile → Edit** for this (the [A
 
 To use a widget of your own instead, add `"TURNSTILE_SITE_KEY": "<site key>"` under `vars` in `wrangler.jsonc` and store its secret key with `printf '%s' "$TURNSTILE_SECRET" | pnpm exec wrangler secret put TURNSTILE_SECRET -c wrangler.deploy.jsonc`. The deploy then creates no widget and never replaces your secret; it only fills in a missing `TURNSTILE_SECRET` when your widget is in the same Cloudflare account. If you rotate the secret key of the deploy's widget in the dashboard, run `pnpm exec wrangler secret delete TURNSTILE_SECRET -c wrangler.deploy.jsonc` and deploy again, so the deploy stores the new one.
 
+### SMTP
+
+Without an `EMAIL` binding, Diffinery can send email through any SMTP server that speaks TLS: your mail provider's submission server, Amazon SES, Postmark, Mailgun or your own. This is how an instance outside Cloudflare, which has no Email Sending, sends sign-up codes, invitations and notifications. When the `EMAIL` binding is there, it is used and `SMTP_URL` is ignored.
+
+1. Add `SMTP_URL` under `vars` in `wrangler.jsonc`; the deploy keeps it.
+   - `smtps://<user>@<host>:465` uses TLS from the start. The port defaults to 465.
+   - `smtp://<user>@<host>:587` starts plain and upgrades with STARTTLS. The port defaults to 587. If the server doesn't offer STARTTLS, Diffinery sends nothing (`E_SMTP_REJECTED: SMTP: the server doesn't offer STARTTLS, and Diffinery doesn't send without TLS`), so the password never crosses the network in the clear.
+   - Write an `@` in the user as `%40`: `smtps://notifications%40example.com@smtp.example.com`.
+   - Leave the user out (`smtps://relay.internal:465`) for a relay that needs no sign-in.
+   - Cloudflare Workers can't open connections to port 25, so use 465 or 587.
+2. Store the password as a secret. Never put it in `SMTP_URL`: Diffinery refuses such a URL.
+
+   ```sh
+   cd apps/diffinery
+   printf '%s' "$SMTP_PASSWORD" | pnpm exec wrangler secret put SMTP_PASSWORD -c wrangler.deploy.jsonc
+   ```
+
+3. Make sure `MAIL_FROM` is an address the SMTP user may send from. It is both the `From` header and the envelope sender.
+4. Check it: **Settings → Email** shows **Sending** as "over SMTP: smtps://...", and **Send me a test email** sends one.
+
+Diffinery signs in with AUTH PLAIN, or AUTH LOGIN when the server offers only that. Each email is one connection, and each reply has 30 seconds to arrive. What happens to the email depends on the server's answer:
+
+| Answer | Result |
+| --- | --- |
+| `2xx` | `sent`. **Recent emails** shows the `Message-ID` Diffinery gave the email. |
+| `4xx`, a timeout or a dropped connection | `E_SMTP_TRANSIENT`. The queue tries again later, up to 6 times. |
+| `5xx` to `RCPT TO` that says the address doesn't exist (enhanced status `5.1.1`, `5.1.2`, `5.1.3`, `5.1.6`, `5.1.10` or `5.2.1`, or `550`, `551` or `553` without one) | `failed` with `E_SMTP_RECIPIENT_REJECTED`, and the address goes on the [suppression list](/docs/admin/site-administration#bounces-complaints-and-the-suppression-list) as a `hard-bounce` with source `send`. |
+| Any other `5xx`, such as `535` for a wrong password or `5.7.1` for a sender the server won't relay for | `failed` with `E_SMTP_REJECTED`. Nothing else changes. |
+
+Most submission servers accept every recipient and report a bounce later, by email to `MAIL_FROM`. Diffinery doesn't read that mailbox. To suppress those addresses too, have your provider post bounces and complaints to the signed intake, `POST /-/email/events` (see `MAIL_EVENTS_SECRET`).
+
+Diffinery never logs the password or the content of an email. Errors quote the server's reply, never the commands sent.
+
 ### DEV_AUTH
 
 When `DEV_AUTH` is set, `ACCESS_AUD` is empty and both `PUBLIC_URL` and the request's own address are on the local machine (`localhost`, `127.x.x.x` or `[::1]`), every request without credentials (no token, no session) acts as the account with the email in `DEV_AUTH`, with full access. That account is created on first use and is a site administrator if the email is also in `BOOTSTRAP_ADMINS`. While `DEV_AUTH` is set, the email log also keeps each whole message, and `GET /api/v3/diffinery/emails` returns it, so tests can read emails without delivering them.
@@ -177,6 +211,7 @@ Set with `wrangler secret put` (the deploy does this for you with `scripts/ensur
 | `OIDC_PRIVATE_KEY` | An ECDSA P-256 private key as a JWK (JSON), with a `kid` | `ensure-secrets.sh`, once | Signs the ID tokens that workflow jobs request with `permissions: id-token: write` (ES256). Its public half is served at `/.well-known/jwks`. | Jobs that request an ID token fail with `OIDC is not configured on this Diffinery instance`, `/.well-known/jwks` returns no keys, and `GET /api/v3/meta` returns `"oidc": false`. |
 | `GITHUB_OAUTH_CLIENT_SECRET` | The client secret of a GitHub OAuth app | You, optionally | With `GITHUB_OAUTH_CLIENT_ID`, turns on the **Link with GitHub** option on **Settings → Linked accounts**. | People link GitHub accounts with the gist code only. |
 | `MAIL_EVENTS_SECRET` | A random string, at least 32 characters | You, optionally | Turns on `POST /-/email/events`, the signed intake for bounces and complaints from anything other than Cloudflare's own event subscriptions. See [Bounces, complaints and the suppression list](/docs/admin/site-administration#bounces-complaints-and-the-suppression-list). | The endpoint answers 404. Bounces and complaints still arrive through the `diffinery-mail-events` queue. |
+| `SMTP_PASSWORD` | The password of the user in `SMTP_URL` | You, optionally | Signs in to the SMTP server in `SMTP_URL`. See [SMTP](#smtp). | With a user in `SMTP_URL`, nothing is sent: every email fails with `E_SMTP_CONFIG: SMTP_URL names a user but the SMTP_PASSWORD secret is not set`. |
 | `TURNSTILE_SECRET` | The secret key of a Cloudflare Turnstile widget | The deploy, from its widget (see [Turnstile](#turnstile)) | With `TURNSTILE_SITE_KEY`, checks that whoever asks for a sign-up code (with `SIGNUP=open`), or sends a security report, an early access request or a contact message without signing in, passed the Turnstile widget. See [SIGNUP](#signup) and [Security contact](#security-contact). | With `SIGNUP=open`, sign-up answers `503` "Sign-up needs Turnstile configured", the security report and contact forms take reports and messages only from people who are signed in, and the early access form is closed (local development skips the check). The next deploy sets it when the token has **Account → Turnstile → Edit**. |
 
 None of these secrets is rotated automatically, and `ensure-secrets.sh` never replaces one that exists. Keep a copy of `MASTER_KEY` somewhere safe: replacing it without keeping the old one as `MASTER_KEY_PREV` makes every stored secret undecryptable and invalidates unsubscribe links already sent, along with the runtime tokens of running jobs and cache and artifact links already handed out. To rotate it, follow [Rotating MASTER_KEY](#rotating-master_key). To rotate the OIDC key, delete `OIDC_PRIVATE_KEY` and deploy: a new key with a new `kid` (`diffinery-<date>`) is generated, and relying parties pick it up from `/.well-known/jwks`.
@@ -232,7 +267,7 @@ Defined in `wrangler.jsonc`. The deploy creates the underlying resources if they
 | `BUCKET` | R2 bucket | `diffinery-data` | Large git objects, LFS objects, archived job logs, caches, artifacts, container image layers and manifests, the event archive, release assets, cached source archives (zipball and tarball downloads) and profile pictures. |
 | `EVENTS` | Queue producer, with a consumer on the same Worker | `diffinery-events`, dead-letter queue `diffinery-events-dlq` | Repository events for webhooks, notifications and the audit log. Consumer: batches of up to 50, waiting up to 2 seconds, 8 retries. |
 | `MAIL` | Queue producer, with a consumer on the same Worker | `diffinery-mail`, dead-letter queue `diffinery-mail-dlq` | Email jobs. Consumer: batches of up to 20, waiting up to 2 seconds, 8 retries. Optional: without it emails are dropped with a warning in the logs. |
-| `EMAIL` | `send_email` (Email Sending) | Your onboarded domain | Sending email. Optional: without it every email is logged as `skipped`. |
+| `EMAIL` | `send_email` (Email Sending) | Your onboarded domain | Sending email. Optional: without it email goes to the SMTP server in `SMTP_URL`, and without that too every email is logged as `skipped`. |
 | (none) | Queue consumer | `diffinery-mail-events` | Bounces and complaints from Email Sending's event subscriptions; the deploy subscribes this queue to your sending domain's events (see [Site administration](/docs/admin/site-administration#where-bounces-and-complaints-come-from)). Consumer: batches of up to 50, waiting up to 5 seconds, 8 retries. |
 | `RL_AUTH`, `RL_ANON`, `RL_ACCOUNT`, `RL_CREATE`, `RL_MODEL` | Rate limiting (`ratelimits`) | Namespaces `1001` to `1005`; 20, 300, 2,000, 60 and 600 requests per 60 seconds | [Request rate limits](/docs/reference/rest-api#rate-limits): sign-in and security reports per IP address, anonymous requests per IP address, signed-in requests per account, new content per account, and agents' model requests per paying person (`MODEL_RATE_LIMIT` in `src/lib/rate-limit.ts`). Optional: a missing binding (the `dev` environment declares none) or one that fails lets requests through. If you change a limit, change `RATE_LIMITS` (or `MODEL_RATE_LIMIT`) in `src/lib/rate-limit.ts` to match, since the 429 messages quote it. Namespace IDs are shared across your Cloudflare account, so pick others if another Worker already uses these. |
 | `REPO` | Durable Object namespace | Class `RepoDO` (SQLite) | One object per repository. |

@@ -11,6 +11,7 @@ export default defineConfig({
     alias: {
       "cloudflare:workflows": fileURLToPath(new URL("./test/unit/stubs/cloudflare-workflows.ts", import.meta.url)),
       "cloudflare:workers": fileURLToPath(new URL("./test/unit/stubs/cloudflare-workers.ts", import.meta.url)),
+      "cloudflare:sockets": fileURLToPath(new URL("./test/unit/stubs/cloudflare-sockets.ts", import.meta.url)),
     },
   },
   plugins: [
