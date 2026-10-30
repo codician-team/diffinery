@@ -186,7 +186,7 @@ The script writes `apps/diffinery/wrangler.deploy.jsonc`, which every later `wra
 
 ### wrangler deploy
 
-`pnpm exec wrangler deploy -c wrangler.deploy.jsonc` (run in `apps/diffinery`) deploys the Worker with all its bindings, and builds the runner image from `containers/runner/Dockerfile` (Ubuntu 24.04 with Node.js 22, git, git-lfs and the runner agent) for all three container classes: `RunnerContainer` (hosted jobs), `SandboxContainer` (agent sandboxes) and `ImportContainer` (the Git transfers of GitHub imports). It also applies Durable Object migrations the account doesn't have yet: tag `v1` creates `RepoDO`, `RunnerContainer` and `SandboxContainer`, tag `v2` creates `ImportContainer`, tag `v3` creates `ProjectDO`, tag `v4` creates `SchedulerDO`, tag `v5` creates the smaller runner classes, and tag `v6` creates `ComposeDO`.
+`pnpm exec wrangler deploy -c wrangler.deploy.jsonc` (run in `apps/diffinery`) deploys the Worker with all its bindings, and builds the runner image from `containers/runner/Dockerfile` (Ubuntu 24.04 with Node.js 22, git, git-lfs and the runner agent) for all three container classes: `RunnerContainer` (hosted jobs), `SandboxContainer` (agent sandboxes) and `ImportContainer` (the Git transfers of GitHub imports). It also applies Durable Object migrations the account doesn't have yet: tag `v1` creates `RepoDO`, `RunnerContainer` and `SandboxContainer`, tag `v2` creates `ImportContainer`, tag `v3` creates `ProjectDO`, tag `v4` creates `SchedulerDO`, tag `v5` creates the smaller runner classes, tag `v6` creates `ComposeDO`, and tag `v7` creates `RateLimiterDO`.
 
 ### scripts/ensure-secrets.sh
 

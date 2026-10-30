@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Env } from "../../src/env.js";
 import type { Principal } from "../../src/auth/principal.js";
-import { bucketsFor, MODEL_RATE_LIMIT, modelRateLimited, overLimit, RATE_LIMITS, RATE_PERIOD_S, type RateLimiter } from "../../src/lib/rate-limit.js";
+import { bucketsFor, MODEL_RATE_LIMIT, modelRateLimited, overLimit, RATE_LIMITER_SHARDS, rateLimiterShard, RATE_LIMITS, RATE_PERIOD_S, type RateLimiter } from "../../src/lib/rate-limit.js";
+import { RateLimiterDO } from "../../src/rate-limiter.js";
 
 const anon: Principal = { type: "anonymous" };
 const person = { type: "account", account: { id: "u1" }, via: "token", scopes: ["write"], repoIds: null } as unknown as Principal;
@@ -138,5 +139,95 @@ describe("model requests per paying person (phase 5a)", () => {
     const line = text.split("\n").find((l) => l.includes('"name": "RL_MODEL"')) ?? "";
     expect(/"limit": (\d+), "period": (\d+)/.exec(line)?.slice(1).map(Number)).toEqual([MODEL_RATE_LIMIT, RATE_PERIOD_S]);
     expect(bucketsFor("POST", "/-/model/anthropic/v1/messages", person, "203.0.113.9")).toEqual([]);
+  });
+});
+
+/** A RATE_LIMITER namespace of real RateLimiterDO objects, recording which object each call reached. */
+function limiterObjects(fail = false) {
+  const objects = new Map<string, RateLimiterDO>();
+  const calls: string[] = [];
+  const ns = {
+    idFromName: (name: string) => name,
+    get: (name: string) => ({
+      hit: async (key: string, limits: Array<[string, number]>) => {
+        calls.push(name);
+        if (fail) throw new Error("object unreachable");
+        if (!objects.has(name)) objects.set(name, new RateLimiterDO({} as DurableObjectState, {} as Env));
+        return objects.get(name)!.hit(key, limits);
+      },
+    }),
+  };
+  return { ns, calls };
+}
+
+describe("the Durable Object fallback (RATE_LIMITS=durable)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("counts buckets without a binding at the production limits, one object call per request", async () => {
+    const { ns, calls } = limiterObjects();
+    const env = { RATE_LIMITS: "durable", RATE_LIMITER: ns } as unknown as Env;
+    const sign = bucketsFor("POST", "/signup", anon, "203.0.113.9");
+    for (let i = 0; i < RATE_LIMITS.RL_AUTH; i++) expect(await overLimit(env, sign)).toBeNull();
+    expect(await overLimit(env, sign)).toBe("RL_AUTH");
+    expect(await overLimit(env, bucketsFor("POST", "/signup", anon, "203.0.113.10"))).toBeNull();
+    // An account's request and its new content share a key: one call counts both buckets.
+    calls.length = 0;
+    const create = bucketsFor("POST", "/api/v3/repos/acme/app/issues", person, "x");
+    for (let i = 0; i < RATE_LIMITS.RL_CREATE; i++) expect(await overLimit(env, create)).toBeNull();
+    expect(await overLimit(env, create)).toBe("RL_CREATE");
+    expect(calls).toHaveLength(RATE_LIMITS.RL_CREATE + 1);
+    expect(new Set(calls)).toEqual(new Set([rateLimiterShard("acct:u1")]));
+  });
+
+  it("starts a new count every window", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.UTC(2026, 9, 30, 12, 0, 0));
+    const { ns } = limiterObjects();
+    const env = { RATE_LIMITS: "durable", RATE_LIMITER: ns } as unknown as Env;
+    const b = bucketsFor("POST", "/signup", anon, "203.0.113.9");
+    for (let i = 0; i < RATE_LIMITS.RL_AUTH; i++) await overLimit(env, b);
+    expect(await overLimit(env, b)).toBe("RL_AUTH");
+    vi.setSystemTime(Date.UTC(2026, 9, 30, 12, 0, RATE_PERIOD_S - 1));
+    expect(await overLimit(env, b)).toBe("RL_AUTH");
+    vi.setSystemTime(Date.UTC(2026, 9, 30, 12, 0, RATE_PERIOD_S));
+    expect(await overLimit(env, b)).toBeNull();
+  });
+
+  it("limits model requests per paying person", async () => {
+    const { ns } = limiterObjects();
+    const env = { RATE_LIMITS: "durable", RATE_LIMITER: ns } as unknown as Env;
+    for (let i = 0; i < MODEL_RATE_LIMIT; i++) expect(await modelRateLimited(env, "p1")).toBe(false);
+    expect(await modelRateLimited(env, "p1")).toBe(true);
+    expect(await modelRateLimited(env, "p2")).toBe(false);
+  });
+
+  it("uses a binding where there is one, and is off unless RATE_LIMITS is durable", async () => {
+    const { ns, calls } = limiterObjects();
+    const bound = { RATE_LIMITS: "durable", RATE_LIMITER: ns, RL_ANON: limiter(1) } as unknown as Env;
+    expect(await overLimit(bound, [["RL_ANON", "ip:x"]])).toBeNull();
+    expect(await overLimit(bound, [["RL_ANON", "ip:x"]])).toBe("RL_ANON");
+    expect(await modelRateLimited({ RATE_LIMITER: ns } as unknown as Env, "p1")).toBe(false);
+    expect(await overLimit({ RATE_LIMITER: ns } as unknown as Env, [["RL_AUTH", "ip:x"]])).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it("lets requests through when the object fails", async () => {
+    const { ns, calls } = limiterObjects(true);
+    const env = { RATE_LIMITS: "durable", RATE_LIMITER: ns } as unknown as Env;
+    expect(await overLimit(env, [["RL_AUTH", "ip:x"]])).toBeNull();
+    expect(await modelRateLimited(env, "p1")).toBe(false);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("spreads keys over a fixed set of objects", () => {
+    const shards = new Set(Array.from({ length: 2000 }, (_, i) => rateLimiterShard(`ip:198.51.${i >> 8}.${i & 255}`)));
+    expect(shards.size).toBe(RATE_LIMITER_SHARDS);
+    expect(rateLimiterShard("acct:u1")).toBe(rateLimiterShard("acct:u1"));
+  });
+
+  it("is bound in wrangler.jsonc, for production and local development", () => {
+    const text = readFileSync(new URL("../../wrangler.jsonc", import.meta.url), "utf8");
+    expect(text.match(/\{ "name": "RATE_LIMITER", "class_name": "RateLimiterDO" \}/g)).toHaveLength(2);
+    expect(text).toMatch(/"new_sqlite_classes": \["RateLimiterDO"\]/);
   });
 });
