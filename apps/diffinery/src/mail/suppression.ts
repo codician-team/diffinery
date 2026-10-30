@@ -12,7 +12,7 @@ import { hmacSha256, matchesAnyKey, signingSecrets } from "../lib/crypto.js";
  *
  * Bounces and complaints come from Cloudflare Email Sending's Event Subscriptions (a queue,
  * mail/events.ts), from a signed POST to /-/email/events for anything else, and from Email
- * Sending's own answer to a send that it refuses for good (sendSuppression, used by deliver()).
+ * Sending's or the SMTP server's own answer to a send it refuses for good (sendSuppression, used by deliver()).
  */
 
 export type SuppressionReason = "hard-bounce" | "complaint" | "manual";
@@ -103,11 +103,13 @@ export function suppressionFor(ev: unknown): { email: string; reason: Exclude<Su
 /**
  * Error codes with which Email Sending's send() refuses a recipient for good: it is on Cloudflare's
  * own suppression list (after a bounce or complaint there), so every later send fails the same way.
- * Everything else (rate limits, the daily limit, delivery and internal errors, a bad message or
- * sender) is about the send, not the address, and changes nothing.
+ * Over SMTP (smtp.ts), E_SMTP_RECIPIENT_REJECTED: the server answered RCPT TO with a permanent
+ * "no such mailbox or domain". Everything else (rate limits, the daily limit, delivery and internal
+ * errors, a bad message or sender, a wrong SMTP password) is about the send, not the address, and
+ * changes nothing.
  * https://developers.cloudflare.com/email-service/api/send-emails/workers-api/
  */
-export const PERMANENT_SEND_CODES: ReadonlySet<string> = new Set(["E_RECIPIENT_SUPPRESSED"]);
+export const PERMANENT_SEND_CODES: ReadonlySet<string> = new Set(["E_RECIPIENT_SUPPRESSED", "E_SMTP_RECIPIENT_REJECTED"]);
 
 /**
  * What Email Sending's answer to one send means for the list: a permanent failure for the
@@ -122,7 +124,7 @@ export function sendSuppression(to: string, answer: { error?: unknown; result?: 
     const e = answer.error as { code?: unknown; message?: unknown };
     const code = typeof e.code === "string" ? e.code : "";
     if (!PERMANENT_SEND_CODES.has(code)) return null;
-    return { email, reason: "hard-bounce", detail: clip(`Email Sending refused it: ${code}${typeof e.message === "string" && e.message ? `: ${e.message}` : ""}`) };
+    return { email, reason: "hard-bounce", detail: clip(`${code.startsWith("E_SMTP_") ? "The SMTP server" : "Email Sending"} refused it: ${code}${typeof e.message === "string" && e.message ? `: ${e.message}` : ""}`) };
   }
   const r = answer.result && typeof answer.result === "object" ? (answer.result as { permanent_bounces?: unknown }) : null;
   const bounced = Array.isArray(r?.permanent_bounces) ? r.permanent_bounces : [];
