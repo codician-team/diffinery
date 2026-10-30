@@ -56,7 +56,7 @@ describe("wrangler.jsonc for celld", () => {
 });
 
 /** Built-in modules celld implements (its docs/cloudflare-compat.md); node:crypto and node:zlib only in part. */
-const CELLD_MODULES = new Set(["cloudflare:workers", "cloudflare:workflows", ...["assert", "async_hooks", "buffer", "crypto", "diagnostics_channel", "events", "fs", "os", "path", "stream", "timers/promises", "util", "zlib"].map((m) => `node:${m}`)]);
+const CELLD_MODULES = new Set(["cloudflare:workers", "cloudflare:workflows", "cloudflare:sockets", ...["assert", "async_hooks", "buffer", "crypto", "diagnostics_channel", "events", "fs", "os", "path", "stream", "timers/promises", "util", "zlib"].map((m) => `node:${m}`)]);
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((f) => {
