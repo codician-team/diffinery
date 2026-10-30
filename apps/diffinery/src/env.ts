@@ -2,6 +2,7 @@ import type { DiffineryEvent } from "@diffinery/shared";
 import type { RepoDO } from "./repo/RepoDO.js";
 import type { SchedulerDO } from "./scheduler.js";
 import type { ComposeDO } from "./compose.js";
+import type { RateLimiterDO } from "./rate-limiter.js";
 import type { ImportContainer } from "./imports/container.js";
 import type { RunnerContainer, SandboxContainer } from "./runner/containers.js";
 import type { MailJob } from "./mail/types.js";
@@ -59,6 +60,14 @@ export interface Env {
   RL_CREATE?: RateLimit;
   /** Model requests through the proxy, per paying person (agentic/proxy.ts). */
   RL_MODEL?: RateLimit;
+  /**
+   * "durable": count the requests of each RL_* binding that isn't configured in RATE_LIMITER instead,
+   * for deployments without Cloudflare's rate limiting, such as celld (lib/rate-limit.ts). Unset, a
+   * missing binding lets requests through.
+   */
+  RATE_LIMITS?: string;
+  /** The rate limiter RATE_LIMITS=durable uses, one object per shard of keys (rate-limiter.ts). */
+  RATE_LIMITER?: DurableObjectNamespace<RateLimiterDO>;
   /** Email jobs, sent by the queue consumer in mail/send.ts. */
   MAIL?: Queue<MailJob>;
   IMPORT_WORKFLOW: Workflow<{ importId: string }>;
