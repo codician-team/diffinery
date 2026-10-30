@@ -51,7 +51,7 @@ export interface Env {
   MODEL_UPSTREAM_OPENAI?: string;
   MODEL_UPSTREAM_OPENROUTER?: string;
   RUN_WORKFLOW: Workflow<{ repoId: string; runId: string }>;
-  /** Cloudflare Email Sending. Missing when sending isn't set up; emails are then logged as skipped. */
+  /** Cloudflare Email Sending. Missing when sending isn't set up; emails then go over SMTP_URL, or are logged as skipped. */
   EMAIL?: SendEmail;
   /** Request rate limits (lib/rate-limit.ts); none in local development. */
   RL_AUTH?: RateLimit;
@@ -109,6 +109,11 @@ export interface Env {
   /** Sender address for every email, e.g. notifications@diffinery.com. */
   MAIL_FROM?: string;
   /**
+   * SMTP server for email when there is no EMAIL binding (mail/smtp.ts), e.g. on celld:
+   * `smtps://user@host:465` (TLS) or `smtp://user@host:587` (STARTTLS). The password is SMTP_PASSWORD.
+   */
+  SMTP_URL?: string;
+  /**
    * More places security researchers can report vulnerabilities, served in /.well-known/security.txt
    * after the instance's own report form (/security/report): an email address or an https URL, several
    * separated by commas.
@@ -160,6 +165,8 @@ export interface Env {
   OIDC_PRIVATE_KEY?: string;
   /** Secret: signs bounce and complaint events posted to /-/email/events (mail/events.ts); unset, that endpoint is off. */
   MAIL_EVENTS_SECRET?: string;
+  /** Secret: the password for the user in SMTP_URL. */
+  SMTP_PASSWORD?: string;
   /** Secret: Cloudflare Turnstile secret key, to check the widget on the sign-up page and the security report form (siteverify). */
   TURNSTILE_SECRET?: string;
   /** Secret: the GitHub App's client secret, to check who links an installation. */
