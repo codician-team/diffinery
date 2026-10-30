@@ -49,7 +49,8 @@
   // domain is onboarded under Compute > Email Service > Email Sending (see scripts/email-sending.sh).
   "send_email": [{ "name": "EMAIL" }],
   // Request rate limits per minute (src/lib/rate-limit.ts; RATE_LIMITS there must match). Local
-  // development declares none, so nothing is limited there.
+  // development declares none, so nothing is limited there. Where these bindings don't exist (celld),
+  // the RATE_LIMITER Durable Object counts instead when the RATE_LIMITS var is "durable".
   "ratelimits": [
     { "name": "RL_AUTH", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } },
     { "name": "RL_ANON", "namespace_id": "1002", "simple": { "limit": 300, "period": 60 } },
@@ -63,6 +64,8 @@
       { "name": "REPO", "class_name": "RepoDO" },
       { "name": "SCHEDULER", "class_name": "SchedulerDO" },
       { "name": "COMPOSE", "class_name": "ComposeDO" },
+      // Request rate limits without the ratelimits bindings (RATE_LIMITS=durable, src/rate-limiter.ts).
+      { "name": "RATE_LIMITER", "class_name": "RateLimiterDO" },
       { "name": "RUNNER", "class_name": "RunnerContainer" },
       // Smaller hosted runners (src/runner/sizes.ts), the same runner on smaller instance types.
       { "name": "RUNNER_MEDIUM", "class_name": "RunnerContainerMedium" },
@@ -83,7 +86,9 @@
     // Smaller hosted runner sizes (src/runner/sizes.ts).
     { "tag": "v5", "new_sqlite_classes": ["RunnerContainerMedium", "RunnerContainerSmall", "RunnerContainerTiny"] },
     // Joining large uploads' blocks, a step per object (compose.ts).
-    { "tag": "v6", "new_sqlite_classes": ["ComposeDO"] }
+    { "tag": "v6", "new_sqlite_classes": ["ComposeDO"] },
+    // Request rate limits without the ratelimits bindings (rate-limiter.ts).
+    { "tag": "v7", "new_sqlite_classes": ["RateLimiterDO"] }
   ],
   "workflows": [
     { "name": "diffinery-run", "binding": "RUN_WORKFLOW", "class_name": "RunWorkflow" },
@@ -156,6 +161,7 @@
           { "name": "REPO", "class_name": "RepoDO" },
           { "name": "SCHEDULER", "class_name": "SchedulerDO" },
           { "name": "COMPOSE", "class_name": "ComposeDO" },
+          { "name": "RATE_LIMITER", "class_name": "RateLimiterDO" },
           { "name": "RUNNER", "class_name": "RunnerContainer" },
           { "name": "RUNNER_MEDIUM", "class_name": "RunnerContainerMedium" },
           { "name": "RUNNER_SMALL", "class_name": "RunnerContainerSmall" },

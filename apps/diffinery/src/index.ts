@@ -8,6 +8,7 @@ import { web } from "./web/routes.js";
 export { RepoDO } from "./repo/RepoDO.js";
 export { SchedulerDO } from "./scheduler.js";
 export { ComposeDO } from "./compose.js";
+export { RateLimiterDO } from "./rate-limiter.js";
 export { RunnerContainer, RunnerContainerMedium, RunnerContainerSmall, RunnerContainerTiny, SandboxContainer, SandboxPoolDO } from "./runner/containers.js";
 export { RunWorkflow } from "./runner/workflow.js";
 export { ImportWorkflow } from "./imports/workflow.js";
