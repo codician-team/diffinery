@@ -111,6 +111,7 @@ In your copy's repository settings, add:
 | `MAIL_DOMAIN` | Variable, optional | The domain email is sent from, when it isn't `DIFFINERY_DOMAIN`. |
 | `ACCESS_TEAM_DOMAIN` | Variable, optional | Your Zero Trust team domain, for example `example.cloudflareaccess.com`. Needed only when the token can't read it. |
 | `DIFFINERY_GITHUB_APP_ID`, `DIFFINERY_GITHUB_APP_SLUG`, `DIFFINERY_GITHUB_APP_CLIENT_ID`, `DIFFINERY_GITHUB_APP_URL` | Variables, optional | The GitHub App of [GitHub runners](/docs/self-hosting/configuration#github-runners). The workflow passes them to render-config as `GITHUB_APP_ID` and the rest. |
+| `DIFFINERY_RUNS_ON` | Variable, optional | The `runs-on` label of every job in the repository's workflows. Without it, jobs run on `ubuntu-latest`. Set it to `diffinery` to run them on a Diffinery instance's [GitHub runners](/docs/actions/github-runners) once that instance's GitHub App is installed on the repository. Set it back to `ubuntu-latest` to deploy while those runners can't start, for example while the instance itself is down. |
 
 The Deploy job runs in an environment named `production`, so you can also store the secrets as environment secrets there and add required reviewers to that environment.
 

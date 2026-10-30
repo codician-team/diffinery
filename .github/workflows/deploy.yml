@@ -9,6 +9,9 @@ name: Deploy
 #   ACCESS_TEAM_DOMAIN   e.g. example.cloudflareaccess.com
 #   DIFFINERY_GITHUB_APP_ID, DIFFINERY_GITHUB_APP_SLUG, DIFFINERY_GITHUB_APP_CLIENT_ID,
 #   DIFFINERY_GITHUB_APP_URL   the GitHub App of GitHub runners (docs/self-hosting/configuration.md)
+#   DIFFINERY_RUNS_ON    the runner label of every job in this repository's workflows (default
+#                        ubuntu-latest). `diffinery` runs them on a Diffinery instance's GitHub runners;
+#                        set it back to ubuntu-latest to deploy while those can't start.
 #
 # It deploys a main commit only once CI (typecheck, unit tests and the Worker bundle) has
 # passed on it, so it doesn't run those itself. End-to-end tests run alongside the deploy.
@@ -37,7 +40,7 @@ jobs:
     # Every push to main deploys once CI passes on it, on GitHub or on a Diffinery
     # instance, and so does running this workflow by hand.
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.DIFFINERY_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 5
     outputs:
       deploy: ${{ steps.tip.outputs.deploy }}
@@ -67,7 +70,7 @@ jobs:
     name: Deploy to Cloudflare
     needs: gate
     if: ${{ needs.gate.outputs.deploy == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.DIFFINERY_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 45
     environment:
       name: production

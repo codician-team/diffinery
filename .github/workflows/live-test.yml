@@ -31,7 +31,7 @@ jobs:
     name: Containers, registry, sandboxes, webhooks, schedules, LFS and pull requests
     # Runs on the host that deploys production (see the gate in deploy.yml).
     if: ${{ github.event_name == 'workflow_dispatch' || (github.server_url == 'https://diffinery.com' && github.event.workflow_run.conclusion == 'success') }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.DIFFINERY_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 45
     environment: production
     env:
