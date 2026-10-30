@@ -110,6 +110,7 @@ In your copy's repository settings, add:
 | `DIFFINERY_ZONE` | Variable, optional | The Cloudflare zone that holds the hostname, when it isn't the hostname's last two labels. |
 | `MAIL_DOMAIN` | Variable, optional | The domain email is sent from, when it isn't `DIFFINERY_DOMAIN`. |
 | `ACCESS_TEAM_DOMAIN` | Variable, optional | Your Zero Trust team domain, for example `example.cloudflareaccess.com`. Needed only when the token can't read it. |
+| `DIFFINERY_GITHUB_APP_ID`, `DIFFINERY_GITHUB_APP_SLUG`, `DIFFINERY_GITHUB_APP_CLIENT_ID`, `DIFFINERY_GITHUB_APP_URL` | Variables, optional | The GitHub App of [GitHub runners](/docs/self-hosting/configuration#github-runners). The workflow passes them to render-config as `GITHUB_APP_ID` and the rest. |
 
 The Deploy job runs in an environment named `production`, so you can also store the secrets as environment secrets there and add required reviewers to that environment.
 
@@ -165,7 +166,11 @@ It reads `apps/diffinery/wrangler.jsonc`, drops the `env` section (the `dev` env
 | `--mail-from <address>` | No | Sets `MAIL_FROM`, overriding the `notifications@<hostname>` that `--public-url` sets. |
 | `--admins <emails>` | No | Sets `BOOTSTRAP_ADMINS` to the comma-separated emails, trimmed. An empty value sets it empty; without the flag, the value in `wrangler.jsonc` stays. An entry that isn't an email address stops the script with `--admins takes comma-separated email addresses; not an email address: ...`. |
 
-It also reads two environment variables: `RUNNER_IMAGE` (set by `scripts/runner-image.sh`) points every container at a prebuilt runner image and sets the `RUNNER_IMAGE` variable, and `TURNSTILE_SITE_KEY` (set by bootstrap from `scripts/turnstile.sh`) sets the `TURNSTILE_SITE_KEY` variable, unless `wrangler.jsonc` already sets one.
+It also reads these environment variables:
+
+- `RUNNER_IMAGE` (set by `scripts/runner-image.sh`) points every container at a prebuilt runner image and sets the `RUNNER_IMAGE` variable.
+- `TURNSTILE_SITE_KEY` (set by bootstrap from `scripts/turnstile.sh`) sets the `TURNSTILE_SITE_KEY` variable, unless `wrangler.jsonc` already sets one.
+- `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_URL` set the variables of the same names, for [GitHub runners](/docs/self-hosting/configuration#github-runners). One that is empty leaves the value in `wrangler.jsonc`. A value of the wrong shape stops the script with, for example, `GITHUB_APP_ID must be the App ID, a number`; the message never shows the value.
 
 Without `--public-url`, the route, `PUBLIC_URL` and `MAIL_FROM` stay as they are in `wrangler.jsonc`. Bootstrap always passes `--public-url` and `--mail-from`, so a normal deploy takes them from `DIFFINERY_DOMAIN` and `MAIL_DOMAIN`.
 

@@ -7,6 +7,8 @@ name: Deploy
 #   DIFFINERY_ZONE       the Cloudflare zone for the route (default: the domain's last two labels)
 #   MAIL_DOMAIN          sends from notifications@<MAIL_DOMAIN> (default DIFFINERY_DOMAIN)
 #   ACCESS_TEAM_DOMAIN   e.g. example.cloudflareaccess.com
+#   DIFFINERY_GITHUB_APP_ID, DIFFINERY_GITHUB_APP_SLUG, DIFFINERY_GITHUB_APP_CLIENT_ID,
+#   DIFFINERY_GITHUB_APP_URL   the GitHub App of GitHub runners (docs/self-hosting/configuration.md)
 #
 # It deploys a main commit only once CI (typecheck, unit tests and the Worker bundle) has
 # passed on it, so it doesn't run those itself. End-to-end tests run alongside the deploy.
@@ -77,6 +79,11 @@ jobs:
       ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
       # Who becomes site administrator on first sign-in. Unset keeps the deployed Worker's list (scripts/bootstrap-admins.sh).
       BOOTSTRAP_ADMINS: ${{ vars.BOOTSTRAP_ADMINS }}
+      # The GitHub App's IDs, for scripts/render-config.mjs. Repository variables can't start with GITHUB_.
+      GITHUB_APP_ID: ${{ vars.DIFFINERY_GITHUB_APP_ID }}
+      GITHUB_APP_SLUG: ${{ vars.DIFFINERY_GITHUB_APP_SLUG }}
+      GITHUB_APP_CLIENT_ID: ${{ vars.DIFFINERY_GITHUB_APP_CLIENT_ID }}
+      GITHUB_APP_URL: ${{ vars.DIFFINERY_GITHUB_APP_URL }}
     steps:
       - uses: actions/checkout@v4
         with:
