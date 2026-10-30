@@ -55,7 +55,7 @@ You need the celld binary ([install](https://celld.dev)) on every node, a bucket
    pnpm -r build
    ```
 
-2. Create the Worker's secrets once and keep them. `celld deploy` has no secret store, so `scripts/celld-config.mjs` copies `MASTER_KEY`, `MASTER_KEY_PREV`, `OIDC_PRIVATE_KEY`, `MAIL_EVENTS_SECRET`, `TURNSTILE_SECRET`, `GITHUB_OAUTH_CLIENT_SECRET` and `SANDBOX_POOL_SECRET` from the environment into the Worker's variables. Never change `MASTER_KEY` once it is in use.
+2. Create the Worker's secrets once and keep them. `celld deploy` has no secret store, so `scripts/celld-config.mjs` copies `MASTER_KEY`, `MASTER_KEY_PREV`, `OIDC_PRIVATE_KEY`, `MAIL_EVENTS_SECRET`, `TURNSTILE_SECRET`, `GITHUB_OAUTH_CLIENT_SECRET`, `SANDBOX_POOL_SECRET`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` and `GITHUB_APP_WEBHOOK_SECRET` from the environment into the Worker's variables. Never change `MASTER_KEY` once it is in use.
 
    ```sh
    export MASTER_KEY="$(openssl rand -base64 32)"

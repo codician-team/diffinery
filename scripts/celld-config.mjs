@@ -51,7 +51,7 @@ export const DROPPED = {
 const CONTAINER_KEYS = ["class_name", "image", "name", "instance_type", "max_instances", "runtime"];
 
 /** Secrets (`wrangler secret put` on Cloudflare) copied from the environment into `vars`. */
-export const SECRETS = ["MASTER_KEY", "MASTER_KEY_PREV", "OIDC_PRIVATE_KEY", "MAIL_EVENTS_SECRET", "TURNSTILE_SECRET", "GITHUB_OAUTH_CLIENT_SECRET", "SANDBOX_POOL_SECRET"];
+export const SECRETS = ["MASTER_KEY", "MASTER_KEY_PREV", "OIDC_PRIVATE_KEY", "MAIL_EVENTS_SECRET", "TURNSTILE_SECRET", "GITHUB_OAUTH_CLIENT_SECRET", "SANDBOX_POOL_SECRET", "GITHUB_APP_CLIENT_SECRET", "GITHUB_APP_PRIVATE_KEY", "GITHUB_APP_WEBHOOK_SECRET"];
 
 /**
  * wrangler.jsonc as celld takes it. Returns the config and the bindings left out (`absent`), which
