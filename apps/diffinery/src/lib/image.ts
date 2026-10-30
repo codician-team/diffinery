@@ -1,7 +1,7 @@
 /**
  * Profile pictures: check an uploaded JPEG, PNG or WebP and turn it into small square WebPs.
  *
- * Everything runs in the Worker on jSquash's WASM codecs. Wrangler bundles each `*.wasm` import
+ * Everything runs in the Worker on jSquash's WASM codecs. Wrangler (and celld) bundles each `*.wasm` import
  * as a compiled WebAssembly.Module (its default CompiledWasm rule), and each codec gets its module
  * through `init(module)`, so nothing is fetched at runtime.
  *
@@ -15,12 +15,12 @@ import { decode as decodePng, init as initPngDecode } from "@jsquash/png/decode.
 import decodeWebp, { init as initWebpDecode } from "@jsquash/webp/decode.js";
 import encodeWebp, { init as initWebpEncode } from "@jsquash/webp/encode.js";
 import resize, { initResize } from "@jsquash/resize";
-import JPEG_DEC_WASM from "@jsquash/jpeg/codec/dec/mozjpeg_dec.wasm?module";
-import PNG_DEC_WASM from "@jsquash/png/codec/pkg/squoosh_png_bg.wasm?module";
-import WEBP_DEC_WASM from "@jsquash/webp/codec/dec/webp_dec.wasm?module";
+import JPEG_DEC_WASM from "@jsquash/jpeg/codec/dec/mozjpeg_dec.wasm";
+import PNG_DEC_WASM from "@jsquash/png/codec/pkg/squoosh_png_bg.wasm";
+import WEBP_DEC_WASM from "@jsquash/webp/codec/dec/webp_dec.wasm";
 // @jsquash/webp's encoder picks its SIMD build when the runtime supports WASM SIMD, which V8 (workerd, Node) does.
-import WEBP_ENC_WASM from "@jsquash/webp/codec/enc/webp_enc_simd.wasm?module";
-import RESIZE_WASM from "@jsquash/resize/lib/resize/pkg/squoosh_resize_bg.wasm?module";
+import WEBP_ENC_WASM from "@jsquash/webp/codec/enc/webp_enc_simd.wasm";
+import RESIZE_WASM from "@jsquash/resize/lib/resize/pkg/squoosh_resize_bg.wasm";
 import { HttpError } from "./util.js";
 
 /** Square sizes we store, in pixels: 2× the 20, 40 (`.av.lg`) and 96 (`.av.xl`, rounded up) CSS pixel avatars. */
