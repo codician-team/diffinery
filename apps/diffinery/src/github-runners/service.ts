@@ -170,15 +170,40 @@ export class GitHubRunners {
           .bind(ev.conclusion, ev.githubJobId, ev.jobName, ev.installationId, ev.runnerName)
           .run();
       }
+      await this.took(ev.installationId, ev.runnerName, ev.githubJobId);
     }
-    // Cancelled before its runner started, or taken by another runner (one started for another job with the same labels):
-    // a runner started for it now would only wait for IDLE_MS.
+    // Cancelled before its runner started, or ran on a runner that isn't one of this account's: a runner started
+    // for it now would only wait for IDLE_MS.
     if (ev.action === "completed" || ev.runnerName) {
       await this.db
         .prepare("UPDATE github_runner_jobs SET status = 'skipped', message = ?, conclusion = ?, ended_at = ? WHERE installation_id = ? AND github_job_id = ? AND status = 'queued'")
         .bind(ev.runnerName ? `The job ran on ${ev.runnerName} before a runner started for it` : "The job ended before a runner started for it", ev.conclusion, this.at(), ev.installationId, ev.githubJobId)
         .run();
     }
+  }
+
+  /**
+   * A runner took `jobId`, which may not be the job its row was started for. When that job's own row still waits,
+   * the two rows trade jobs: the runner's row describes the job it runs, and the other row waits for the job the
+   * runner was started for, which still needs a runner, in that job's place in line.
+   */
+  private async took(installationId: number, runnerName: string, jobId: number): Promise<void> {
+    const a = await this.db.prepare("SELECT * FROM github_runner_jobs WHERE installation_id = ? AND runner_name = ?").bind(installationId, runnerName).first<RunnerJobRow>();
+    if (!a || a.github_job_id === jobId) return;
+    const b = await this.db.prepare("SELECT * FROM github_runner_jobs WHERE installation_id = ? AND repo = ? AND github_job_id = ? AND status = 'queued'").bind(installationId, a.repo, jobId).first<RunnerJobRow>();
+    if (!b) return;
+    // (installation_id, github_job_id) is unique, so b's job id is negated (GitHub's never are) while a takes it.
+    // The first step changes nothing unless both rows still hold the jobs they were read with, and the other two
+    // only follow it. a keeps its size, which is its container's.
+    const set = "github_job_id = ?, run_id = ?, workflow_name = ?, job_name = ?, html_url = ?, labels = ?, created_at = ?";
+    const job = (r: RunnerJobRow) => [r.github_job_id, r.run_id, r.workflow_name, r.job_name, r.html_url, r.labels, r.created_at];
+    await this.db.batch([
+      this.db
+        .prepare("UPDATE github_runner_jobs SET github_job_id = -github_job_id WHERE id = ? AND github_job_id = ? AND status = 'queued' AND EXISTS (SELECT 1 FROM github_runner_jobs WHERE id = ? AND github_job_id = ?)")
+        .bind(b.id, b.github_job_id, a.id, a.github_job_id),
+      this.db.prepare(`UPDATE github_runner_jobs SET ${set} WHERE id = ? AND EXISTS (SELECT 1 FROM github_runner_jobs WHERE id = ? AND github_job_id = ?)`).bind(...job(b), a.id, b.id, -b.github_job_id),
+      this.db.prepare(`UPDATE github_runner_jobs SET ${set}, size = ? WHERE id = ? AND github_job_id = ?`).bind(...job(a), a.size, b.id, -b.github_job_id),
+    ]);
   }
 
   /**

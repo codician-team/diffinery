@@ -187,7 +187,7 @@ describe("GitHub jobs on Diffinery runners", () => {
     await w.svc.queued("ann", job(1), "large");
     await w.svc.jobEvent({ installationId: 11, githubJobId: 1, action: "completed", runnerName: null, jobName: "test 1", conclusion: "cancelled" });
     expect(w.rows()[0]).toMatchObject({ status: "skipped", conclusion: "cancelled", message: "The job ended before a runner started for it" });
-    // Another Diffinery runner, started for another job with the same labels, took it.
+    // A Diffinery runner this account didn't start (another instance's, say) took it.
     await w.svc.queued("ann", job(2), "large");
     await w.svc.jobEvent({ installationId: 11, githubJobId: 2, action: "in_progress", runnerName: "diffinery-other-1", jobName: "test 2", conclusion: null });
     expect(w.rows()[1]).toMatchObject({ status: "skipped", message: "The job ran on diffinery-other-1 before a runner started for it" });
@@ -201,6 +201,68 @@ describe("GitHub jobs on Diffinery runners", () => {
     await v.svc.queued("ann", job(2), "large");
     await v.svc.pump("ann");
     expect(v.rows()[1]).toMatchObject({ status: "skipped", message: "The GitHub installation is no longer linked to this account" });
+  });
+
+  it("still start a runner for a job when the runner started for it took another queued job", async () => {
+    const w = world();
+    const byJob = (id: number) => w.rows().find((r) => r.github_job_id === id)!;
+    await w.svc.queued("ann", job(1, ["diffinery-small", "diffinery-medium"]), "medium");
+    await w.svc.pump("ann");
+    const first = w.rows()[0]!;
+    // Job 2 is queued after job 1, and GitHub hands it to job 1's runner before a runner starts for it.
+    w.clock.advance(1000);
+    await w.svc.queued("ann", job(2, ["diffinery-small"]), "small");
+    const queued2 = byJob(2).created_at;
+    await w.svc.jobEvent({ installationId: 11, githubJobId: 2, action: "in_progress", runnerName: first.runner_name, jobName: "test 2", conclusion: null });
+    // The rows trade jobs: the runner's row shows the job it runs, the other waits for job 1 in job 1's place in line.
+    expect(byJob(2)).toMatchObject({ id: first.id, status: "running", job_name: "test 2", html_url: job(2).htmlUrl, labels: '["diffinery-small"]', size: "medium", created_at: queued2, ran_job_id: 2, container: first.container });
+    expect(byJob(1)).toMatchObject({ status: "queued", job_name: "test 1", html_url: job(1).htmlUrl, labels: '["diffinery-small","diffinery-medium"]', size: "medium", created_at: first.created_at, runner_name: null, ran_job_id: null });
+    const waiting = byJob(1);
+
+    await w.svc.pump("ann");
+    expect(byJob(1)).toMatchObject({ id: waiting.id, status: "starting", runner_name: `diffinery-${waiting.id}-1`, container: `gh-${waiting.id}-1.medium` });
+    expect(w.calls.filter((c) => c.op === "jit").map((c) => c.args[3])).toEqual([
+      ["diffinery-small", "diffinery-medium"],
+      ["diffinery-small", "diffinery-medium"],
+    ]);
+    expect(w.compute().map((c) => [c.id, c.ended_at])).toEqual([
+      [first.container, null],
+      [`gh-${waiting.id}-1.medium`, null],
+    ]);
+    // Each runner's row ends with its own container.
+    await w.svc.jobEvent({ installationId: 11, githubJobId: 2, action: "completed", runnerName: first.runner_name, jobName: "test 2", conclusion: "success" });
+    await w.svc.stopped(first.id, 0);
+    expect(byJob(2)).toMatchObject({ status: "completed", conclusion: "success", exit_code: 0 });
+    expect(byJob(1)).toMatchObject({ status: "starting" });
+    expect(w.compute().map((c) => c.ended_at === null)).toEqual([false, true]);
+
+    // Job 1 cancelled while its row waits: the row is skipped and no runner starts for it.
+    const v = world();
+    await v.svc.queued("ann", job(1), "large");
+    await v.svc.pump("ann");
+    const runner = v.rows()[0]!.runner_name;
+    await v.svc.queued("ann", job(2), "large");
+    await v.svc.jobEvent({ installationId: 11, githubJobId: 2, action: "in_progress", runnerName: runner, jobName: "test 2", conclusion: null });
+    await v.svc.jobEvent({ installationId: 11, githubJobId: 1, action: "completed", runnerName: null, jobName: "test 1", conclusion: "cancelled" });
+    expect(v.rows().map((r) => [r.github_job_id, r.status, r.message])).toEqual([
+      [1, "skipped", "The job ended before a runner started for it"],
+      [2, "running", null],
+    ]);
+    await v.svc.pump("ann");
+    expect(v.started).toHaveLength(1);
+
+    // A job whose own runner already started keeps it: GitHub hands that runner the job the other was started for.
+    const u = world();
+    await u.svc.queued("ann", job(1), "large");
+    await u.svc.queued("ann", job(2), "large");
+    await u.svc.pump("ann");
+    const [r1, r2] = u.rows();
+    await u.svc.jobEvent({ installationId: 11, githubJobId: 2, action: "in_progress", runnerName: r1!.runner_name, jobName: "test 2", conclusion: null });
+    await u.svc.jobEvent({ installationId: 11, githubJobId: 1, action: "in_progress", runnerName: r2!.runner_name, jobName: "test 1", conclusion: null });
+    expect(u.rows().map((r) => [r.id, r.github_job_id, r.status, r.ran_job_id])).toEqual([
+      [r1!.id, 1, "running", 2],
+      [r2!.id, 2, "running", 1],
+    ]);
   });
 
   it("run a size this Diffinery doesn't have on a large runner", async () => {
