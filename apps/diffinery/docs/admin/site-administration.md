@@ -219,6 +219,7 @@ The repository's **Actions** page, its run pages and its **Settings** pages show
 
 - Suspending a repository or an account cancels each of its unfinished runs ("Cancelled: Actions are suspended ...", including jobs on self-hosted runners) and closes each of its open sandboxes.
 - Pausing hosted compute fails each running hosted job ("The job was stopped: Hosted runners are paused ...") and closes the open sandboxes, in every repository with hosted compute running (Diffinery finds them from the hosted minutes it is counting). Jobs that wait in the queue fail when they would start.
+- [GitHub jobs on Diffinery runners](/docs/actions/github-runners) count as the linked account's hosted jobs: suspending that account, or pausing hosted compute, fails its GitHub jobs that wait for a runner and stops its running GitHub runners (counted in `jobs`). The jobs on GitHub end as their runner stops.
 
 The answer says what was stopped: `stopped` with `repositories`, `runs`, `jobs`, `sandboxes`, and `failed` for repositories that didn't answer (their work still can't start).
 

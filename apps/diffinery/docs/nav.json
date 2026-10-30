@@ -81,6 +81,7 @@
       "actions/events",
       "actions/expressions",
       "actions/runners",
+      "actions/github-runners",
       "actions/docker",
       "actions/reusable-workflows",
       "actions/secrets-and-variables",

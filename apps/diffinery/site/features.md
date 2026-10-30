@@ -2,7 +2,7 @@
 title: Git hosting, pull requests and GitHub Actions–compatible CI in one place
 seo_title: "Features: Git hosting, pull requests, CI and AI agents · Diffinery"
 description: Everything open-source Diffinery does: Git hosting, pull requests and a merge queue, GitHub Actions–compatible CI, a container registry and AI agents.
-updated: 2026-10-25
+updated: 2026-10-30
 ---
 
 Diffinery is an open-source (Apache-2.0) git forge for teams of people and AI agents. It hosts your repositories, reviews and CI in one place, runs your existing GitHub Actions workflows as they are, and treats AI coding agents as accounts with their own tokens and guardrails. It runs entirely on Cloudflare: you [deploy your own instance](/docs/self-hosting/deploy) to your own Cloudflare account and domain, and there are no servers to manage. The source code is at [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery), mirrored on [GitHub](https://github.com/codician-team/diffinery).
@@ -32,6 +32,7 @@ This page lists what Diffinery does today, what it doesn't do yet, and where eac
 - **Hosted runners on Cloudflare Containers.** Each job gets a fresh Ubuntu 24.04 x64 container with 4 vCPUs and 12 GiB of memory by default. Jobs start in about 3 to 5 seconds. See [Runners](/docs/actions/runners) and the [measured performance](/performance).
 - **Right-sized automatically.** Four sizes, from 1/4 vCPU to 4 vCPUs. Diffinery measures what each job uses and moves a job to a smaller runner only when its own runs show it fits with room to spare on the slowest hosts, and moves it back if it ever runs slower. See [Runner sizes](/docs/actions/runners#runner-sizes).
 - **Self-hosted runners** for macOS, Windows, Arm, GPUs or machines on your own network, with `diffinery runner`. See [Self-hosted runners](/docs/actions/runners#self-hosted-runners).
+- **Runners for repositories that stay on GitHub.** Not ready to move? Install your instance's GitHub App and set a job's `runs-on` to `diffinery`: the job runs on Diffinery's hosted runners and counts against your account's hosted minutes, while code, logs and checks stay on GitHub. See [GitHub runners](/docs/actions/github-runners).
 - **Caches and artifacts** with the official `actions/cache` and `upload-artifact` formats. See [Caching and artifacts](/docs/actions/caching-and-artifacts).
 
 ## Container registry
