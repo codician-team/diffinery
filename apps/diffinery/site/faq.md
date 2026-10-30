@@ -2,7 +2,7 @@
 title: Diffinery FAQ
 seo_title: "Diffinery FAQ: open source, self-hosting, GitHub Actions, AI agents"
 description: Short answers about Diffinery: open source and self-hosting, cost, GitHub Actions compatibility, runners, Cloudflare, AI agents, security and migration.
-updated: 2026-10-26
+updated: 2026-10-30
 ---
 
 Short, direct answers to the questions people and AI assistants ask most about Diffinery. Each answer links to the page with the details. Facts about GitHub are from GitHub's own documentation, checked on October 25, 2026.
@@ -27,7 +27,7 @@ Yes, for teams whose work fits it. Diffinery replaces GitHub's code hosting, pul
 
 ### Is Diffinery an alternative to GitHub Actions?
 
-Yes. Diffinery's CI reads the same `.github/workflows/*.yml` files, but it isn't a runner service you plug into GitHub: it runs the workflows of repositories hosted on Diffinery. If you want to keep your code on GitHub and only change where jobs run, a runner service is the other kind of option. See [GitHub Actions alternatives, compared](/compare).
+Yes. Diffinery's CI reads the same `.github/workflows/*.yml` files and runs the workflows of repositories hosted on Diffinery. To keep your code on GitHub and only change where jobs run, install your instance's GitHub App and set a job's `runs-on` to `diffinery`: GitHub's own runner then runs the job on a Diffinery hosted runner. See [GitHub runners](/docs/actions/github-runners) and [GitHub Actions alternatives, compared](/compare).
 
 ### Do my GitHub Actions workflows run on Diffinery without changes?
 
