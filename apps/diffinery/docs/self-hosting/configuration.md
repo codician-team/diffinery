@@ -37,7 +37,7 @@ Set under `vars` in `wrangler.jsonc`. All values are strings.
 | `HOSTED_JOBS_LIMIT` | Not set | No | Hosted Actions jobs the whole instance runs at once (default `80`); one account runs at most half of them, accounts run by a site administrator included. Keep it under the runner container classes' `max_instances`. Past it, hosted jobs wait as queued until one finishes. See [Limits](/docs/reference/limits#actions). |
 | `IMPORT_GHE_HOST` | Not set | No | The host name of a GitHub Enterprise Server (like `ghe.example.com`) that imports may download release assets from. Without it, imports download release assets only from github.com and its asset hosts, and assets of an Enterprise import are skipped with a warning. |
 | `GITHUB_OAUTH_CLIENT_ID` | Not set | No | The client ID of a GitHub OAuth app, for linking GitHub accounts with a GitHub sign-in instead of a gist. Needs `GITHUB_OAUTH_CLIENT_SECRET` too. See [GitHub imports](#github-imports). |
-| `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID` | Not set | No | The GitHub App that lets GitHub repositories run jobs on this instance's hosted runners: its App ID, its slug (the last part of `https://github.com/apps/<slug>`) and its Client ID. Needs `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` and `GITHUB_APP_WEBHOOK_SECRET` too. See [GitHub runners](#github-runners). |
+| `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID` | Not set | No | The GitHub App that lets GitHub repositories run jobs on this instance's hosted runners: its App ID, its slug (the last part of `https://github.com/apps/<slug>`) and its Client ID. Needs `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` and `GITHUB_APP_WEBHOOK_SECRET` too. The deploy sets them from the environment (the Deploy workflow from the `DIFFINERY_GITHUB_APP_*` repository variables). See [GitHub runners](#github-runners). |
 | `GITHUB_APP_URL` | Not set | No | The origin of a GitHub Enterprise Server for that app, like `https://ghe.example.com`. Default `https://github.com`. |
 | `IMPORT_GIT_AGENT` | Not set in production; `external` in the `dev` environment | Never in production | With `external`, an import's Git transfer doesn't start a container: it waits for an import agent started by hand (see [The dev environment](#the-dev-environment)). |
 | `SCHEDULE_TICK_MINUTES` | Not set | No | Minutes between the workflow scheduler's checks, a whole number from 1 to 60. Default `5`, GitHub's shortest schedule interval. Anything else counts as not set. The end-to-end tests use `1`. |
@@ -377,15 +377,24 @@ Create the app on GitHub under **Settings → Developer settings → GitHub Apps
 | **Subscribe to events** | **Workflow job** |
 | **Where can this GitHub App be installed?** | **Any account** to let anyone with an account on your instance use it; **Only on this account** for your own repositories only |
 
-Then, on the app's page: note the **App ID** and the **Client ID**, click **Generate a new client secret**, and under **Private keys** click **Generate a private key**, which downloads a `.pem` file. Add the IDs and the slug under `vars` in `wrangler.jsonc`:
+Then, on the app's page: note the **App ID** and the **Client ID**, click **Generate a new client secret**, and under **Private keys** click **Generate a private key**, which downloads a `.pem` file.
 
-```jsonc
-"GITHUB_APP_ID": "123456",
-"GITHUB_APP_SLUG": "diffinery-runners-for-git-example-com",
-"GITHUB_APP_CLIENT_ID": "Iv23li...",
+Give the deploy the IDs and the slug (the last part of `https://github.com/apps/<slug>`). They aren't secrets, but they are your instance's, so the deploy takes them from the environment, like your hostname, and `scripts/render-config.mjs` writes them into the deployed config:
+
+| Deploy from | Set |
+| --- | --- |
+| The Deploy workflow | Repository variables `DIFFINERY_GITHUB_APP_ID`, `DIFFINERY_GITHUB_APP_SLUG` and `DIFFINERY_GITHUB_APP_CLIENT_ID` (and `DIFFINERY_GITHUB_APP_URL` for GitHub Enterprise Server). GitHub doesn't allow variable names that start with `GITHUB_`, so the workflow passes them on as `GITHUB_APP_ID` and the rest. |
+| `scripts/setup.sh` | The environment variables `GITHUB_APP_ID`, `GITHUB_APP_SLUG` and `GITHUB_APP_CLIENT_ID` (and `GITHUB_APP_URL`). |
+
+```sh
+gh variable set DIFFINERY_GITHUB_APP_ID --body 123456
+gh variable set DIFFINERY_GITHUB_APP_SLUG --body diffinery-runners-for-git-example-com
+gh variable set DIFFINERY_GITHUB_APP_CLIENT_ID --body Iv23li...
 ```
 
-and store the secrets:
+A value of the wrong shape, such as a slug with capital letters, stops the deploy with `GITHUB_APP_SLUG must be the slug, like diffinery-runners`. You can put them under `vars` in your copy's `wrangler.jsonc` instead; the environment wins when it has them.
+
+Then store the secrets:
 
 ```sh
 cd apps/diffinery

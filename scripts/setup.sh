@@ -16,6 +16,8 @@
 #   DIFFINERY_ZONE         the Cloudflare zone holding DIFFINERY_DOMAIN (default: its last two labels)
 #   MAIL_DOMAIN            send email from notifications@<MAIL_DOMAIN> (default DIFFINERY_DOMAIN)
 #   ACCESS_TEAM_DOMAIN     your Zero Trust team domain, e.g. example.cloudflareaccess.com, when the token can't read it
+#   GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_APP_CLIENT_ID, GITHUB_APP_URL
+#                          the GitHub App of GitHub runners (docs/self-hosting/configuration.md#github-runners)
 #   ROLLOUT_WAIT_MINUTES   how long to wait for the container rollout (default 10)
 #
 # Every step is idempotent: it creates only what is missing and keeps your data and secrets, so run
