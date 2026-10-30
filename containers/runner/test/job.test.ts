@@ -954,7 +954,8 @@ describe("agent binary (esbuild bundle)", () => {
     expect(api.logText()).toContain("Runner: image diffinery-runner:abc123, in fra06, EEUR, container d0");
     // A hosted runner also names its host's processor and, at the end, the share of its vCPUs' time the host took.
     if (existsSync("/proc/cpuinfo")) {
-      expect(api.logText()).toContain(`Host: ${runner.cpu}`);
+      // The clock speed is read again for the log line, and it moves between reads on a busy host.
+      expect(api.logText()).toContain(`Host: ${String(runner.cpu).replace(/, \d+ MHz$/, "")}`);
       expect(api.logText()).toMatch(/Host: \d+% of the vCPUs' time went to other work on the host \(steal\)/);
     }
     expect(api.completion).toMatchObject({ conclusion: "failure", failure: { step: 0 } });
