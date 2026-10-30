@@ -45,6 +45,14 @@ describe("wrangler.jsonc for celld", () => {
     expect(config.containers.every((c: { image: string }) => c.image === "registry.example.com/runner:1")).toBe(true);
     expect(SECRETS).toContain("OIDC_PRIVATE_KEY");
   });
+
+  it("copies every secret the Worker reads", () => {
+    // celld deploy has no secret store: a secret missing from SECRETS never reaches the Worker. Env marks them "Secret".
+    const env = readFileSync(join(repo, "apps/diffinery/src/env.ts"), "utf8");
+    const secrets = [...env.matchAll(/\/\*\*((?:(?!\*\/)[\s\S])*)\*\/\s*([A-Z][A-Z0-9_]*)\??:/g)].filter(([, doc]) => /^Secret\b/.test(doc.replace(/^[\s*]+/, ""))).map(([, , name]) => name);
+    expect(secrets.length).toBeGreaterThan(5);
+    expect(secrets.filter((s) => !SECRETS.includes(s))).toEqual([]);
+  });
 });
 
 /** Built-in modules celld implements (its docs/cloudflare-compat.md); node:crypto and node:zlib only in part. */
