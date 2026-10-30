@@ -4,6 +4,7 @@ import { Directory, type Account } from "../lib/directory.js";
 import { MailStore, wantsEmail } from "./prefs.js";
 import { compose, toHtml, toText, type RenderCtx } from "./templates.js";
 import { categoryOf, isMandatory, type MailJob } from "./types.js";
+import { SmtpError, sendSmtp, smtpConfig, type SmtpConfig } from "./smtp.js";
 import { REASON_TEXT, Suppressions, sendSuppression } from "./suppression.js";
 import { unsubUrl } from "./unsubscribe.js";
 
@@ -11,8 +12,9 @@ import { unsubUrl } from "./unsubscribe.js";
  * Sending: jobs go on the `diffinery-mail` queue (so a slow or failing send
  * never holds up a request, and failures retry with backoff), and the queue
  * consumer checks the recipient's settings, renders and sends each one through
- * Cloudflare Email Sending. Nothing goes to an address on the suppression list
- * (suppression.ts), and an address Email Sending refuses for good goes on it.
+ * Cloudflare Email Sending, or over SMTP (smtp.ts) where there is no EMAIL binding.
+ * Nothing goes to an address on the suppression list (suppression.ts), and an
+ * address Email Sending or the SMTP server refuses for good goes on it.
  */
 
 /**
@@ -74,9 +76,22 @@ export async function enqueueMail(env: Env, jobs: MailJob[]): Promise<void> {
   }
 }
 
-const RETRYABLE = new Set(["E_RATE_LIMIT_EXCEEDED", "E_INTERNAL_SERVER_ERROR", "E_DELIVERY_FAILED"]);
+const RETRYABLE = new Set(["E_RATE_LIMIT_EXCEEDED", "E_INTERNAL_SERVER_ERROR", "E_DELIVERY_FAILED", "E_SMTP_TRANSIENT"]);
 
 export class RetryableMailError extends Error {}
+
+/**
+ * How this instance sends email: Cloudflare Email Sending when the EMAIL binding is there, else
+ * the SMTP server in SMTP_URL (with what is wrong with it, if anything); null when neither is set.
+ */
+export type MailTransport = { kind: "email-sending"; binding: SendEmail } | { kind: "smtp"; config: SmtpConfig } | { kind: "smtp"; error: string };
+
+export function mailTransport(env: Pick<Env, "EMAIL" | "SMTP_URL" | "SMTP_PASSWORD">): MailTransport | null {
+  if (env.EMAIL) return { kind: "email-sending", binding: env.EMAIL };
+  const smtp = smtpConfig(env);
+  if (!smtp) return null;
+  return "error" in smtp ? { kind: "smtp", error: smtp.error } : { kind: "smtp", config: smtp };
+}
 
 /** The address every email is sent from: MAIL_FROM, or notifications@ the public host. */
 export const senderAddress = (env: Pick<Env, "MAIL_FROM" | "PUBLIC_URL">): string => env.MAIL_FROM || `notifications@${new URL(env.PUBLIC_URL).hostname}`;
@@ -205,18 +220,21 @@ export async function deliver(env: Env, job: MailJob, opts: DeliverOptions = {})
   const msg = await buildMessage(env, job, to);
   const devCopy = devAuth(env) ? JSON.stringify(msg) : null;
   const base = { account_id: to.accountId ?? null, to_addr: to.email, kind: job.kind, subject: msg.subject, dev_copy: devCopy };
-  if (!env.EMAIL) {
-    await store.log({ ...base, status: "skipped", detail: "email sending is not configured (no EMAIL binding)", message_id: null });
-    return { status: "skipped", detail: "no EMAIL binding" };
+  const transport = mailTransport(env);
+  if (!transport) {
+    await store.log({ ...base, status: "skipped", detail: "email sending is not configured (no EMAIL binding or SMTP_URL)", message_id: null });
+    return { status: "skipped", detail: "no EMAIL binding or SMTP_URL" };
   }
   let res: { messageId?: string };
   try {
-    res = await env.EMAIL.send(msg);
+    if (transport.kind === "email-sending") res = await transport.binding.send(msg);
+    else if ("error" in transport) throw new SmtpError("E_SMTP_CONFIG", transport.error);
+    else res = await sendSmtp(transport.config, msg, { ehlo: new URL(env.PUBLIC_URL).hostname });
   } catch (e) {
     const code = (e as { code?: string }).code ?? "";
     const detail = `${code ? `${code}: ` : ""}${(e as Error).message ?? String(e)}`;
     if (RETRYABLE.has(code)) throw new RetryableMailError(detail);
-    // A permanent failure for this recipient (it's on Cloudflare's suppression list) puts it on ours.
+    // A permanent failure for this recipient (it's on Cloudflare's suppression list, or the SMTP server has no such mailbox) puts it on ours.
     const s = sendSuppression(to.email, { error: e });
     if (s) await suppressFromSend(env, s);
     await store.log({ ...base, status: "failed", detail, message_id: null });
@@ -234,7 +252,7 @@ export async function deliver(env: Env, job: MailJob, opts: DeliverOptions = {})
   return { status: "sent", messageId: res.messageId };
 }
 
-/** Suppress an address Email Sending refused for good (source `send`), audited like any other addition. Never throws. */
+/** Suppress an address Email Sending or the SMTP server refused for good (source `send`), audited like any other addition. Never throws. */
 async function suppressFromSend(env: Env, s: NonNullable<ReturnType<typeof sendSuppression>>): Promise<void> {
   try {
     await new Suppressions(env.DB).add({ ...s, source: "send" });
