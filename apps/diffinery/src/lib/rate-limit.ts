@@ -34,8 +34,11 @@ export type Bucket = "RL_AUTH" | "RL_ANON" | "RL_ACCOUNT" | "RL_CREATE";
 export const RATE_LIMITS: Record<Bucket, number> = { RL_AUTH: 20, RL_ANON: 300, RL_ACCOUNT: 2000, RL_CREATE: 60 };
 export const RATE_PERIOD_S = 60;
 
-/** Paths that never count: health checks, avatars, and the Actions runtime and runners (their own credentials). */
-const EXEMPT = /^\/(?:healthz$|api\/avatars\/|twirp\/|_runtime\/|_apis\/|runner\/|-\/model\/)/;
+/**
+ * Paths that never count: health checks, avatars, the Actions runtime and runners (their own credentials), and
+ * the GitHub App's signed webhook, which GitHub sends from a few addresses for every job of every installation.
+ */
+const EXEMPT = /^\/(?:healthz$|api\/avatars\/|twirp\/|_runtime\/|_apis\/|runner\/|-\/model\/|-\/github\/webhook$)/;
 const AUTH = /^\/(?:auth\/passkey\/|invite\/|signin\/|login(?:$|\/)|signup(?:$|\/)|security\/report$|early-access(?:\/confirm|\/remove(?:\/confirm)?)?$|contact(?:\/confirm)?$|-\/cli\/device$|oauth\/register$)/;
 const CREATE: Array<[method: string, path: RegExp]> = [
   ["POST", /^\/api\/v3\/(?:user|orgs\/[^/]+)\/repos$/],

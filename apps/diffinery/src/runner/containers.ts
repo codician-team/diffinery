@@ -39,6 +39,8 @@ abstract class HostedContainer extends Container<Env> {
 
 /** The job a runner container runs; stopRequested once Diffinery asked it to stop (stopJob). */
 type RunnerJob = { repoId: string; jobId: string; container?: string; stopRequested?: boolean };
+/** A GitHub job's runner (github-runners/): GitHub's own runner, for the account that pays. */
+type GitHubRunner = { accountId: string; runnerId: string };
 
 /** How long a job's container may take to come up, and how often it is checked meanwhile. */
 const START_WAIT_MS = 180_000;
@@ -54,18 +56,29 @@ export class RunnerContainer extends HostedContainer {
 
   async startJob(input: { repoId: string; jobId: string; container?: string; token: string; apiUrl: string; egress?: Egress; vcpu?: number }): Promise<void> {
     await this.ctx.storage.put("job", { repoId: input.repoId, jobId: input.jobId, container: input.container });
-    const egressEnv = await this.useEgress(input.egress ?? "open");
+    await this.startRunner({
+      DIFFINERY_API_URL: input.apiUrl,
+      DIFFINERY_JOB_ID: input.jobId,
+      DIFFINERY_JOB_TOKEN: input.token,
+      // The runner's share of CPU, which the agent measures the job's use against (runner/sizes.ts).
+      ...(input.vcpu ? { DIFFINERY_RUNNER_VCPU: String(input.vcpu) } : {}),
+      ...(await this.useEgress(input.egress ?? "open")),
+    });
+  }
+
+  /**
+   * A GitHub job's runner (github-runners/service.ts): the agent runs GitHub's runner with the just-in-time
+   * configuration GitHub made for it, which holds the runner's credentials, so it is only ever in the
+   * container's environment.
+   */
+  async startGitHubRunner(input: { accountId: string; runnerId: string; jitConfig: string; egress: Egress; vcpu: number }): Promise<void> {
+    await this.ctx.storage.put("github", { accountId: input.accountId, runnerId: input.runnerId } satisfies GitHubRunner);
+    await this.startRunner({ DIFFINERY_GITHUB_JIT_CONFIG: input.jitConfig, DIFFINERY_RUNNER_VCPU: String(input.vcpu), ...(await this.useEgress(input.egress)) });
+  }
+
+  private async startRunner(envVars: Record<string, string>): Promise<void> {
     await this.start(
-      {
-        envVars: {
-          DIFFINERY_API_URL: input.apiUrl,
-          DIFFINERY_JOB_ID: input.jobId,
-          DIFFINERY_JOB_TOKEN: input.token,
-          // The runner's share of CPU, which the agent measures the job's use against (runner/sizes.ts).
-          ...(input.vcpu ? { DIFFINERY_RUNNER_VCPU: String(input.vcpu) } : {}),
-          ...egressEnv,
-        },
-      },
+      { envVars },
       // The library gives up after 8 s and reports "no container instance", but a container on a host
       // that hasn't pulled the runner image yet takes longer than that to come up: such jobs went back
       // in line for 30 to 90 s more (measured on 10-leg matrices). Wait for it instead.
@@ -91,6 +104,13 @@ export class RunnerContainer extends HostedContainer {
   }
 
   override async onStop(params: StopParams): Promise<void> {
+    const gh = await this.ctx.storage.get<GitHubRunner>("github");
+    if (gh) {
+      const ns = this.env.GITHUB_RUNNERS;
+      if (ns) await ns.get(ns.idFromName(gh.accountId)).stopped(gh.accountId, gh.runnerId, params.exitCode ?? null);
+      await this.ctx.storage.delete("github");
+      return;
+    }
     const job = await this.ctx.storage.get<RunnerJob>("job");
     if (!job) return;
     const repo = this.env.REPO.get(this.env.REPO.idFromName(job.repoId));

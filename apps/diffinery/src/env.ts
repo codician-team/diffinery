@@ -8,6 +8,7 @@ import type { MailJob } from "./mail/types.js";
 import type { ProjectDO } from "./agentic/ProjectDO.js";
 import type { ExportJob } from "./accounts/export.js";
 import type { DeletionCleanup } from "./accounts/lifecycle.js";
+import type { GitHubRunnersDO } from "./github-runners/GitHubRunnersDO.js";
 
 export interface Env {
   DB: D1Database;
@@ -32,6 +33,8 @@ export interface Env {
   RUNNER_SMALL?: DurableObjectNamespace<RunnerContainer>;
   RUNNER_TINY?: DurableObjectNamespace<RunnerContainer>;
   SANDBOX: DurableObjectNamespace<SandboxContainer>;
+  /** GitHub jobs on Diffinery runners, one per paying account (github-runners/GitHubRunnersDO.ts). */
+  GITHUB_RUNNERS?: DurableObjectNamespace<GitHubRunnersDO>;
   /** One per repository: its agent tasks (agentic/ProjectDO.ts). */
   PROJECT: DurableObjectNamespace<ProjectDO>;
   /**
@@ -80,6 +83,17 @@ export interface Env {
   /** Optional GitHub OAuth app, for linking an account through the web flow instead of a gist. */
   GITHUB_OAUTH_CLIENT_ID?: string;
   GITHUB_OAUTH_CLIENT_SECRET?: string;
+  /**
+   * The GitHub App that lets GitHub repositories run jobs on this Diffinery's hosted runners
+   * (github-runners/github.ts, docs/actions/github-runners.md). The feature is off until all of
+   * GITHUB_APP_ID, GITHUB_APP_SLUG, GITHUB_APP_CLIENT_ID and the secrets GITHUB_APP_CLIENT_SECRET,
+   * GITHUB_APP_PRIVATE_KEY and GITHUB_APP_WEBHOOK_SECRET are set.
+   */
+  GITHUB_APP_ID?: string;
+  GITHUB_APP_SLUG?: string;
+  GITHUB_APP_CLIENT_ID?: string;
+  /** A GitHub Enterprise Server origin for the app; default https://github.com. */
+  GITHUB_APP_URL?: string;
 
   /** Canonical origin, e.g. https://diffinery.com */
   PUBLIC_URL: string;
@@ -139,6 +153,12 @@ export interface Env {
   MAIL_EVENTS_SECRET?: string;
   /** Secret: Cloudflare Turnstile secret key, to check the widget on the sign-up page and the security report form (siteverify). */
   TURNSTILE_SECRET?: string;
+  /** Secret: the GitHub App's client secret, to check who links an installation. */
+  GITHUB_APP_CLIENT_SECRET?: string;
+  /** Secret: the GitHub App's private key (PEM, as GitHub gives it). */
+  GITHUB_APP_PRIVATE_KEY?: string;
+  /** Secret: the GitHub App's webhook secret, which signs deliveries to /-/github/webhook. */
+  GITHUB_APP_WEBHOOK_SECRET?: string;
   /** Optional GitHub Enterprise host (e.g. github.example.com) the importer may download release assets from. */
   IMPORT_GHE_HOST?: string;
 }
