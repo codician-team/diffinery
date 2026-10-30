@@ -70,7 +70,9 @@
       { "name": "RUNNER_TINY", "class_name": "RunnerContainerTiny" },
       { "name": "SANDBOX", "class_name": "SandboxContainer" },
       { "name": "IMPORTER", "class_name": "ImportContainer" },
-      { "name": "PROJECT", "class_name": "ProjectDO" }
+      { "name": "PROJECT", "class_name": "ProjectDO" },
+      // GitHub jobs on Diffinery runners, one per paying account (src/github-runners/GitHubRunnersDO.ts).
+      { "name": "GITHUB_RUNNERS", "class_name": "GitHubRunnersDO" }
     ]
   },
   "migrations": [
@@ -83,7 +85,9 @@
     // Smaller hosted runner sizes (src/runner/sizes.ts).
     { "tag": "v5", "new_sqlite_classes": ["RunnerContainerMedium", "RunnerContainerSmall", "RunnerContainerTiny"] },
     // Joining large uploads' blocks, a step per object (compose.ts).
-    { "tag": "v6", "new_sqlite_classes": ["ComposeDO"] }
+    { "tag": "v6", "new_sqlite_classes": ["ComposeDO"] },
+    // GitHub jobs on Diffinery runners (src/github-runners/GitHubRunnersDO.ts).
+    { "tag": "v7", "new_sqlite_classes": ["GitHubRunnersDO"] }
   ],
   "workflows": [
     { "name": "diffinery-run", "binding": "RUN_WORKFLOW", "class_name": "RunWorkflow" },
@@ -163,7 +167,8 @@
           // Sandboxes run in an `agent.mjs --sandbox-pool` process (SANDBOX_POOL_URL), not containers.
           { "name": "SANDBOX", "class_name": "SandboxPoolDO" },
           { "name": "IMPORTER", "class_name": "ImportContainer" },
-          { "name": "PROJECT", "class_name": "ProjectDO" }
+          { "name": "PROJECT", "class_name": "ProjectDO" },
+          { "name": "GITHUB_RUNNERS", "class_name": "GitHubRunnersDO" }
         ]
       },
       "workflows": [

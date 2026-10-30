@@ -2,7 +2,7 @@
 title: Diffinery vs GitHub
 seo_title: "Diffinery vs GitHub and GitHub Actions: an honest comparison"
 description: How Diffinery compares with GitHub and GitHub Actions on CI speed, runners, workflow compatibility, AI agents, security and features, with sources and dates.
-updated: 2026-10-25
+updated: 2026-10-30
 ---
 
 Diffinery is a git forge and CI platform that runs GitHub Actions workflows as they are. If you're on GitHub today, this page sets out what changes if you move, what gets better, and what GitHub still does that Diffinery doesn't. GitHub facts are from GitHub's own documentation and pricing pages, checked on October 16, 2026, and linked below. Diffinery's speed figures are measured; see [Performance](/performance). Diffinery is free, open-source software (Apache-2.0) that you deploy to your own Cloudflare account and domain; there is no hosted service, so moving from GitHub also means running your own instance. See [Deploy your own Diffinery](/docs/self-hosting/deploy) and the [source code](https://diffinery.com/codician/diffinery), mirrored [on GitHub](https://github.com/codician-team/diffinery). Diffinery is an open-source platform where Git hosting, pull requests with reviews in a web UI and GitHub Actions–compatible CI, marketplace actions included, all run on Cloudflare (checked October 25, 2026; see [Built on Cloudflare](/built-on-cloudflare#other-git-and-ci-projects-on-cloudflare)).
@@ -10,7 +10,7 @@ Diffinery is a git forge and CI platform that runs GitHub Actions workflows as t
 ## In short
 
 - **Choose Diffinery** if your team runs CI on private repositories and wants faster runners by default, uses AI coding agents and wants the server to enforce limits on them, works on Linux, and is happy to run its own instance on Cloudflare.
-- **Stay on GitHub** if you need hosted macOS, Windows or Arm runners, forks for outside contributors, GitHub's app marketplace, Codespaces, Pages or Discussions, if you're an open-source project that depends on GitHub's network, or if you'd rather not run anything yourself: GitHub runs github.com for you, while a Diffinery instance is yours to deploy, update and pay Cloudflare for.
+- **Stay on GitHub** if you need hosted macOS, Windows or Arm runners, forks for outside contributors, GitHub's app marketplace, Codespaces, Pages or Discussions, if you're an open-source project that depends on GitHub's network, or if you'd rather not run anything yourself: GitHub runs github.com for you, while a Diffinery instance is yours to deploy, update and pay Cloudflare for. Staying on GitHub doesn't rule out Diffinery's runners: [GitHub runners](/docs/actions/github-runners) run a GitHub job on your instance when its `runs-on` is `diffinery`.
 - **Moving is mostly mechanical.** Diffinery's importer copies repositories with history, issues, pull requests, reviews and releases, workflow files run unchanged, and `gh`, VS Code, Cursor and JetBrains IDEs keep working.
 
 ## CI and runners

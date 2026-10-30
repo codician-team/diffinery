@@ -2,7 +2,7 @@
 title: Diffinery vs Depot
 seo_title: "Diffinery vs Depot: CI runners, Depot CI and Git hosting"
 description: Depot sells fast GitHub Actions runners, its own Depot CI engine and container builds. How it compares with Diffinery, with specs, prices and trade-offs.
-updated: 2026-10-25
+updated: 2026-10-30
 ---
 
 Depot started with fast container builds and now sells drop-in runners for GitHub Actions, its own CI engine that runs GitHub Actions YAML (Depot CI), and Git hosting in beta (Depot Code). Diffinery is a git forge with pull requests, issues, GitHub Actions–compatible CI and AI agents in one platform. Depot is a service that runs everything for you; Diffinery is free, open-source software (Apache-2.0) that you deploy to your own Cloudflare account, with no hosted service (see [Deploy your own Diffinery](/docs/self-hosting/deploy) and the [source code](https://diffinery.com/codician/diffinery)). Depot facts here are from its own website and documentation, checked on October 16, 2026, and linked below.
@@ -19,7 +19,7 @@ Depot started with fast container builds and now sells drop-in runners for GitHu
 | Who runs it | You: you deploy your instance to your own Cloudflare account and pay Cloudflare for its usage | Depot |
 | What it is | Git hosting, pull requests, issues, releases, a container registry and GitHub Actions–compatible CI | GitHub Actions runners, Depot CI (generally available since March 2026), container builds, a registry, and Depot Code (beta) ([runners](https://depot.dev/docs/github-actions/overview), [Depot CI](https://depot.dev/changelog/2026-03-24-depot-ci-now-available)) |
 | Git hosting and pull requests | Yes, with reviews, required checks, auto-merge and a merge queue | Depot Code, in beta: repositories or GitHub mirrors that trigger CI on push; Depot says a code review UI is in progress ([source](https://depot.dev/docs/code/overview)) |
-| Runners for GitHub-hosted repositories | No (Diffinery runs its own repositories' workflows) | Yes, for repositories owned by GitHub organizations, with a `runs-on: depot-ubuntu-24.04` label ([source](https://depot.dev/docs/github-actions/overview)) |
+| Runners for GitHub-hosted repositories | Yes, for repositories of GitHub users and organizations: install your instance's GitHub App and set `runs-on: diffinery` ([guide](/docs/actions/github-runners)) | Yes, for repositories owned by GitHub organizations, with a `runs-on: depot-ubuntu-24.04` label ([source](https://depot.dev/docs/github-actions/overview)) |
 | Linux x64 runner sizes | 1/4, 1/2, 2 and 4 vCPU; 4 vCPU and 12 GiB by default | 2 to 64 vCPU, 8 to 256 GB, on AMD EPYC Genoa ([source](https://depot.dev/docs/github-actions/runner-types)) |
 | Arm, Windows, macOS | Self-hosted runners only | Arm (Graviton4) and Windows; macOS on the Startup and Business plans ([source](https://depot.dev/docs/github-actions/runner-types)) |
 | Linux x64 price | Free and open source (Apache-2.0); you pay Cloudflare for your instance's usage, with runner containers billed by the 10 ms while a job runs ([source](https://developers.cloudflare.com/containers/pricing/), checked October 25, 2026) | $0.006 per minute at 2 vCPU, tracked per second; plans from $20 a month with 2,000 runner minutes included ([source](https://depot.dev/pricing)) |
@@ -31,7 +31,7 @@ Depot started with fast container builds and now sells drop-in runners for GitHu
 
 ## Where each one is the better fit
 
-**Depot is the better fit when** container image builds are your bottleneck, you need runners bigger than 4 vCPUs or on macOS, Windows or Arm, you want to keep GitHub as your forge and speed up CI around it, or you don't want to run any infrastructure yourself.
+**Depot is the better fit when** container image builds are your bottleneck, you need runners bigger than 4 vCPUs or on macOS, Windows or Arm, or you want to keep GitHub as your forge without running any infrastructure yourself.
 
 **Diffinery is the better fit when** you want one place for code, review and CI with a mature pull request workflow, when your CI is Linux, and when AI agents do a growing share of your work and you want the forge to enforce what they can and can't do. You run Diffinery yourself, on your own Cloudflare account.
 

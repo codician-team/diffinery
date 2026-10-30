@@ -35,6 +35,8 @@ Set under `vars` in `wrangler.jsonc`. All values are strings.
 | `HOSTED_JOBS_LIMIT` | Not set | No | Hosted Actions jobs the whole instance runs at once (default `80`); one account runs at most half of them, accounts run by a site administrator included. Keep it under the runner container classes' `max_instances`. Past it, hosted jobs wait as queued until one finishes. See [Limits](/docs/reference/limits#actions). |
 | `IMPORT_GHE_HOST` | Not set | No | The host name of a GitHub Enterprise Server (like `ghe.example.com`) that imports may download release assets from. Without it, imports download release assets only from github.com and its asset hosts, and assets of an Enterprise import are skipped with a warning. |
 | `GITHUB_OAUTH_CLIENT_ID` | Not set | No | The client ID of a GitHub OAuth app, for linking GitHub accounts with a GitHub sign-in instead of a gist. Needs `GITHUB_OAUTH_CLIENT_SECRET` too. See [GitHub imports](#github-imports). |
+| `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID` | Not set | No | The GitHub App that lets GitHub repositories run jobs on this instance's hosted runners: its App ID, its slug (the last part of `https://github.com/apps/<slug>`) and its Client ID. Needs `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` and `GITHUB_APP_WEBHOOK_SECRET` too. See [GitHub runners](#github-runners). |
+| `GITHUB_APP_URL` | Not set | No | The origin of a GitHub Enterprise Server for that app, like `https://ghe.example.com`. Default `https://github.com`. |
 | `IMPORT_GIT_AGENT` | Not set in production; `external` in the `dev` environment | Never in production | With `external`, an import's Git transfer doesn't start a container: it waits for an import agent started by hand (see [The dev environment](#the-dev-environment)). |
 | `SCHEDULE_TICK_MINUTES` | Not set | No | Minutes between the workflow scheduler's checks, a whole number from 1 to 60. Default `5`, GitHub's shortest schedule interval. Anything else counts as not set. The end-to-end tests use `1`. |
 | `WAIT_TIMER_MINUTE_MS` | Not set | Never in production | Local development and the end-to-end tests only: how long one minute of a deployment environment's wait timer lasts, in milliseconds, from 1 to `60000` (the default). Anything else counts as not set. It counts only when `PUBLIC_URL` is on this machine (`localhost`, `127.x` or `[::1]`) and `ACCESS_AUD` is empty, as for `DEV_AUTH`; a deployed Worker ignores it. The end-to-end tests use `10000` so a wait timer passes in seconds. |
@@ -176,6 +178,7 @@ Set with `wrangler secret put` (the deploy does this for you with `scripts/ensur
 | `MASTER_KEY_PREV` | The `MASTER_KEY` you replaced | You, only while [rotating `MASTER_KEY`](#rotating-master_key) | Everything sealed or signed with the old key keeps working: secrets encrypted with it still decrypt, and links and tokens signed with it still verify. Nothing new uses it. | The normal state. Right after a rotation without it, secrets stored under the old key can't be read and links signed with it stop working, as if the old key had been lost. |
 | `OIDC_PRIVATE_KEY` | An ECDSA P-256 private key as a JWK (JSON), with a `kid` | `ensure-secrets.sh`, once | Signs the ID tokens that workflow jobs request with `permissions: id-token: write` (ES256). Its public half is served at `/.well-known/jwks`. | Jobs that request an ID token fail with `OIDC is not configured on this Diffinery instance`, `/.well-known/jwks` returns no keys, and `GET /api/v3/meta` returns `"oidc": false`. |
 | `GITHUB_OAUTH_CLIENT_SECRET` | The client secret of a GitHub OAuth app | You, optionally | With `GITHUB_OAUTH_CLIENT_ID`, turns on the **Link with GitHub** option on **Settings → Linked accounts**. | People link GitHub accounts with the gist code only. |
+| `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET` | The GitHub App's client secret, its private key (the PEM file GitHub gives, as it is) and its webhook secret | You, optionally | With `GITHUB_APP_ID`, `GITHUB_APP_SLUG` and `GITHUB_APP_CLIENT_ID`, turns on [GitHub runners](#github-runners). | **Settings → GitHub runners** says the instance has no GitHub App, and `POST /-/github/webhook` answers 404. |
 | `MAIL_EVENTS_SECRET` | A random string, at least 32 characters | You, optionally | Turns on `POST /-/email/events`, the signed intake for bounces and complaints from anything other than Cloudflare's own event subscriptions. See [Bounces, complaints and the suppression list](/docs/admin/site-administration#bounces-complaints-and-the-suppression-list). | The endpoint answers 404. Bounces and complaints still arrive through the `diffinery-mail-events` queue. |
 | `TURNSTILE_SECRET` | The secret key of a Cloudflare Turnstile widget | The deploy, from its widget (see [Turnstile](#turnstile)) | With `TURNSTILE_SITE_KEY`, checks that whoever asks for a sign-up code (with `SIGNUP=open`), or sends a security report, an early access request or a contact message without signing in, passed the Turnstile widget. See [SIGNUP](#signup) and [Security contact](#security-contact). | With `SIGNUP=open`, sign-up answers `503` "Sign-up needs Turnstile configured", the security report and contact forms take reports and messages only from people who are signed in, and the early access form is closed (local development skips the check). The next deploy sets it when the token has **Account → Turnstile → Edit**. |
 
@@ -228,7 +231,7 @@ Defined in `wrangler.jsonc`. The deploy creates the underlying resources if they
 
 | Binding | Kind | Resource (production) | What Diffinery uses it for |
 | --- | --- | --- | --- |
-| `DB` | D1 database | `diffinery` (migrations in `migrations/`) | Accounts (including each account's appearance setting and profile picture version), organizations, tokens, repository list, topics and access, invitations, sessions and passkeys, notifications, audit log, schedules, organization secrets and variables, the registry index, email settings and log, GitHub imports and linked GitHub accounts. |
+| `DB` | D1 database | `diffinery` (migrations in `migrations/`) | Accounts (including each account's appearance setting and profile picture version), organizations, tokens, repository list, topics and access, invitations, sessions and passkeys, notifications, audit log, schedules, organization secrets and variables, the registry index, email settings and log, GitHub imports and linked GitHub accounts, and GitHub runners' installations and runners. |
 | `BUCKET` | R2 bucket | `diffinery-data` | Large git objects, LFS objects, archived job logs, caches, artifacts, container image layers and manifests, the event archive, release assets, cached source archives (zipball and tarball downloads) and profile pictures. |
 | `EVENTS` | Queue producer, with a consumer on the same Worker | `diffinery-events`, dead-letter queue `diffinery-events-dlq` | Repository events for webhooks, notifications and the audit log. Consumer: batches of up to 50, waiting up to 2 seconds, 8 retries. |
 | `MAIL` | Queue producer, with a consumer on the same Worker | `diffinery-mail`, dead-letter queue `diffinery-mail-dlq` | Email jobs. Consumer: batches of up to 20, waiting up to 2 seconds, 8 retries. Optional: without it emails are dropped with a warning in the logs. |
@@ -238,13 +241,14 @@ Defined in `wrangler.jsonc`. The deploy creates the underlying resources if they
 | `REPO` | Durable Object namespace | Class `RepoDO` (SQLite) | One object per repository. |
 | `SCHEDULER` | Durable Object namespace | Class `SchedulerDO` (SQLite) | One object that starts scheduled workflow runs on its own alarm. |
 | `COMPOSE` | Durable Object namespace | Class `ComposeDO` (SQLite) | Joins the blocks of large artifact and cache uploads, one short-lived object per step, so the copying doesn't slow the repository's object. Without it, `RepoDO` does the joining. |
-| `RUNNER` | Durable Object namespace with a container | Class `RunnerContainer` (SQLite) | One container per hosted workflow job. |
+| `RUNNER` | Durable Object namespace with a container | Class `RunnerContainer` (SQLite) | One container per hosted workflow job, and per runner of a [GitHub job](/docs/actions/github-runners). |
+| `GITHUB_RUNNERS` | Durable Object namespace | Class `GitHubRunnersDO` (SQLite) | One object per account that pays for [GitHub runners](#github-runners): it starts runners for its GitHub jobs on its own alarm. |
 | `SANDBOX` | Durable Object namespace with a container | Class `SandboxContainer` (SQLite) | One container per agent sandbox. |
 | `RUN_WORKFLOW` | Workflow | `diffinery-run`, class `RunWorkflow` | One durable instance per workflow run. |
 | `IMPORTER` | Durable Object namespace with a container | Class `ImportContainer` (SQLite) | One container per Git transfer of a GitHub import. |
 | `IMPORT_WORKFLOW` | Workflow | `diffinery-import`, class `ImportWorkflow` | One durable instance per attempt of a GitHub import. |
 
-The Durable Object classes are declared in six migrations (`new_sqlite_classes`): tag `v1` for `RepoDO`, `RunnerContainer` and `SandboxContainer`, tag `v2` for `ImportContainer`, tag `v3` for `ProjectDO`, tag `v4` for `SchedulerDO`, tag `v5` for `RunnerContainerMedium`, `RunnerContainerSmall` and `RunnerContainerTiny`, and tag `v6` for `ComposeDO`. `wrangler deploy` applies a migration tag the account doesn't have yet.
+The Durable Object classes are declared in seven migrations (`new_sqlite_classes`): tag `v1` for `RepoDO`, `RunnerContainer` and `SandboxContainer`, tag `v2` for `ImportContainer`, tag `v3` for `ProjectDO`, tag `v4` for `SchedulerDO`, tag `v5` for `RunnerContainerMedium`, `RunnerContainerSmall` and `RunnerContainerTiny`, tag `v6` for `ComposeDO`, and tag `v7` for `GitHubRunnersDO`. `wrangler deploy` applies a migration tag the account doesn't have yet.
 
 ## Other Worker settings
 
@@ -316,6 +320,50 @@ printf '%s' "$CLIENT_SECRET" | pnpm exec wrangler secret put GITHUB_OAUTH_CLIENT
 The OAuth flow asks GitHub for the `read:user` scope only, uses github.com (not an Enterprise host), and binds its state to the signed-in account. Without the two settings, people link accounts with the gist code, which needs no configuration.
 
 Imports reach GitHub only on HTTPS hosts with public names; a GitHub API URL on a private address, `localhost`, `.local` or `.internal` is refused with `422 github_api_url must be a public host`.
+
+## GitHub runners
+
+[GitHub runners](/docs/actions/github-runners) let repositories that stay on GitHub run jobs on this instance's hosted runners. They need a GitHub App of your own; the runner containers, the `GITHUB_RUNNERS` Durable Object and the D1 tables of migration `0044_github_runners.sql` come with a normal deploy.
+
+Create the app on GitHub under **Settings → Developer settings → GitHub Apps → New GitHub App** (of your user, or of an organization for a shared instance), with these settings. `https://git.example.com` stands for your `PUBLIC_URL`.
+
+| Setting | Value |
+| --- | --- |
+| **GitHub App name** | Any, such as `Diffinery runners for git.example.com` |
+| **Homepage URL** | `https://git.example.com` |
+| **Callback URL** | `https://git.example.com/settings/github-runners/setup` |
+| **Request user authorization (OAuth) during installation** | Off |
+| **Setup URL** | `https://git.example.com/settings/github-runners/setup`, with **Redirect on update** on |
+| **Webhook** | Active, URL `https://git.example.com/-/github/webhook`, and a random secret of at least 32 characters |
+| **Repository permissions** | **Administration**: Read and write (to register and remove a repository's self-hosted runners). **Actions**: Read-only. **Metadata**: Read-only. Nothing else |
+| **Subscribe to events** | **Workflow job** |
+| **Where can this GitHub App be installed?** | **Any account** to let anyone with an account on your instance use it; **Only on this account** for your own repositories only |
+
+Then, on the app's page: note the **App ID** and the **Client ID**, click **Generate a new client secret**, and under **Private keys** click **Generate a private key**, which downloads a `.pem` file. Add the IDs and the slug under `vars` in `wrangler.jsonc`:
+
+```jsonc
+"GITHUB_APP_ID": "123456",
+"GITHUB_APP_SLUG": "diffinery-runners-for-git-example-com",
+"GITHUB_APP_CLIENT_ID": "Iv23li...",
+```
+
+and store the secrets:
+
+```sh
+cd apps/diffinery
+printf '%s' "$CLIENT_SECRET" | pnpm exec wrangler secret put GITHUB_APP_CLIENT_SECRET -c wrangler.deploy.jsonc
+pnpm exec wrangler secret put GITHUB_APP_PRIVATE_KEY -c wrangler.deploy.jsonc < diffinery-runners.private-key.pem
+printf '%s' "$WEBHOOK_SECRET" | pnpm exec wrangler secret put GITHUB_APP_WEBHOOK_SECRET -c wrangler.deploy.jsonc
+```
+
+After the next deploy, **Settings → GitHub runners** offers **Install on GitHub**. GitHub's **Recent Deliveries** on the app's **Advanced** tab shows each webhook delivery and Diffinery's answer, such as `{"queued":true,"size":"large"}` or `{"ignored":"not for a Diffinery runner"}`.
+
+What to know:
+
+- Jobs run GitHub's own runner, which the runner image includes (`ACTIONS_RUNNER_VERSION` in `containers/runner/Dockerfile`). GitHub updates a runner that has fallen too far behind as it starts, which adds a few seconds to each job, so keep that version close to [the latest release](https://github.com/actions/runner/releases).
+- GitHub jobs count against the linked account's quotas and the instance's `HOSTED_JOBS_LIMIT` like any hosted job, and [kill switches](/docs/admin/site-administration#kill-switches) stop them.
+- The webhook isn't rate limited per address, because GitHub sends every delivery from a few addresses; it refuses any delivery without a good signature.
+- Containers don't run under `wrangler dev`, so locally a GitHub job's runner fails to start ("Could not start a runner: ...").
 
 ## Deploy script settings
 

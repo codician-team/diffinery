@@ -5,6 +5,8 @@ description: Where workflow jobs run: hosted Linux runners in Cloudflare Contain
 
 A runner is the machine that executes one workflow job. Diffinery offers two kinds: **hosted runners**, which run each job in a fresh Ubuntu 24.04 container on Cloudflare, and **self-hosted runners**, which run jobs on a machine you control (a Mac, a GPU box, a server on a private network) using the `diffinery runner` command. You pick one per job with `runs-on`, the same key GitHub Actions uses.
 
+Repositories that stay on GitHub can use the same hosted runners too: see [GitHub runners](/docs/actions/github-runners).
+
 ## How runs-on picks a runner
 
 Diffinery reads the job's `runs-on` labels (case-insensitive) and decides:

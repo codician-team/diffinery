@@ -14,6 +14,7 @@ export { ImportWorkflow } from "./imports/workflow.js";
 export { AccountWorkflow } from "./accounts/workflow.js";
 export { ImportContainer } from "./imports/container.js";
 export { ProjectDO } from "./agentic/ProjectDO.js";
+export { GitHubRunnersDO } from "./github-runners/GitHubRunnersDO.js";
 // Carries hosted containers' HTTP and HTTPS out under EGRESS=web (lib/egress.ts).
 export { ContainerProxy } from "@cloudflare/containers";
 
