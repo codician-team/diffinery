@@ -6,7 +6,9 @@ import type { Principal } from "../auth/principal.js";
  * Request rate limits (Workers rate limiting bindings, configured in wrangler.jsonc). Each
  * binding counts per key over 60 seconds in the Cloudflare location that serves the request, so
  * the limits stop floods and scripted abuse rather than meter use exactly. A binding that isn't
- * configured (local development) or that fails lets the request through.
+ * configured (local development) or that fails lets the request through, unless RATE_LIMITS=durable:
+ * then the RATE_LIMITER Durable Object counts that bucket instead (rate-limiter.ts), for deployments
+ * without the bindings, such as celld. It fails open too.
  *
  * - RL_AUTH: sign-in, passkey registration, invitation and sign-in links, open sign-up, private
  *   security reports (/security/report), early access requests and their confirmations
@@ -70,16 +72,20 @@ export function bucketsFor(method: string, path: string, p: Principal, ip: strin
 
 /** The bucket that's over its limit for this request, or null. */
 export async function overLimit(env: Env, buckets: Array<[Bucket, string]>): Promise<Bucket | null> {
+  const unbound: Array<[Bucket, string]> = [];
   for (const [b, key] of buckets) {
     const rl = (env as unknown as Record<string, RateLimiter | undefined>)[b];
-    if (!rl) continue;
+    if (!rl) {
+      unbound.push([b, key]);
+      continue;
+    }
     try {
       if (!(await rl.limit({ key })).success) return b;
     } catch (e) {
       console.error("rate limiter failed", b, e);
     }
   }
-  return null;
+  return durableOverLimit(env, unbound);
 }
 
 /**
@@ -91,13 +97,51 @@ export const MODEL_RATE_LIMIT = 600;
 
 /** Whether this person is over their model request rate. A missing (local) or failing binding lets it through. */
 export async function modelRateLimited(env: Env, personId: string): Promise<boolean> {
-  if (!env.RL_MODEL) return false;
+  if (!env.RL_MODEL) return (await durableOverLimit(env, [["RL_MODEL", `model:${personId}`]])) !== null;
   try {
     return !(await env.RL_MODEL.limit({ key: `model:${personId}` })).success;
   } catch (e) {
     console.error("model rate limiter failed", e);
     return false;
   }
+}
+
+/** Limits per window for the Durable Object fallback: the same as the bindings'. */
+const DURABLE_LIMITS: Record<Bucket | "RL_MODEL", number> = { ...RATE_LIMITS, RL_MODEL: MODEL_RATE_LIMIT };
+
+/**
+ * Objects the fallback spreads keys over. A key always lands on the same one; the requests of one
+ * key (one address, one account) can't be spread anyway, and a fixed set keeps the objects few and
+ * warm instead of one per address.
+ */
+export const RATE_LIMITER_SHARDS = 32;
+
+/** The RATE_LIMITER object that counts `key`: FNV-1a of the key, modulo the shards. */
+export function rateLimiterShard(key: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 0x01000193);
+  return `shard-${(h >>> 0) % RATE_LIMITER_SHARDS}`;
+}
+
+/**
+ * Counts buckets that have no binding in the RATE_LIMITER Durable Object, when RATE_LIMITS=durable.
+ * One call per key, so a request costs one call: its buckets share a key (an account's requests
+ * and its new content). A failing object lets the request through, as a failing binding does.
+ */
+async function durableOverLimit<B extends Bucket | "RL_MODEL">(env: Env, buckets: Array<[B, string]>): Promise<B | null> {
+  const ns = env.RATE_LIMITS === "durable" ? env.RATE_LIMITER : undefined;
+  if (!ns || !buckets.length) return null;
+  const byKey = new Map<string, Array<[B, number]>>();
+  for (const [b, key] of buckets) byKey.set(key, [...(byKey.get(key) ?? []), [b, DURABLE_LIMITS[b]]]);
+  for (const [key, limits] of byKey) {
+    try {
+      const over = await ns.get(ns.idFromName(rateLimiterShard(key))).hit(key, limits);
+      if (over) return over as B;
+    } catch (e) {
+      console.error("rate limiter object failed", e);
+    }
+  }
+  return null;
 }
 
 const WHAT: Record<Bucket, string> = {
