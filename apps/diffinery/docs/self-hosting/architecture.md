@@ -3,7 +3,7 @@ title: Architecture
 description: How Diffinery maps onto Cloudflare products, how a git push and a workflow run flow through them, and where each kind of data is stored.
 ---
 
-Diffinery is one Cloudflare Worker plus the Cloudflare products it binds to. There are no servers or databases to run yourself. This page explains which product does what, how a git push and a workflow run move through the system, how the code is organized, and where each kind of data lives. Read it before you deploy or operate your own instance, or when you need to reason about consistency and failure modes.
+Diffinery is one Cloudflare Worker plus the Cloudflare products it binds to. There are no servers or databases to run yourself. This page explains which product does what, how a git push and a workflow run move through the system, how the code is organized, and where each kind of data lives. Read it before you deploy or operate your own instance, or when you need to reason about consistency and failure modes. The same code also runs on celld, the open-source Workers runtime; [Run on celld](/docs/self-hosting/celld) maps each product to its celld equivalent.
 
 ## Overview
 

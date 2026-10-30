@@ -132,6 +132,7 @@
       "self-hosting/deploy",
       "self-hosting/configuration",
       "self-hosting/architecture",
+      "self-hosting/celld",
       "self-hosting/status-page"
     ]
   },

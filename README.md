@@ -210,6 +210,8 @@ The setup script creates whatever is missing in your account (the D1 database, R
 
 You can also deploy from CI with the included [Deploy workflow](.github/workflows/deploy.yml) on Diffinery or GitHub Actions. The full guide, including email sending, DNS, Access and troubleshooting, is [Deploy your own Diffinery](https://diffinery.com/docs/self-hosting/deploy), and every setting is described in [Configuration](https://diffinery.com/docs/self-hosting/configuration).
 
+Diffinery also targets [celld](https://celld.dev), the open-source Workers and Durable Objects runtime, so the same repository can run on your own machines if you leave Cloudflare. See [Run on celld](https://diffinery.com/docs/self-hosting/celld).
+
 ## How it runs on Cloudflare
 
 | Piece | Cloudflare product |

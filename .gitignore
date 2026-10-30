@@ -7,3 +7,5 @@ dist/
 coverage/
 .DS_Store
 wrangler.deploy.jsonc
+wrangler.celld.jsonc
+.celld/
