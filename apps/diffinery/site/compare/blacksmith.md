@@ -1,16 +1,16 @@
 ---
 title: Diffinery vs Blacksmith
 seo_title: "Diffinery vs Blacksmith: faster GitHub Actions, two approaches"
-description: Blacksmith speeds up GitHub Actions on its own runners while you stay on GitHub. Diffinery replaces GitHub and Actions together. Specs, prices, trade-offs.
-updated: 2026-10-25
+description: Blacksmith runs GitHub Actions jobs on its runners while you stay on GitHub. Diffinery replaces GitHub and Actions, or runs your GitHub jobs itself.
+updated: 2026-10-30
 ---
 
-Blacksmith and Diffinery both make GitHub Actions workflows run faster, in different ways. Blacksmith sells drop-in runners for GitHub Actions: your code, pull requests and workflows stay on GitHub, and jobs run on Blacksmith's machines. Diffinery replaces GitHub and GitHub Actions together, with fast runners built in. Blacksmith is a service that runs the runners for you; Diffinery is free, open-source software (Apache-2.0) that you deploy to your own Cloudflare account, with no hosted service (see [Deploy your own Diffinery](/docs/self-hosting/deploy) and the [source code](https://diffinery.com/codician/diffinery)). Blacksmith facts here are from its own website and documentation, checked on October 16, 2026, and linked below.
+Blacksmith and Diffinery both make GitHub Actions workflows run faster, in different ways. Blacksmith sells drop-in runners for GitHub Actions: your code, pull requests and workflows stay on GitHub, and jobs run on Blacksmith's machines. Diffinery replaces GitHub and GitHub Actions together, with fast runners built in, and those runners can also run the jobs of repositories that stay on GitHub ([GitHub runners](/docs/actions/github-runners)). Blacksmith is a service that runs the runners for you; Diffinery is free, open-source software (Apache-2.0) that you deploy to your own Cloudflare account, with no hosted service (see [Deploy your own Diffinery](/docs/self-hosting/deploy) and the [source code](https://diffinery.com/codician/diffinery)). Blacksmith facts here are from its own website and documentation, checked on October 16, 2026, and linked below.
 
 ## In short
 
 - **Choose Blacksmith** if you want to stay on GitHub and only want faster or cheaper CI. It needs a GitHub App and a new `runs-on` label, and offers Linux, Arm, Windows and macOS runners up to 32 vCPUs, run for you with nothing to deploy.
-- **Choose Diffinery** if you want one platform for code, reviews and CI, with AI agents as accounts that the server holds to guardrails, and Linux runners that are 4 vCPU by default, and you're happy to run your own instance on Cloudflare.
+- **Choose Diffinery** if you want one platform for code, reviews and CI, with AI agents as accounts that the server holds to guardrails, and Linux runners that are 4 vCPU by default, and you're happy to run your own instance on Cloudflare. Not ready to move? Your instance's runners work for repositories that stay on GitHub too, with `runs-on: diffinery`.
 
 ## Side by side
 
@@ -20,7 +20,8 @@ Blacksmith and Diffinery both make GitHub Actions workflows run faster, in diffe
 | Who runs it | You: you deploy your instance to your own Cloudflare account and pay Cloudflare for its usage | Blacksmith runs the runners; GitHub runs the rest |
 | Where your code lives | Your Diffinery instance | GitHub (github.com, Enterprise Server or Enterprise Cloud) |
 | Setup | Deploy your instance ([guide](/docs/self-hosting/deploy)), then import your repositories; workflows run as they are | Install the GitHub App, change `runs-on` to a Blacksmith label such as `blacksmith-2vcpu-ubuntu-2404` |
-| Personal repositories | Yes | No: GitHub organizations only ([source](https://docs.blacksmith.sh/introduction/quickstart)) |
+| Runners for repositories on GitHub | Yes: install your instance's GitHub App and set `runs-on: diffinery` ([guide](/docs/actions/github-runners)) | Yes: that's the product |
+| Personal repositories | Yes, on Diffinery and on GitHub | No: GitHub organizations only ([source](https://docs.blacksmith.sh/introduction/quickstart)) |
 | Linux x64 runner sizes | 1/4, 1/2, 2 and 4 vCPU; 4 vCPU and 12 GiB by default, smaller sizes picked per job from its measured runs | 2, 4, 8, 16 and 32 vCPU ([source](https://docs.blacksmith.sh/blacksmith-runners/overview)) |
 | Arm, Windows, macOS | Self-hosted runners only | Arm, Windows (public beta) and macOS on Apple M4 ([source](https://docs.blacksmith.sh/blacksmith-runners/overview)) |
 | Machines | Cloudflare Containers on AMD EPYC hosts | "Modern gaming CPUs", in Firecracker microVMs ([source](https://docs.blacksmith.sh/blacksmith-runners/overview)) |
@@ -34,7 +35,7 @@ Blacksmith and Diffinery both make GitHub Actions workflows run faster, in diffe
 
 ## Where each one is the better fit
 
-**Blacksmith is the better fit when** your team is settled on GitHub, needs macOS, Windows, Arm or runners larger than 4 vCPUs, wants SOC 2 Type 2 today, wants faster CI without moving anything, or doesn't want to run any infrastructure itself.
+**Blacksmith is the better fit when** your team is settled on GitHub, needs macOS, Windows, Arm or runners larger than 4 vCPUs, wants SOC 2 Type 2 today, or doesn't want to run any infrastructure itself.
 
 **Diffinery is the better fit when** you'd rather have one platform than GitHub plus a runner service and are happy to run it on your own Cloudflare account, your CI is Linux, you work with AI coding agents and want the forge itself to limit what they can do, or you want workflows, `gh`, your editor and your agents to move together.
 
@@ -43,6 +44,10 @@ Blacksmith and Diffinery both make GitHub Actions workflows run faster, in diffe
 ### Can I use Blacksmith with Diffinery?
 
 No. Blacksmith runners connect to GitHub through its GitHub App. On Diffinery, jobs run on your instance's hosted runners in Cloudflare Containers or on your own machines with `diffinery runner`.
+
+### Can Diffinery run jobs for repositories that stay on GitHub, like Blacksmith?
+
+Yes. Install your instance's GitHub App on your GitHub user or organization, link it to the Diffinery account whose hosted minutes pay, and set a job's `runs-on` to `diffinery` (or `diffinery-medium`, `diffinery-small`, `diffinery-tiny`). GitHub's own runner then runs the job in a fresh container on your instance. See [GitHub runners](/docs/actions/github-runners).
 
 ### Is Diffinery cheaper than Blacksmith?
 

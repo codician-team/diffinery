@@ -74,6 +74,14 @@ RUN set -eux; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
+# GitHub's own runner, for jobs of GitHub repositories that run on Diffinery runners
+# (apps/diffinery/docs/actions/github-runners.md; the agent starts it with a just-in-time
+# configuration). A fixed release, checked against its published SHA-256. GitHub updates a runner
+# that falls too far behind as it starts, so keep this close to the latest release.
+ARG ACTIONS_RUNNER_VERSION=2.338.2
+ARG ACTIONS_RUNNER_SHA256=baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d5558390147c40
+RUN set -eux;     mkdir -p /opt/actions-runner;     cd /tmp;     file="actions-runner-linux-x64-${ACTIONS_RUNNER_VERSION}.tar.gz";     curl -fsSLo "${file}" "https://github.com/actions/runner/releases/download/v${ACTIONS_RUNNER_VERSION}/${file}";     echo "${ACTIONS_RUNNER_SHA256}  ${file}" | sha256sum -c -;     tar -xzf "${file}" -C /opt/actions-runner --no-same-owner;     rm -f "${file}";     /opt/actions-runner/bin/installdependencies.sh;     apt-get clean;     rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
+
 # Docker Engine, started on first use by the /usr/local/bin/docker wrapper. Cloudflare
 # Containers run it rootful with iptables, so bridge networks, service DNS, port
 # publishing and builds all work like on GitHub's hosted runners.
