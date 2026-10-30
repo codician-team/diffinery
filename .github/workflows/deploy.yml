@@ -7,7 +7,6 @@ name: Deploy
 #   DIFFINERY_ZONE       the Cloudflare zone for the route (default: the domain's last two labels)
 #   MAIL_DOMAIN          sends from notifications@<MAIL_DOMAIN> (default DIFFINERY_DOMAIN)
 #   ACCESS_TEAM_DOMAIN   e.g. example.cloudflareaccess.com
-#   DEPLOY_ON_PUSH       "true" deploys every push to main on GitHub too (Diffinery always does)
 #
 # It deploys a main commit only once CI (typecheck, unit tests and the Worker bundle) has
 # passed on it, so it doesn't run those itself. End-to-end tests run alongside the deploy.
@@ -33,12 +32,9 @@ concurrency:
 jobs:
   gate:
     name: Main's current tip
-    # Production deploys from Diffinery itself, on its own hosted runners (any
-    # Diffinery, so self-hosted copies deploy themselves too). Running this
-    # workflow by hand on GitHub still deploys, as a fallback. On GitHub, pushes to
-    # main deploy only when the repository variable DEPLOY_ON_PUSH is "true", so a
-    # mirror of a repository that deploys elsewhere never deploys twice.
-    if: ${{ github.event_name == 'workflow_dispatch' || ((github.server_url != 'https://github.com' || vars.DEPLOY_ON_PUSH == 'true') && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
+    # Every push to main deploys once CI passes on it, on GitHub or on a Diffinery
+    # instance, and so does running this workflow by hand.
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
