@@ -75,6 +75,10 @@ they run on.
 - **GitHub compatibility.** Where GitHub has an API, a workflow feature or an event,
   Diffinery follows it, so existing tools (git, `gh`, Octokit, actions) work unchanged.
   When Diffinery has to differ, say so in the docs.
+- **Open-source runtime.** Diffinery also runs on [celld](https://celld.dev), the open-source
+  Workers runtime. A Cloudflare feature celld lacks must be optional, a new `wrangler.jsonc`
+  key must be mapped in `scripts/celld-config.mjs`, and the unit test `celld.test.ts` checks
+  both. See [Run on celld](https://diffinery.com/docs/self-hosting/celld).
 - **Database migrations.** D1 migrations live in `apps/diffinery/migrations`. Use the next
   free number and never edit a migration that has shipped.
 - **Security first.** Agents never get a bypass: guardrails are enforced on the server for

@@ -55,6 +55,11 @@ not depend on the speed of the machine they run on.
 - **Follow GitHub where GitHub has an API, event or workflow feature**, so git, `gh`,
   Octokit and actions keep working. Document any difference in
   `apps/diffinery/docs/actions/compatibility.md` or the relevant page.
+- **Keep it running on celld**, the open-source Workers runtime
+  (`apps/diffinery/docs/self-hosting/celld.md`). Make a binding celld lacks optional (and list it in
+  `CELLD_ABSENT_BINDINGS`), map any new `wrangler.jsonc` key in `scripts/celld-config.mjs`, and import only
+  `cloudflare:workers`, `cloudflare:workflows` and the `node:` modules celld has. Never return a stream or a
+  `Response` from a Durable Object RPC method: stream through its `fetch()`. `test/unit/celld.test.ts` checks it.
 - **D1 migrations** live in `apps/diffinery/migrations`. Use the next free number and never
   edit a migration that has shipped.
 - **Security:** guardrails for agents are enforced on the server for git, REST, MCP and the
