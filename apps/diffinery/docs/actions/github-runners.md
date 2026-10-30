@@ -62,6 +62,16 @@ Rules:
 - Diffinery doesn't pick a smaller size by itself for GitHub jobs, as it does for [jobs of Diffinery repositories](/docs/actions/runners#runner-sizes): the label sets the size.
 - Matrix legs each get their own runner.
 
+### Switch a whole repository with one variable
+
+To move every job at once, and to be able to move them back without a commit, read the label from a repository variable:
+
+```yaml
+    runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
+```
+
+Then set the variable to `diffinery` (`gh variable set RUNS_ON --body diffinery`). Setting it back to `ubuntu-latest` returns the jobs to GitHub-hosted runners, for example to keep a deploy working while Diffinery can't start runners. Forks without the variable keep running on GitHub. Diffinery's own repository does this with `DIFFINERY_RUNS_ON`.
+
 ## The machine
 
 The container runs the same image as Diffinery's own [hosted runners](/docs/actions/runners#hosted-runners): Ubuntu 24.04 on x64 with Git, Node.js 22, Python 3.12, Docker, the GitHub CLI and `/dev/kvm`. Differences from a GitHub-hosted runner:

@@ -19,7 +19,7 @@ jobs:
   setup:
     name: Labels, welcome discussion and roadmap issue
     if: ${{ github.server_url != 'https://github.com' && github.repository == 'codician/diffinery' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.DIFFINERY_RUNS_ON || 'ubuntu-latest' }}
     environment: github-mirror
     timeout-minutes: 5
     steps:
