@@ -1,7 +1,7 @@
 ---
 title: Self-hosting
 description: Diffinery is open source (Apache-2.0) and runs on your own Cloudflare account. What an instance needs, what it costs, the steps to deploy one, and where to go next.
-updated: 2026-10-25
+updated: 2026-10-30
 ---
 
 Diffinery is open-source software under the Apache License 2.0, and the way to use it is to run your own instance on your own Cloudflare account and domain. There's no hosted service to sign up for: diffinery.com is the project's own instance. This page is the overview; [Deploy your own Diffinery](/docs/self-hosting/deploy) is the step-by-step guide.
@@ -58,6 +58,10 @@ Diffinery is free. Your instance's costs are your Cloudflare bill: the Workers P
 - **Running it.** [Site administration](/docs/admin/site-administration) covers accounts, early access requests, contact messages, email and audits, and the [status page](/docs/self-hosting/status-page) shows whether each part of your instance works.
 - **Your team's tools.** The CLI, the Claude Code and Codex plugins, the MCP server and the editor extensions all work with your instance. People install the CLI from it and run `diffinery setup` with its URL, which signs them in and points git, gh, the Claude Code plugins and Codex at it: `curl -fsSL https://git.example.com/install | bash`, then `diffinery setup --url https://git.example.com`. AI apps connect to `https://git.example.com/mcp`. See [Claude Code](/docs/connect/claude-code#self-hosted-diffinery), [Codex](/docs/connect/codex#self-hosted-diffinery), [Clone in your editor](/docs/repositories/clone-in-your-editor) and [Clone in JetBrains IDEs](/docs/repositories/clone-in-jetbrains-ides).
 - **How it fits together.** [Architecture](/docs/self-hosting/architecture) maps each part of Diffinery to the Cloudflare product that runs it.
+
+## Without Cloudflare
+
+The same repository also targets [celld](https://celld.dev), the open-source Workers and Durable Objects runtime, which runs on your own machines with an object storage bucket. `scripts/celld-config.mjs` turns `wrangler.jsonc` into a configuration celld accepts, and the unit tests keep Diffinery inside what celld supports. celld is beta and a few things work differently there, such as email and rate limits; see [Run on celld](/docs/self-hosting/celld).
 
 ## Get help and contribute
 

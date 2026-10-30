@@ -178,3 +178,12 @@ export interface Env {
   /** Optional GitHub Enterprise host (e.g. github.example.com) the importer may download release assets from. */
   IMPORT_GHE_HOST?: string;
 }
+
+type OptionalKeys<T> = { [K in keyof T]-?: object extends Pick<T, K> ? K : never }[keyof T];
+
+/**
+ * Bindings celld (the open-source Workers runtime, docs/self-hosting/celld.md) has no equivalent for:
+ * scripts/celld-config.mjs leaves them out, so each must stay optional here and the Worker must run
+ * without it. The celld unit test checks this list against what the script leaves out.
+ */
+export const CELLD_ABSENT_BINDINGS = ["EMAIL", "RL_AUTH", "RL_ANON", "RL_ACCOUNT", "RL_CREATE", "RL_MODEL", "CF_VERSION_METADATA"] as const satisfies ReadonlyArray<OptionalKeys<Env>>;

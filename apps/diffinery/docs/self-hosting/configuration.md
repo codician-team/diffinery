@@ -13,6 +13,7 @@ A Diffinery instance is configured in four places: Worker variables in `apps/dif
 | `apps/diffinery/wrangler.deploy.jsonc` | `wrangler.jsonc` without the `dev` environment, plus the real D1 database ID, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `TURNSTILE_SITE_KEY`, and the route, `PUBLIC_URL` and `MAIL_FROM` for your hostname. Written by `scripts/render-config.mjs` on every deploy and ignored by git. | No. It is regenerated on each deploy. |
 | Worker secrets | `MASTER_KEY` and `OIDC_PRIVATE_KEY`, created by `scripts/ensure-secrets.sh`; `TURNSTILE_SECRET`, set by the deploy from its Turnstile widget; and optionally `GITHUB_OAUTH_CLIENT_SECRET`, which you set yourself. | Only to restore them, or to add the optional one. Never change `MASTER_KEY`. |
 | Repository secrets and variables | Cloudflare credentials and options for the Deploy workflow, and a token for the live test. | Yes, in your forge's repository settings. |
+| `apps/diffinery/wrangler.celld.jsonc` | `wrangler.jsonc` as [celld](/docs/self-hosting/celld) takes it, with the Cloudflare-only keys left out and the secrets in `vars`. Written by `scripts/celld-config.mjs` and ignored by git. | No. Render it again after changing `wrangler.jsonc`. |
 | `apps/diffinery/.dev.vars` | Local secrets for `wrangler dev`, such as `MASTER_KEY`. Ignored by git. | Yes, for local development only. |
 
 ## Worker variables
