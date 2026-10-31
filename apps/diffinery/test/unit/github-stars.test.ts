@@ -1,5 +1,5 @@
 /**
- * The GitHub mirror's star count behind the site's "Star on GitHub" buttons (web/github-stars.ts): pages never wait
+ * The GitHub repository's star count behind the site's "Star on GitHub" buttons (web/github-stars.ts): pages never wait
  * on GitHub, a count is shared through the colo's cache, failures keep the last count, and the numbers read like
  * GitHub's own.
  */

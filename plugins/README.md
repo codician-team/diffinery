@@ -39,8 +39,9 @@ requests, CI and issues.
 
 ## Install
 
-codician/diffinery is public, so adding the marketplace needs no sign-in. The plugin works through
-the `diffinery` CLI, so install it and sign in once per machine:
+The marketplace is the public GitHub repository codician-team/diffinery, so adding it needs
+no sign-in. The plugin works through the `diffinery` CLI, so install it and sign in once per
+machine:
 
 ```sh
 curl -fsSL https://diffinery.com/install | bash      # Windows: irm https://diffinery.com/install.ps1 | iex
@@ -51,11 +52,11 @@ diffinery auth setup-git
 ### Claude Code
 
 ```sh
-claude plugin marketplace add https://diffinery.com/codician/diffinery.git
+claude plugin marketplace add codician-team/diffinery
 claude plugin install diffinery@diffinery
 ```
 
-Or inside a session: `/plugin marketplace add https://diffinery.com/codician/diffinery.git`,
+Or inside a session: `/plugin marketplace add codician-team/diffinery`,
 then `/plugin install diffinery@diffinery`, then `/reload-plugins` (or restart).
 
 Add `claude plugin install diffinery-ci@diffinery` for the live CI band.
@@ -72,7 +73,7 @@ cloud sessions at their next start. For a project's threads, also add them under
 ### Codex
 
 ```sh
-codex plugin marketplace add https://diffinery.com/codician/diffinery.git
+codex plugin marketplace add codician-team/diffinery
 codex plugin add diffinery@diffinery
 ```
 

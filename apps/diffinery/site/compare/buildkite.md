@@ -5,7 +5,7 @@ description: Buildkite orchestrates CI on agents you run or it hosts, for code o
 updated: 2026-10-25
 ---
 
-Buildkite Pipelines is a CI/CD service with a hybrid design: Buildkite runs the control plane (the web interface, APIs and scheduling), and the jobs run on agents, either on your own machines or on agents Buildkite hosts. Your code stays on GitHub, GitLab or Bitbucket. Diffinery is a git forge with CI built in: it hosts your repositories, pull requests and issues, and runs GitHub Actions workflows as they are on its own runners. It is free, open-source software (Apache-2.0) that you deploy to your own Cloudflare account, with no hosted service (see [Deploy your own Diffinery](/docs/self-hosting/deploy) and the [source code](https://diffinery.com/codician/diffinery)). Buildkite facts here are from its own website and documentation, checked on October 25, 2026, and linked below.
+Buildkite Pipelines is a CI/CD service with a hybrid design: Buildkite runs the control plane (the web interface, APIs and scheduling), and the jobs run on agents, either on your own machines or on agents Buildkite hosts. Your code stays on GitHub, GitLab or Bitbucket. Diffinery is a git forge with CI built in: it hosts your repositories, pull requests and issues, and runs GitHub Actions workflows as they are on its own runners. It is free, open-source software (Apache-2.0) that you deploy to your own Cloudflare account, with no hosted service (see [Deploy your own Diffinery](/docs/self-hosting/deploy) and the [source code](https://github.com/codician-team/diffinery)). Buildkite facts here are from its own website and documentation, checked on October 25, 2026, and linked below.
 
 ## In short
 

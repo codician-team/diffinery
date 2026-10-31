@@ -164,22 +164,24 @@ describe("home page", () => {
     expect(html).toContain("Code hosting and CI for the agentic era</h1>");
     const g = graph(html);
     expect(types(g)).toEqual(expect.arrayContaining(["Organization", "WebSite", "SoftwareApplication", "SoftwareSourceCode", "WebPage", "FAQPage"]));
-    // Open source: the license and the repositories, no pricing, and early access to try it on diffinery.com.
+    // Open source: the license and the GitHub repository, no pricing, and early access to try it on diffinery.com.
     const source = g.find((n) => n["@type"] === "SoftwareSourceCode")!;
-    expect(source).toMatchObject({ codeRepository: "https://diffinery.com/codician/diffinery", license: "https://www.apache.org/licenses/LICENSE-2.0", sameAs: ["https://github.com/codician-team/diffinery"] });
-    expect(g.find((n) => n["@type"] === "SoftwareApplication")).toMatchObject({ license: "https://www.apache.org/licenses/LICENSE-2.0", isAccessibleForFree: true, installUrl: `${ORIGIN}/docs/self-hosting/deploy`, downloadUrl: "https://diffinery.com/codician/diffinery/releases" });
+    expect(source).toMatchObject({ codeRepository: "https://github.com/codician-team/diffinery", license: "https://www.apache.org/licenses/LICENSE-2.0" });
+    expect(g.find((n) => n["@type"] === "SoftwareApplication")).toMatchObject({ license: "https://www.apache.org/licenses/LICENSE-2.0", isAccessibleForFree: true, installUrl: `${ORIGIN}/docs/self-hosting/deploy`, downloadUrl: "https://github.com/codician-team/diffinery/releases" });
     expect(html).toContain('href="https://diffinery.com/early-access"');
     const faq = g.find((n) => n["@type"] === "FAQPage") as { mainEntity: Array<{ name: string; acceptedAnswer: { text: string } }> };
     expect(faq.mainEntity.find((q) => q.name === "Can I try Diffinery without deploying it?")?.acceptedAnswer.text).toContain("Request early access to diffinery.com");
     expect(html).not.toMatch(/not been announced|hasn't been announced|invite-only while/i);
-    for (const href of ["/compare/github", "/compare/blacksmith", "/performance", "/agents", "/about", "/llms.txt", "/open-source", "/docs/self-hosting", "https://diffinery.com/codician/diffinery", "https://github.com/codician-team/diffinery"]) expect(html, href).toContain(`href="${href}"`);
+    // diffinery.com's copy of the repository is no longer updated.
+    expect(html).not.toContain("diffinery.com/codician/diffinery");
+    for (const href of ["/compare/github", "/compare/blacksmith", "/performance", "/agents", "/about", "/llms.txt", "/open-source", "/docs/self-hosting", "https://github.com/codician-team/diffinery"]) expect(html, href).toContain(`href="${href}"`);
   });
 
   it("doesn't load the Kumo bundle, which only pages with islands use", async () => {
     expect(await (await get("/")).text()).not.toContain("/-/kumo/");
   });
 
-  it("asks visitors to star the GitHub mirror with plain links, loading nothing from GitHub", async () => {
+  it("asks visitors to star the GitHub repository with plain links, loading nothing from GitHub", async () => {
     const stars = (html: string) => html.match(/<a href="https:\/\/github\.com\/codician-team\/diffinery" class="btn gh-star[^"]*"/g) ?? [];
     const home = await (await get("/")).text();
     // The header, the hero and the footer.

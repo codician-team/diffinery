@@ -330,7 +330,8 @@ describe("docs routes", () => {
   it("points agents at the connect guides, the plugin and gh from llms.txt", () => {
     const txt = llmsTxt(ORIGIN);
     expect(txt).toContain(`${ORIGIN}/docs/connect.md`);
-    expect(txt).toContain(`codex plugin marketplace add ${ORIGIN}/codician/diffinery.git`);
+    expect(txt).toContain("codex plugin marketplace add codician-team/diffinery");
+    expect(txt).not.toContain("/codician/diffinery");
     expect(txt).toContain(`\`diffinery setup\` adds both`);
     expect(txt).toContain(`${ORIGIN}/docs/connect/ci-status-in-claude.md`);
     expect(txt).toContain("diffinery auth setup-gh");
