@@ -381,7 +381,7 @@ Emails are queued and sent through Cloudflare Email Sending from `notifications@
 | `turned off <group> emails` | You turned off that group (for example `turned off watching emails`). |
 | `no email address` | Your account has no email address. |
 | `account disabled` | Disabled accounts only get the email saying they were disabled or enabled. |
-| `email sending is not configured (no EMAIL binding)` | The instance can't send email; ask a site administrator. |
+| `email sending is not configured (no EMAIL binding or SMTP_URL)` | The instance can't send email; ask a site administrator. |
 | `address is suppressed: ...` | Email to your address bounced or was reported as spam, or a site administrator suppressed it. See [When Diffinery stops emailing you](#when-diffinery-stops-emailing-you). |
 
 ## How notifications differ from GitHub

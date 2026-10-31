@@ -19,7 +19,7 @@ describe("retention", () => {
     usage.run("old-job", ago(COMPUTE_RETENTION_DAYS + 2), ago(COMPUTE_RETENTION_DAYS + 1));
     usage.run("recent-job", ago(30), ago(30));
     usage.run("running", ago(0), null);
-    expect(await pruneExpired(DB, at)).toEqual({ sessions: 1, notifications: 1, compute_usage: 1, early_access: 0, early_access_attempts: 0, contact_messages: 0, contact_attempts: 0 });
+    expect(await pruneExpired(DB, at)).toEqual({ sessions: 1, notifications: 1, compute_usage: 1, early_access: 0, early_access_attempts: 0, contact_messages: 0, contact_attempts: 0, github_runner_jobs: 0 });
     const ids = (t: string) => (DB.sqlite.prepare(`SELECT id FROM ${t} ORDER BY id`).all() as Array<{ id: string }>).map((r) => r.id);
     expect(ids("sessions")).toEqual(["just-expired", "live"]);
     expect(ids("notifications")).toEqual(["recent"]);

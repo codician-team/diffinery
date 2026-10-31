@@ -1590,7 +1590,7 @@ export const API_DOCS: Record<string, OpDoc> = {
     description: "When your address is suppressed by a bounce or complaint, sends one email to it, past the suppression list; following its link while signed in lifts the suppression. 409 when it isn't suppressed, 403 for a suppression a site administrator added, at most 3 an hour.",
     access: "account",
   },
-  "GET /diffinery/admin/email": { summary: "Email delivery status", description: "Whether sending is configured, whether the signed bounce and complaint endpoint is on (`event_intake`), and counts for the last 24 hours.", access: "site-admin" },
+  "GET /diffinery/admin/email": { summary: "Email delivery status", description: "Whether sending is configured and how (`transport`: Cloudflare Email Sending or SMTP, with `smtp` naming the server), whether the signed bounce and complaint endpoint is on (`event_intake`), and counts for the last 24 hours.", access: "site-admin" },
   "GET /diffinery/admin/email/suppressions": { summary: "List suppressed email addresses", description: "Newest first: `email`, `reason` (`hard-bounce`, `complaint` or `manual`), `detail`, `source` (`cloudflare`, `webhook`, `send` or `admin`), `created_by` and `created_at`.", access: "site-admin" },
   "PUT /diffinery/admin/email/suppressions/{email}": { summary: "Suppress an email address", description: "Diffinery sends nothing to it until it is removed. Recorded in the audit log.", access: "site-admin", body: { note: ["string", "Why, kept with the entry."] } },
   "DELETE /diffinery/admin/email/suppressions/{email}": { summary: "Remove an address from the suppression list", description: "Whatever put it there. 404 when it isn't suppressed. Recorded in the audit log.", access: "site-admin", status: 204 },

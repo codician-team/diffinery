@@ -68,7 +68,7 @@ You don't edit any code to deploy your own instance. `apps/diffinery/wrangler.js
 - `DIFFINERY_ZONE`, if the Cloudflare zone that holds your hostname is not its last two labels. For `git.example.com` the default zone is `example.com`, which is right; for `git.example.co.uk` the default would be `co.uk`, so set `DIFFINERY_ZONE` to `example.co.uk`.
 - `MAIL_DOMAIN`, if email should come from another domain than your hostname, for example `example.com` to send from `notifications@example.com`.
 
-The Deploy job runs on every push to `main` when your copy lives on a Diffinery instance, and whenever you start it by hand. On GitHub it doesn't run on pushes; start it by hand there (`workflow_dispatch`).
+The Deploy job runs on every push to `main` once the CI workflow passes on that commit, on GitHub or on a Diffinery instance, and whenever you start it by hand (`workflow_dispatch`). A GitHub mirror of a repository that already deploys from Diffinery would deploy too, so keep Actions or the Cloudflare secrets off on such a mirror.
 
 The workflow doesn't pass `BOOTSTRAP_ADMINS`. Set the list with a first deploy from your machine (`scripts/setup.sh`), or put it under `vars` in your copy's `wrangler.jsonc`; after that, workflow deploys keep it.
 
@@ -110,6 +110,7 @@ In your copy's repository settings, add:
 | `DIFFINERY_ZONE` | Variable, optional | The Cloudflare zone that holds the hostname, when it isn't the hostname's last two labels. |
 | `MAIL_DOMAIN` | Variable, optional | The domain email is sent from, when it isn't `DIFFINERY_DOMAIN`. |
 | `ACCESS_TEAM_DOMAIN` | Variable, optional | Your Zero Trust team domain, for example `example.cloudflareaccess.com`. Needed only when the token can't read it. |
+| `DIFFINERY_GITHUB_APP_ID`, `DIFFINERY_GITHUB_APP_SLUG`, `DIFFINERY_GITHUB_APP_CLIENT_ID`, `DIFFINERY_GITHUB_APP_URL` | Variables, optional | The GitHub App of [GitHub runners](/docs/self-hosting/configuration#github-runners). The workflow passes them to render-config as `GITHUB_APP_ID` and the rest. |
 
 The Deploy job runs in an environment named `production`, so you can also store the secrets as environment secrets there and add required reviewers to that environment.
 
@@ -165,7 +166,11 @@ It reads `apps/diffinery/wrangler.jsonc`, drops the `env` section (the `dev` env
 | `--mail-from <address>` | No | Sets `MAIL_FROM`, overriding the `notifications@<hostname>` that `--public-url` sets. |
 | `--admins <emails>` | No | Sets `BOOTSTRAP_ADMINS` to the comma-separated emails, trimmed. An empty value sets it empty; without the flag, the value in `wrangler.jsonc` stays. An entry that isn't an email address stops the script with `--admins takes comma-separated email addresses; not an email address: ...`. |
 
-It also reads two environment variables: `RUNNER_IMAGE` (set by `scripts/runner-image.sh`) points every container at a prebuilt runner image and sets the `RUNNER_IMAGE` variable, and `TURNSTILE_SITE_KEY` (set by bootstrap from `scripts/turnstile.sh`) sets the `TURNSTILE_SITE_KEY` variable, unless `wrangler.jsonc` already sets one.
+It also reads these environment variables:
+
+- `RUNNER_IMAGE` (set by `scripts/runner-image.sh`) points every container at a prebuilt runner image and sets the `RUNNER_IMAGE` variable.
+- `TURNSTILE_SITE_KEY` (set by bootstrap from `scripts/turnstile.sh`) sets the `TURNSTILE_SITE_KEY` variable, unless `wrangler.jsonc` already sets one.
+- `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_URL` set the variables of the same names, for [GitHub runners](/docs/self-hosting/configuration#github-runners). One that is empty leaves the value in `wrangler.jsonc`. A value of the wrong shape stops the script with, for example, `GITHUB_APP_ID must be the App ID, a number`; the message never shows the value.
 
 Without `--public-url`, the route, `PUBLIC_URL` and `MAIL_FROM` stay as they are in `wrangler.jsonc`. Bootstrap always passes `--public-url` and `--mail-from`, so a normal deploy takes them from `DIFFINERY_DOMAIN` and `MAIL_DOMAIN`.
 
@@ -186,7 +191,7 @@ The script writes `apps/diffinery/wrangler.deploy.jsonc`, which every later `wra
 
 ### wrangler deploy
 
-`pnpm exec wrangler deploy -c wrangler.deploy.jsonc` (run in `apps/diffinery`) deploys the Worker with all its bindings, and builds the runner image from `containers/runner/Dockerfile` (Ubuntu 24.04 with Node.js 22, git, git-lfs and the runner agent) for all three container classes: `RunnerContainer` (hosted jobs), `SandboxContainer` (agent sandboxes) and `ImportContainer` (the Git transfers of GitHub imports). It also applies Durable Object migrations the account doesn't have yet: tag `v1` creates `RepoDO`, `RunnerContainer` and `SandboxContainer`, tag `v2` creates `ImportContainer`, tag `v3` creates `ProjectDO`, tag `v4` creates `SchedulerDO`, tag `v5` creates the smaller runner classes, and tag `v6` creates `ComposeDO`.
+`pnpm exec wrangler deploy -c wrangler.deploy.jsonc` (run in `apps/diffinery`) deploys the Worker with all its bindings, and builds the runner image from `containers/runner/Dockerfile` (Ubuntu 24.04 with Node.js 22, git, git-lfs and the runner agent) for all three container classes: `RunnerContainer` (hosted jobs), `SandboxContainer` (agent sandboxes) and `ImportContainer` (the Git transfers of GitHub imports). It also applies Durable Object migrations the account doesn't have yet: tag `v1` creates `RepoDO`, `RunnerContainer` and `SandboxContainer`, tag `v2` creates `ImportContainer`, tag `v3` creates `ProjectDO`, tag `v4` creates `SchedulerDO`, tag `v5` creates the smaller runner classes, tag `v6` creates `ComposeDO`, tag `v7` creates `GitHubRunnersDO`, and tag `v8` creates `RateLimiterDO`.
 
 ### scripts/ensure-secrets.sh
 
