@@ -15,7 +15,7 @@ Diffinery is a git forge and CI platform for teams of people and AI agents. It h
 
 ### Is Diffinery open source?
 
-Yes. Diffinery is open source under the Apache License 2.0. The source code is at [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery), where it's developed, and mirrored to [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery). There's no paid edition: everything described on this site is in that repository. See [Open source](/open-source).
+Yes. Diffinery is open source under the Apache License 2.0. The source code is at [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery), where it's developed. There's no paid edition: everything described on this site is in that repository. See [Open source](/open-source).
 
 ### How do I start using Diffinery?
 
@@ -135,11 +135,11 @@ Yes, and that's how Diffinery is used. It runs as one Cloudflare Worker and the 
 
 ### Can I get an account on diffinery.com?
 
-diffinery.com is the instance Diffinery itself is developed on, and accounts there are by invitation for the people working on it. To use Diffinery, deploy your own instance. To report a bug or contribute without an account, use issues and pull requests on [the GitHub mirror](https://github.com/codician-team/diffinery).
+diffinery.com is the project's home and its own Diffinery instance, and accounts there are by invitation. To use Diffinery, deploy your own instance. To report a bug or contribute, use issues and pull requests on [GitHub](https://github.com/codician-team/diffinery), where Diffinery is developed; no diffinery.com account is needed.
 
 ### How do I contact the Diffinery team?
 
-Use the [contact form](https://diffinery.com/contact) at diffinery.com/contact, for questions, partnerships, press or privacy requests; a person reads every message and replies by email. Report security problems privately through [the security report form](/security/report), and bugs or ideas as issues on [the Diffinery repository](https://diffinery.com/codician/diffinery). See [Contact form](/docs/admin/contact-form).
+Use the [contact form](https://diffinery.com/contact) at diffinery.com/contact, for questions, partnerships, press or privacy requests; a person reads every message and replies by email. Report security problems privately through [the security report form](/security/report), and bugs or ideas as issues on [GitHub](https://github.com/codician-team/diffinery). See [Contact form](/docs/admin/contact-form).
 
 ### How do people join my instance?
 

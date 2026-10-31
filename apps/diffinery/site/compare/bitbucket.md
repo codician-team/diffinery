@@ -5,7 +5,7 @@ description: How Diffinery compares with Bitbucket Cloud and Bitbucket Pipelines
 updated: 2026-10-25
 ---
 
-Bitbucket is Atlassian's Git hosting, with Bitbucket Pipelines for CI/CD built in and close ties to Jira. It comes as Bitbucket Cloud and as Bitbucket Data Center, Atlassian's self-managed edition. Diffinery is a git forge with GitHub Actions–compatible CI built in, designed for teams of people and AI agents. It is free, open-source software (Apache-2.0) that you deploy to your own Cloudflare account, with no hosted service (see [Deploy your own Diffinery](/docs/self-hosting/deploy) and the [source code](https://diffinery.com/codician/diffinery)). Bitbucket facts here are from Atlassian's own website and documentation, checked on October 25, 2026, and linked below.
+Bitbucket is Atlassian's Git hosting, with Bitbucket Pipelines for CI/CD built in and close ties to Jira. It comes as Bitbucket Cloud and as Bitbucket Data Center, Atlassian's self-managed edition. Diffinery is a git forge with GitHub Actions–compatible CI built in, designed for teams of people and AI agents. It is free, open-source software (Apache-2.0) that you deploy to your own Cloudflare account, with no hosted service (see [Deploy your own Diffinery](/docs/self-hosting/deploy) and the [source code](https://github.com/codician-team/diffinery)). Bitbucket facts here are from Atlassian's own website and documentation, checked on October 25, 2026, and linked below.
 
 ## In short
 

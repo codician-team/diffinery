@@ -1,15 +1,15 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "diffinery-ci",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Live CI for Diffinery pull requests in Claude Code: the branch's PR and its checks above the prompt and in the status line, a checks pane, and a note to Claude when CI on a commit it pushed settles.",
   "author": { "name": "Codician Team" },
   "homepage": "https://diffinery.com/docs/connect/ci-status-in-claude",
-  "repository": "https://diffinery.com/codician/diffinery",
+  "repository": "https://github.com/codician-team/diffinery",
   "license": "Apache-2.0",
   "icon": "./.claude-plugin/icon.png",
   "documentationUrl": "https://diffinery.com/docs/connect/ci-status-in-claude",
-  "supportUrl": "https://diffinery.com/codician/diffinery/issues",
+  "supportUrl": "https://github.com/codician-team/diffinery/issues",
   "keywords": ["diffinery", "ci", "pull-requests", "status"],
   "types": "./types/index.d.ts",
   "userConfig": {

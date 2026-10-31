@@ -11,16 +11,13 @@ Diffinery is open source under the [Apache License 2.0](https://www.apache.org/l
 
 | | |
 | --- | --- |
-| Repository | [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery), where Diffinery is developed and its CI runs |
-| Mirror on GitHub | [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery) |
+| Repository | [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery), where Diffinery is developed, with CI on Diffinery's [GitHub runners](/docs/actions/github-runners) |
 | License | Apache-2.0, in the repository's `LICENSE` file, with a `NOTICE` file ("Copyright 2026 The Diffinery Authors") |
 | Language and platform | TypeScript, on Cloudflare Workers, Durable Objects, R2, D1, Queues, Workflows and Containers. See [Architecture](/docs/self-hosting/architecture). |
 
-Clone it from either place:
+Clone it:
 
 ```bash
-git clone https://diffinery.com/codician/diffinery.git
-# or
 git clone https://github.com/codician-team/diffinery.git
 ```
 
@@ -51,11 +48,11 @@ What a month costs depends on how much your team pushes and builds. Each instanc
 
 ## What diffinery.com is
 
-diffinery.com is the project's home: this site, the [documentation](/docs), and the Diffinery instance that Diffinery itself is developed on, with its CI, deploys and agents. Accounts there are by invitation. If you'd like to try Diffinery before running your own, [request early access](https://diffinery.com/early-access): its administrators review requests and email invitations. It isn't a hosted service for teams; to use Diffinery for your work, run your own instance.
+diffinery.com is the project's home: this site, the [documentation](/docs), and the project's own Diffinery instance, whose [GitHub runners](/docs/actions/github-runners) run the CI of the GitHub repository. Accounts there are by invitation. If you'd like to try Diffinery before running your own, [request early access](https://diffinery.com/early-access): its administrators review requests and email invitations. It isn't a hosted service for teams; to use Diffinery for your work, run your own instance.
 
 ## Contribute
 
-- **Issues and pull requests:** on [the GitHub mirror](https://github.com/codician-team/diffinery) if you don't have a diffinery.com account, or on [the Diffinery repository](https://diffinery.com/codician/diffinery). The repository's `CONTRIBUTING.md` explains how to build, test and send changes.
+- **Issues and pull requests:** on [GitHub](https://github.com/codician-team/diffinery), where Diffinery is developed. The repository's `CONTRIBUTING.md` explains how to build, test and send changes.
 - **Security problems:** report them privately with the [report form](/security/report), not in a public issue. See [Vulnerability disclosure](/docs/security/disclosure).
 - **Docs:** every page at [/docs](/docs) is Markdown in the repository, under `apps/diffinery/docs/`.
 
@@ -63,7 +60,7 @@ diffinery.com is the project's home: this site, the [documentation](/docs), and 
 
 ### Is Diffinery open source?
 
-Yes, under the Apache License 2.0. The source is at [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery) and mirrored to [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery).
+Yes, under the Apache License 2.0. The source is at [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery), where it's developed.
 
 ### Is there a paid or enterprise edition?
 

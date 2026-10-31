@@ -5,7 +5,7 @@ description: CircleCI runs CI for code on GitHub, GitLab or Bitbucket. Diffinery
 updated: 2026-10-25
 ---
 
-CircleCI is a hosted CI/CD service: your code stays on GitHub, GitLab or Bitbucket, and CircleCI runs the pipelines you define in `.circleci/config.yml`. It also sells a self-hosted edition, CircleCI Server, and since September 2026 it has been previewing support for running GitHub Actions workflow files. Diffinery is a git forge with CI built in: it hosts your repositories, pull requests and issues, and runs GitHub Actions workflows as they are. It is free, open-source software (Apache-2.0) that you deploy to your own Cloudflare account, with no hosted service (see [Deploy your own Diffinery](/docs/self-hosting/deploy) and the [source code](https://diffinery.com/codician/diffinery)). CircleCI facts here are from its own website and documentation, checked on October 25, 2026, and linked below.
+CircleCI is a hosted CI/CD service: your code stays on GitHub, GitLab or Bitbucket, and CircleCI runs the pipelines you define in `.circleci/config.yml`. It also sells a self-hosted edition, CircleCI Server, and since September 2026 it has been previewing support for running GitHub Actions workflow files. Diffinery is a git forge with CI built in: it hosts your repositories, pull requests and issues, and runs GitHub Actions workflows as they are. It is free, open-source software (Apache-2.0) that you deploy to your own Cloudflare account, with no hosted service (see [Deploy your own Diffinery](/docs/self-hosting/deploy) and the [source code](https://github.com/codician-team/diffinery)). CircleCI facts here are from its own website and documentation, checked on October 25, 2026, and linked below.
 
 ## In short
 

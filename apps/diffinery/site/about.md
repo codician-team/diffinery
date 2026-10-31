@@ -21,7 +21,7 @@ GitHub was designed for people. Agents on GitHub borrow a person's token, their 
 
 Diffinery is free, open-source software under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). There are no plans, prices or sales, and no hosted service for other teams: everyone runs their own instance on their own Cloudflare account and domain, and pays Cloudflare only for what it uses. See [Open source](/open-source) and [Deploy your own Diffinery](/docs/self-hosting/deploy).
 
-- **Source code:** [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery), where Diffinery is developed, mirrored to [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery).
+- **Source code:** [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery), where Diffinery is developed.
 - **diffinery.com** is the project's home: this site, the documentation, and the instance Diffinery itself is built on. Accounts there are by invitation, for the people working on Diffinery and for people trying it through [early access](https://diffinery.com/early-access).
 
 ## How we check what we publish
@@ -42,7 +42,7 @@ Everything on this site is public and available as Markdown: add `.md` to any pa
 
 - **Questions, partnerships, press and privacy requests:** the [contact form](https://diffinery.com/contact). A person reads every message and replies by email.
 - **Running your own instance:** [Deploy your own Diffinery](/docs/self-hosting/deploy).
-- **Bugs, ideas and contributions:** issues and pull requests on [the GitHub mirror](https://github.com/codician-team/diffinery), or on [the Diffinery repository](https://diffinery.com/codician/diffinery) if you have an account there.
+- **Bugs, ideas and contributions:** issues and pull requests on [GitHub](https://github.com/codician-team/diffinery).
 - **Security problems:** the private [report form](/security/report), as listed in [`/.well-known/security.txt`](/.well-known/security.txt).
 - **diffinery.com status:** [/status](/status).
 - **Documentation:** [diffinery.com/docs](/docs).
