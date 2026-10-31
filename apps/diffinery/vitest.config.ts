@@ -11,6 +11,7 @@ export default defineConfig({
     alias: {
       "cloudflare:workflows": fileURLToPath(new URL("./test/unit/stubs/cloudflare-workflows.ts", import.meta.url)),
       "cloudflare:workers": fileURLToPath(new URL("./test/unit/stubs/cloudflare-workers.ts", import.meta.url)),
+      "cloudflare:sockets": fileURLToPath(new URL("./test/unit/stubs/cloudflare-sockets.ts", import.meta.url)),
     },
   },
   plugins: [
@@ -26,12 +27,12 @@ export default defineConfig({
       },
     },
     {
-      // `import mod from "x.wasm?module"` gives a compiled WebAssembly.Module, like wrangler's CompiledWasm rule in the Worker.
+      // `import mod from "x.wasm"` gives a compiled WebAssembly.Module, like wrangler's CompiledWasm rule in the Worker.
       name: "diffinery:wasm-module",
       enforce: "pre",
       async resolveId(source, importer) {
-        if (!source.endsWith(".wasm?module")) return null;
-        const file = await this.resolve(source.slice(0, -"?module".length), importer, { skipSelf: true });
+        if (!source.endsWith(".wasm")) return null;
+        const file = await this.resolve(source, importer, { skipSelf: true });
         return file ? PREFIX + Buffer.from(file.id).toString("base64url") : null;
       },
       load(id) {

@@ -7,6 +7,7 @@ import { app, queue, scheduled } from "../../src/app.js";
 export { RepoDO } from "../../src/repo/RepoDO.js";
 export { SchedulerDO } from "../../src/scheduler.js";
 export { ComposeDO } from "../../src/compose.js";
+export { RateLimiterDO } from "../../src/rate-limiter.js";
 export { RunnerContainer, RunnerContainerMedium, RunnerContainerSmall, RunnerContainerTiny, SandboxContainer } from "../../src/runner/containers.js";
 export { RunWorkflow } from "../../src/runner/workflow.js";
 export { ImportWorkflow } from "../../src/imports/workflow.js";

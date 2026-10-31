@@ -33,6 +33,7 @@ import { registerPackages } from "./packages.js";
 import { registerDocs } from "../docs/web.js";
 import { registerModeration } from "./moderation.js";
 import { registerApps } from "./apps.js";
+import { registerGitHubRunners } from "./github-runners.js";
 
 /**
  * Server-rendered web UI. Mount at "/" after the API, Git and runner routes:
@@ -96,6 +97,8 @@ registerTerminals(web);
 registerAccountLifecycle(web);
 // Settings → Apps and Installed apps, and /apps/:slug: fixed paths, before /:owner.
 registerApps(web);
+// Settings → GitHub runners: fixed /settings paths, before /:owner.
+registerGitHubRunners(web);
 // /-/report and /:owner/:repo/comments/:id/...: before the /:owner and /:owner/:repo catch-alls.
 registerModeration(web);
 registerAccount(web);

@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import encodeJpeg, { init as initJpegEncode } from "@jsquash/jpeg/encode.js";
 import decodeWebpWasm, { init as initWebpDecode } from "@jsquash/webp/decode.js";
 import encodeWebp from "@jsquash/webp/encode.js";
-import JPEG_ENC_WASM from "@jsquash/jpeg/codec/enc/mozjpeg_enc.wasm?module";
-import WEBP_DEC_WASM from "@jsquash/webp/codec/dec/webp_dec.wasm?module";
+import JPEG_ENC_WASM from "@jsquash/jpeg/codec/enc/mozjpeg_enc.wasm";
+import WEBP_DEC_WASM from "@jsquash/webp/codec/dec/webp_dec.wasm";
 import { AVATAR_SIZES, MAX_AVATAR_BYTES, cropAndShrink, imageSize, jpegOrientation, makeAvatarImages, orientSquare, shrinkFactor, sniffImage, squareCrop, type Pixels } from "../../src/lib/image.js";
 import { HttpError } from "../../src/lib/util.js";
 
