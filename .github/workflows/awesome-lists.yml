@@ -26,7 +26,7 @@ jobs:
   suggest:
     name: Open the list pull requests
     if: ${{ github.server_url != 'https://github.com' && github.repository == 'codician/diffinery' }}
-    runs-on: ${{ vars.DIFFINERY_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.DIFFINERY_RUNS_ON || (github.repository == 'codician-team/diffinery' && 'diffinery') || 'ubuntu-latest' }}
     environment: github-mirror
     timeout-minutes: 10
     steps:

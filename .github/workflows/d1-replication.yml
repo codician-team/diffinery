@@ -18,7 +18,7 @@ permissions:
 jobs:
   check:
     name: Check sessions on a test database
-    runs-on: ${{ vars.DIFFINERY_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.DIFFINERY_RUNS_ON || (github.repository == 'codician-team/diffinery' && 'diffinery') || 'ubuntu-latest' }}
     # The Cloudflare secrets are the production environment's.
     environment: production
     timeout-minutes: 20
@@ -81,7 +81,7 @@ jobs:
     name: Turn on read replication in production
     needs: check
     if: ${{ inputs.enable_production }}
-    runs-on: ${{ vars.DIFFINERY_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.DIFFINERY_RUNS_ON || (github.repository == 'codician-team/diffinery' && 'diffinery') || 'ubuntu-latest' }}
     environment:
       name: production
       url: https://${{ vars.DIFFINERY_DOMAIN || 'diffinery.com' }}
