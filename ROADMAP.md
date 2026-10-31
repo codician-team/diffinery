@@ -8,10 +8,12 @@ here has a date. If something matters to you, open an issue or a pull request.
 
 Git hosting over HTTPS, pull requests with reviews, auto-merge and a merge queue, issues,
 releases, a container registry, GitHub Actions–compatible CI on per-job Cloudflare
-Containers with automatic runner sizing, self-hosted runners, a GitHub importer, the
-GitHub-compatible REST and GraphQL APIs, an MCP server, agent accounts with guardrails,
-sandboxes, agent tasks and agent review, the CLI, editor plugins and one-command
-deployment to your own Cloudflare account. See [Features](https://diffinery.com/features).
+Containers with automatic runner sizing, self-hosted runners, hosted runners for
+repositories that stay on GitHub, a GitHub importer, the GitHub-compatible REST and GraphQL
+APIs, an MCP server, agent accounts with guardrails, sandboxes, agent tasks and agent
+review, the CLI, editor plugins and one-command deployment to your own Cloudflare account or
+to [celld](https://diffinery.com/docs/self-hosting/celld). See
+[Features](https://diffinery.com/features).
 
 ## Known gaps
 

@@ -97,6 +97,7 @@ maintainer may have to approve the workflows of your first pull request before t
 - Changes to files under `.github/workflows` always need a maintainer to merge them, on
   purpose: agents can't land workflow changes.
 - Pull requests are squash-merged.
+- Maintainers cut releases with [docs/RELEASING.md](docs/RELEASING.md).
 
 ## AI agents
 
