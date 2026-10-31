@@ -68,7 +68,7 @@ You don't edit any code to deploy your own instance. `apps/diffinery/wrangler.js
 - `DIFFINERY_ZONE`, if the Cloudflare zone that holds your hostname is not its last two labels. For `git.example.com` the default zone is `example.com`, which is right; for `git.example.co.uk` the default would be `co.uk`, so set `DIFFINERY_ZONE` to `example.co.uk`.
 - `MAIL_DOMAIN`, if email should come from another domain than your hostname, for example `example.com` to send from `notifications@example.com`.
 
-The Deploy job runs on every push to `main` once the CI workflow passes on that commit, on GitHub or on a Diffinery instance, and whenever you start it by hand (`workflow_dispatch`). A GitHub mirror of a repository that already deploys from Diffinery would deploy too, so keep Actions or the Cloudflare secrets off on such a mirror.
+The Deploy job runs on every push to `main` once the CI workflow passes on that commit, on GitHub or on a Diffinery instance, and whenever you start it by hand (`workflow_dispatch`). A mirror of a repository that already deploys would deploy too, on GitHub or on Diffinery, so keep Actions or the Cloudflare secrets off on such a mirror. The upstream project's own Diffinery mirror, `codician/diffinery` on diffinery.com, is skipped by name.
 
 The workflow doesn't pass `BOOTSTRAP_ADMINS`. Set the list with a first deploy from your machine (`scripts/setup.sh`), or put it under `vars` in your copy's `wrangler.jsonc`; after that, workflow deploys keep it.
 
