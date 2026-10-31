@@ -128,4 +128,6 @@ GitHub hands a runner any queued job of the repository whose labels it has, so a
 
 **"The runner stopped before it took a job (exit code N); starting another".** GitHub's runner exited before a job started, for example because GitHub was unreachable. Diffinery tries up to 3 runners for a job.
 
+**"The runner's container stopped before it took a job; starting another".** The runner's container stopped without an error before GitHub handed it a job, for example because Cloudflare lost the machine it ran on. GitHub still had the job queued, so Diffinery started another runner for it. As with a runner that exited with an error, Diffinery tries up to 3 runners for a job.
+
 **Settings → GitHub runners says "This Diffinery has no GitHub App".** The instance's administrator hasn't set the app up. See [Configuration](/docs/self-hosting/configuration#github-runners).

@@ -193,6 +193,16 @@ export class GitHubAppClient {
     }
   }
 
+  /** A job's status on GitHub (queued, in_progress, completed and others); null once GitHub no longer has it. */
+  async jobStatus(installationId: number, repo: string, jobId: number): Promise<string | null> {
+    try {
+      return (await this.asInstallation<{ status: string }>(installationId, "GET", `repos/${repo}/actions/jobs/${jobId}`)).status;
+    } catch (e) {
+      if (e instanceof GitHubApiError && e.status === 404) return null;
+      throw e;
+    }
+  }
+
   /** Removes a runner that never took a job (one that did removes itself). */
   async removeRunner(installationId: number, repo: string, runnerId: number): Promise<void> {
     try {
