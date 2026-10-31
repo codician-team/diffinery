@@ -41,6 +41,7 @@ function fakeGitHub() {
   const gh = {
     fail: null as Error | null,
     busy: false as boolean | null,
+    jobState: "queued" as string | Error | null,
     async jitRunner(installationId: number, repo: string, name: string, labels: string[]) {
       calls.push({ op: "jit", args: [installationId, repo, name, labels] });
       if (gh.fail) throw gh.fail;
@@ -52,6 +53,11 @@ function fakeGitHub() {
     },
     async removeRunner(installationId: number, repo: string, runnerId: number) {
       calls.push({ op: "remove", args: [installationId, repo, runnerId] });
+    },
+    async jobStatus(installationId: number, repo: string, jobId: number) {
+      calls.push({ op: "job", args: [installationId, repo, jobId] });
+      if (gh.jobState instanceof Error) throw gh.jobState;
+      return gh.jobState;
     },
   };
   return { gh, calls, client: gh as unknown as GitHubAppClient };
@@ -317,6 +323,47 @@ describe("GitHub jobs on Diffinery runners", () => {
     expect(w.rows()[0]).toMatchObject({ status: "completed", tries: MAX_TRIES, message: "The runner stopped before it took a job (exit code 1)" });
     expect(w.compute().every((c) => c.ended_at)).toBe(true);
     expect(w.started.map((s) => s.container)).toEqual([1, 2, 3].map((n) => `gh-${w.rows()[0]!.id}-${n}`));
+  });
+
+  it("replace a runner whose container stopped before it took a job while GitHub still has the job queued", async () => {
+    const w = world();
+    await w.svc.queued("ann", job(1), "large");
+    await w.svc.pump("ann");
+    const first = w.rows()[0]!;
+    // The library reports exit code 0 for a container the platform lost: the job still waits on GitHub.
+    await w.svc.stopped(first.id, 0, first.container!);
+    expect(w.rows()[0]).toMatchObject({ status: "queued", tries: 1, container: null, message: "The runner's container stopped before it took a job; starting another" });
+    expect(w.calls.filter((c) => c.op === "job" || c.op === "remove")).toEqual([
+      { op: "job", args: [11, "ann-gh/app", 1] },
+      { op: "remove", args: [11, "ann-gh/app", 501] },
+    ]);
+    expect(w.compute()[0]!.ended_at).not.toBeNull();
+    // The lost container's stop again, late: the row no longer runs in it.
+    await w.svc.stopped(first.id, 0, first.container!);
+    expect(w.rows()[0]).toMatchObject({ status: "queued", tries: 1 });
+
+    // GitHub doesn't answer: the job counts as queued. Without an exit code it is the same.
+    await w.svc.pump("ann");
+    w.gh.jobState = new GitHubApiError(502, "bad gateway");
+    await w.svc.stopped(first.id, null, w.rows()[0]!.container!);
+    expect(w.rows()[0]).toMatchObject({ status: "queued", tries: 2 });
+
+    // The job ran on another runner or was cancelled meanwhile: the row ends.
+    await w.svc.pump("ann");
+    w.gh.jobState = "completed";
+    await w.svc.stopped(first.id, 0, w.rows()[0]!.container!);
+    expect(w.rows()[0]).toMatchObject({ status: "completed", tries: 3, exit_code: 0, message: null });
+    expect(w.started.map((s) => s.container)).toEqual([1, 2, 3].map((n) => `gh-${first.id}-${n}`));
+
+    // A runner that took its job and stopped isn't asked about.
+    const v = world();
+    await v.svc.queued("ann", job(1), "large");
+    await v.svc.pump("ann");
+    const row = v.rows()[0]!;
+    await v.svc.jobEvent({ installationId: 11, githubJobId: 1, action: "in_progress", runnerName: row.runner_name, jobName: "test 1", conclusion: null });
+    await v.svc.stopped(row.id, 0, row.container!);
+    expect(v.rows()[0]).toMatchObject({ status: "completed", exit_code: 0 });
+    expect(v.calls.filter((c) => c.op === "job")).toEqual([]);
   });
 
   it("stop a runner no job took within the idle time, unless GitHub says it is busy", async () => {

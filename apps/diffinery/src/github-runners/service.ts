@@ -107,7 +107,7 @@ export interface RunnerHost {
 export function containerHost(env: Env): RunnerHost {
   const ns = (container: string) => env[RUNNER_SIZES[sizeOfContainer(container)].binding] ?? env.RUNNER;
   return {
-    start: (container, input) => ns(container).get(ns(container).idFromName(container)).startGitHubRunner(input),
+    start: (container, input) => ns(container).get(ns(container).idFromName(container)).startGitHubRunner({ ...input, container }),
     stop: (container) => ns(container).get(ns(container).idFromName(container)).stopJob(false),
     has: (size) => size === "large" || !!env[RUNNER_SIZES[size].binding],
   };
@@ -355,21 +355,37 @@ export class GitHubRunners {
     await this.ended(row.id, null);
   }
 
-  /** A runner's container stopped (runner/containers.ts onStop), or Diffinery stopped it. */
-  async stopped(rowId: string, exitCode: number | null): Promise<void> {
+  /** A runner's container stopped (runner/containers.ts onStop), or Diffinery stopped it. `container` is the one that stopped, when it says. */
+  async stopped(rowId: string, exitCode: number | null, container?: string): Promise<void> {
     const row = await this.row(rowId);
     if (!row) return;
-    // A runner that crashed before it took a job (nothing of the job ran) is replaced, a few times.
-    if (row.status === "starting" && !row.stop_reason && exitCode !== 0 && exitCode !== null && row.tries < MAX_TRIES) {
-      if (row.container) await endCompute(this.env, row.container).catch(() => {});
-      if (row.github_runner_id) await this.gh.removeRunner(row.installation_id, row.repo, row.github_runner_id).catch(() => {});
-      await this.db
-        .prepare("UPDATE github_runner_jobs SET status = 'queued', container = NULL, message = ? WHERE id = ? AND status = 'starting'")
-        .bind(`The runner stopped before it took a job (exit code ${exitCode}); starting another`, row.id)
-        .run();
-      return;
+    // A container the row no longer runs in: one given up on (back in line, or replaced) that stopped late.
+    if (container && row.container !== container) return;
+    // A runner that stopped before it took a job (nothing of the job ran) is replaced, a few times: one that crashed,
+    // and one that stopped without crashing while GitHub still has its job queued. The containers library reports
+    // exit code 0 for a container the platform lost, and no runner took the job then.
+    if (row.status === "starting" && !row.stop_reason && row.tries < MAX_TRIES) {
+      const crashed = exitCode !== 0 && exitCode !== null;
+      if (crashed || (await this.stillQueued(row))) {
+        if (row.container) await endCompute(this.env, row.container).catch(() => {});
+        if (row.github_runner_id) await this.gh.removeRunner(row.installation_id, row.repo, row.github_runner_id).catch(() => {});
+        await this.db
+          .prepare("UPDATE github_runner_jobs SET status = 'queued', container = NULL, message = ? WHERE id = ? AND status = 'starting'")
+          .bind(crashed ? `The runner stopped before it took a job (exit code ${exitCode}); starting another` : "The runner's container stopped before it took a job; starting another", row.id)
+          .run();
+        return;
+      }
     }
     await this.ended(rowId, exitCode);
+  }
+
+  /**
+   * Whether GitHub still has a row's job queued. When GitHub doesn't answer, it counts as queued: a job left
+   * without a runner waits 24 hours, a runner started for nothing only IDLE_MS.
+   */
+  private async stillQueued(row: RunnerJobRow): Promise<boolean> {
+    const status = await this.gh.jobStatus(row.installation_id, row.repo, row.github_job_id).catch(() => "queued");
+    return status === "queued";
   }
 
   private async ended(rowId: string, exitCode: number | null): Promise<void> {
