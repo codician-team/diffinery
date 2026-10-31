@@ -75,6 +75,8 @@ not depend on the speed of the machine they run on.
   what it is for, and the person you work for in the description. Changes under
   `.github/workflows` need a maintainer to merge them. Never skip or disable a test to get
   green.
+- **Releases:** follow [docs/RELEASING.md](docs/RELEASING.md) step by step. Never create a
+  tag or a GitHub release without a maintainer's go-ahead.
 
 ## Reading the docs as an agent
 
