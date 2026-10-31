@@ -40,7 +40,7 @@ abstract class HostedContainer extends Container<Env> {
 /** The job a runner container runs; stopRequested once Diffinery asked it to stop (stopJob). */
 type RunnerJob = { repoId: string; jobId: string; container?: string; stopRequested?: boolean };
 /** A GitHub job's runner (github-runners/): GitHub's own runner, for the account that pays. */
-type GitHubRunner = { accountId: string; runnerId: string };
+type GitHubRunner = { accountId: string; runnerId: string; container?: string };
 
 /** How long a job's container may take to come up, and how often it is checked meanwhile. */
 const START_WAIT_MS = 180_000;
@@ -53,6 +53,8 @@ const START_POLL_MS = 500;
 export class RunnerContainer extends HostedContainer {
   // Jobs make no inbound requests, so activity-based sleep must not stop them.
   override sleepAfter = "6h";
+  /** True while start() runs (startRunner). */
+  private starting = false;
 
   async startJob(input: { repoId: string; jobId: string; container?: string; token: string; apiUrl: string; egress?: Egress; vcpu?: number }): Promise<void> {
     await this.ctx.storage.put("job", { repoId: input.repoId, jobId: input.jobId, container: input.container });
@@ -71,21 +73,26 @@ export class RunnerContainer extends HostedContainer {
    * configuration GitHub made for it, which holds the runner's credentials, so it is only ever in the
    * container's environment.
    */
-  async startGitHubRunner(input: { accountId: string; runnerId: string; jitConfig: string; egress: Egress; vcpu: number }): Promise<void> {
-    await this.ctx.storage.put("github", { accountId: input.accountId, runnerId: input.runnerId } satisfies GitHubRunner);
+  async startGitHubRunner(input: { accountId: string; runnerId: string; container?: string; jitConfig: string; egress: Egress; vcpu: number }): Promise<void> {
+    await this.ctx.storage.put("github", { accountId: input.accountId, runnerId: input.runnerId, container: input.container } satisfies GitHubRunner);
     await this.startRunner({ DIFFINERY_GITHUB_JIT_CONFIG: input.jitConfig, DIFFINERY_RUNNER_VCPU: String(input.vcpu), ...(await this.useEgress(input.egress)) });
   }
 
   private async startRunner(envVars: Record<string, string>): Promise<void> {
-    await this.start(
-      { envVars },
-      // The library gives up after 8 s and reports "no container instance", but a container on a host
-      // that hasn't pulled the runner image yet takes longer than that to come up: such jobs went back
-      // in line for 30 to 90 s more (measured on 10-leg matrices). Wait for it instead.
-      // The runner listens on no port: the library's own fallback port (33) answers "not listening" once it is up.
-      // Each check can itself take up to 5 s, so the signal bounds the whole wait.
-      { portToCheck: 33, waitInterval: START_POLL_MS, retries: Math.ceil(START_WAIT_MS / START_POLL_MS), signal: AbortSignal.timeout(START_WAIT_MS + 60_000) },
-    );
+    this.starting = true;
+    try {
+      await this.start(
+        { envVars },
+        // The library gives up after 8 s and reports "no container instance", but a container on a host
+        // that hasn't pulled the runner image yet takes longer than that to come up: such jobs went back
+        // in line for 30 to 90 s more (measured on 10-leg matrices). Wait for it instead.
+        // The runner listens on no port: the library's own fallback port (33) answers "not listening" once it is up.
+        // Each check can itself take up to 5 s, so the signal bounds the whole wait.
+        { portToCheck: 33, waitInterval: START_POLL_MS, retries: Math.ceil(START_WAIT_MS / START_POLL_MS), signal: AbortSignal.timeout(START_WAIT_MS + 60_000) },
+      );
+    } finally {
+      this.starting = false;
+    }
   }
 
   /**
@@ -106,8 +113,13 @@ export class RunnerContainer extends HostedContainer {
   override async onStop(params: StopParams): Promise<void> {
     const gh = await this.ctx.storage.get<GitHubRunner>("github");
     if (gh) {
+      // While a start the platform had no machine for is tried again, the library's alarm reports the container
+      // stopped with exit code 0, though nothing ran and the start goes on. Told so, Diffinery removed the runner
+      // from GitHub and its job waited 24 hours for another (2 or 3 jobs of 10 started at once). The start ends in
+      // a running runner, or in an error that github-runners/service.ts place() handles.
+      if (this.starting) return;
       const ns = this.env.GITHUB_RUNNERS;
-      if (ns) await ns.get(ns.idFromName(gh.accountId)).stopped(gh.accountId, gh.runnerId, params.exitCode ?? null);
+      if (ns) await ns.get(ns.idFromName(gh.accountId)).stopped(gh.accountId, gh.runnerId, params.exitCode ?? null, gh.container);
       await this.ctx.storage.delete("github");
       return;
     }
