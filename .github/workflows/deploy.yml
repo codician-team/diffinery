@@ -39,8 +39,8 @@ jobs:
     name: Main's current tip
     # Every push to main deploys once CI passes on it, on GitHub or on a Diffinery
     # instance, and so does running this workflow by hand. Except on diffinery.com's
-    # codician/diffinery: it mirrors GitHub (mirror-from-github.yml), which deploys
-    # diffinery.com, and lacks the GitHub App's variables a deploy needs.
+    # codician/diffinery, an older copy of this repository: GitHub deploys diffinery.com,
+    # and that copy lacks the GitHub App's variables a deploy needs.
     if: ${{ !(github.server_url == 'https://diffinery.com' && github.repository == 'codician/diffinery') && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     runs-on: ${{ vars.DIFFINERY_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 5
