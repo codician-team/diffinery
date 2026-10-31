@@ -59,7 +59,8 @@ describe("scripts/render-config.mjs and the GitHub App", () => {
 
   it("refuses a value of the wrong shape without printing it", () => {
     tree();
-    const pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIEsecret\n-----END RSA PRIVATE KEY-----";
+    // Put together at run time, so secret scanners (diffinery.com's push protection among them) don't take the fake key for a real one.
+    const pem = ["BEGIN", "END"].map((edge) => `-----${edge} RSA PRIVATE KEY-----`).join("\nMIIEsecret\n");
     for (const [key, value, message] of [
       ["GITHUB_APP_ID", pem, "GITHUB_APP_ID must be the App ID, a number"],
       ["GITHUB_APP_SLUG", "Diffinery Runners", "GITHUB_APP_SLUG must be the slug"],
