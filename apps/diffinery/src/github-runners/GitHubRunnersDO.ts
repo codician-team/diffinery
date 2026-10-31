@@ -40,11 +40,11 @@ export class GitHubRunnersDO extends DurableObject<Env> {
     await this.wake(accountId, 0);
   }
 
-  /** A runner's container stopped (runner/containers.ts onStop). */
-  async stopped(accountId: string, runnerId: string, exitCode: number | null): Promise<void> {
+  /** A runner's container stopped (runner/containers.ts onStop); containers started before it said which don't. */
+  async stopped(accountId: string, runnerId: string, exitCode: number | null, container?: string): Promise<void> {
     const r = this.runners();
     if (!r) return;
-    await r.stopped(runnerId, exitCode);
+    await r.stopped(runnerId, exitCode, container);
     await this.wake(accountId, 0);
   }
 

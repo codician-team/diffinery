@@ -1,7 +1,7 @@
 ---
 title: GitHub runners
 description: Keep your code on GitHub and run its Actions jobs on Diffinery's hosted runners: install the app, link the account that pays, and set runs-on to diffinery.
-updated: 2026-10-30
+updated: 2026-10-31
 ---
 
 You don't have to move your code to use Diffinery's runners. Keep your repositories and workflows on GitHub, install Diffinery's GitHub App, and change a job's `runs-on` to `diffinery`. The job then runs on a Diffinery hosted runner (a fresh Ubuntu 24.04 container with 4 vCPUs on Cloudflare) instead of a GitHub-hosted one. Logs, checks, caches, artifacts and `GITHUB_TOKEN` stay on GitHub, as with any self-hosted runner.
@@ -103,10 +103,10 @@ GitHub doesn't charge minutes for jobs on self-hosted runners, which is what Dif
 | starting | The runner is registered and its container is starting, or it waits for GitHub to hand it the job. |
 | running | GitHub handed the runner a job. |
 | done | The container stopped. The GitHub job's conclusion is shown under it. |
-| skipped | The job ended before its runner started (cancelled, or another runner took it), or the installation was suspended or unlinked. |
+| skipped | The job ended before its runner started (cancelled, or run by a runner that isn't one of this account's Diffinery runners), or the installation was suspended or unlinked. |
 | failed | No runner was started: the reason is shown, such as a kill switch, minutes used up, or GitHub refusing to register a runner. |
 
-GitHub hands a runner any queued job of the repository whose labels it has, so the job a runner ran may be another one with the same labels than the job it was started for. Each queued job still gets one runner.
+GitHub hands a runner any queued job of the repository whose labels it has, so a runner may run a different queued job with the same labels instead of the one it was started for. Each queued job still gets one runner: the runner's row then shows the job it ran, and the job it was started for waits for the next runner, in its place in line, with its own labels and size.
 
 ## Security
 
@@ -134,8 +134,10 @@ GitHub hands a runner any queued job of the repository whose labels it has, so t
 
 **"Could not register a runner on GitHub: ... Resource not accessible by integration".** The app lacks the **Administration: Read and write** permission on the repository. An owner of the GitHub account reviews and accepts the app's new permissions in the installation's settings on GitHub (**Choose repositories on GitHub** opens them).
 
-**"No job took this runner within 10 minutes".** The job it was started for was cancelled, or ran on another runner with the same labels, and GitHub had no other job for it. Diffinery stopped the runner and removed it from GitHub; nothing to do.
+**"No job took this runner within 10 minutes".** The job it was started for was cancelled, or ran on another runner with the same labels, and GitHub had no other job for it. This also happens, rarely, when a job is cancelled just as the runner started for it takes a different queued job: Diffinery then starts one more runner for the cancelled job. Diffinery stopped the runner and removed it from GitHub; nothing to do.
 
 **"The runner stopped before it took a job (exit code N); starting another".** GitHub's runner exited before a job started, for example because GitHub was unreachable. Diffinery tries up to 3 runners for a job.
+
+**"The runner's container stopped before it took a job; starting another".** The runner's container stopped without an error before GitHub handed it a job, for example because Cloudflare lost the machine it ran on. GitHub still had the job queued, so Diffinery started another runner for it. As with a runner that exited with an error, Diffinery tries up to 3 runners for a job.
 
 **Settings → GitHub runners says "This Diffinery has no GitHub App".** The instance's administrator hasn't set the app up. See [Configuration](/docs/self-hosting/configuration#github-runners).
