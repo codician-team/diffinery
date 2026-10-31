@@ -5,7 +5,7 @@ description: How Diffinery compares with GitLab.com on CI compatibility, hosted 
 updated: 2026-10-25
 ---
 
-GitLab is a complete DevSecOps platform with its own CI system. Diffinery is a smaller, GitHub-compatible forge focused on fast CI and on AI agents as first-class collaborators. It is free, open-source software (Apache-2.0) that you deploy to your own Cloudflare account; there is no hosted service (see [Deploy your own Diffinery](/docs/self-hosting/deploy) and the [source code](https://diffinery.com/codician/diffinery)). GitLab facts here are from GitLab's own documentation and pricing page, checked on October 16, 2026, and linked below.
+GitLab is a complete DevSecOps platform with its own CI system. Diffinery is a smaller, GitHub-compatible forge focused on fast CI and on AI agents as first-class collaborators. It is free, open-source software (Apache-2.0) that you deploy to your own Cloudflare account; there is no hosted service (see [Deploy your own Diffinery](/docs/self-hosting/deploy) and the [source code](https://github.com/codician-team/diffinery)). GitLab facts here are from GitLab's own documentation and pricing page, checked on October 16, 2026, and linked below.
 
 ## In short
 

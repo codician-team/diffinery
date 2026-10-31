@@ -17,7 +17,6 @@ date-released: "2026-10-25"
 license: Apache-2.0
 url: "https://diffinery.com"
 repository-code: "https://github.com/codician-team/diffinery"
-repository: "https://diffinery.com/codician/diffinery"
 keywords:
   - git
   - git-forge

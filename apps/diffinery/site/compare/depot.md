@@ -5,7 +5,7 @@ description: Depot sells fast GitHub Actions runners, its own Depot CI engine an
 updated: 2026-10-30
 ---
 
-Depot started with fast container builds and now sells drop-in runners for GitHub Actions, its own CI engine that runs GitHub Actions YAML (Depot CI), and Git hosting in beta (Depot Code). Diffinery is a git forge with pull requests, issues, GitHub Actions–compatible CI and AI agents in one platform. Depot is a service that runs everything for you; Diffinery is free, open-source software (Apache-2.0) that you deploy to your own Cloudflare account, with no hosted service (see [Deploy your own Diffinery](/docs/self-hosting/deploy) and the [source code](https://diffinery.com/codician/diffinery)). Depot facts here are from its own website and documentation, checked on October 16, 2026, and linked below.
+Depot started with fast container builds and now sells drop-in runners for GitHub Actions, its own CI engine that runs GitHub Actions YAML (Depot CI), and Git hosting in beta (Depot Code). Diffinery is a git forge with pull requests, issues, GitHub Actions–compatible CI and AI agents in one platform. Depot is a service that runs everything for you; Diffinery is free, open-source software (Apache-2.0) that you deploy to your own Cloudflare account, with no hosted service (see [Deploy your own Diffinery](/docs/self-hosting/deploy) and the [source code](https://github.com/codician-team/diffinery)). Depot facts here are from its own website and documentation, checked on October 16, 2026, and linked below.
 
 ## In short
 

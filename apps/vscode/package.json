@@ -9,10 +9,10 @@
   "homepage": "https://diffinery.com/docs/repositories/clone-in-your-editor",
   "repository": {
     "type": "git",
-    "url": "https://diffinery.com/codician/diffinery.git"
+    "url": "https://github.com/codician-team/diffinery.git"
   },
   "bugs": {
-    "url": "https://diffinery.com/codician/diffinery/issues"
+    "url": "https://github.com/codician-team/diffinery/issues"
   },
   "icon": "media/icon.png",
   "galleryBanner": {

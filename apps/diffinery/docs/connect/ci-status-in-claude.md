@@ -27,7 +27,7 @@ Claude Code shows the pull request of the branch you're on, with its CI. On Diff
    ```text
    ✓ git will use diffinery for https://diffinery.com
    ✓ gh is signed in to diffinery.com
-   ✓ Claude Code plugins: diffinery 0.1.4 and diffinery-ci 0.2.4 load in new Claude Code sessions (named in ~/.claude/settings.json)
+   ✓ Claude Code plugins: diffinery 0.1.5 and diffinery-ci 0.2.5 load in new Claude Code sessions (named in ~/.claude/settings.json)
    ```
 
 3. Start a new Claude Code session in a clone of a Diffinery repository (or run `/reload-plugins` in an open one). On a branch with a pull request, the band appears above the prompt.
@@ -102,4 +102,4 @@ So a Diffinery pull request gets no card there today, and nothing a repository o
 | Claude wasn't told when CI failed | Notes follow commits the session itself pushed, and stop after `/diffinery-ci off`. A push from outside the session shows in the band only. |
 | `diffinery setup` says `~/.claude/settings.json isn't valid JSON` | Claude Code's settings file has a typo. Fix it (or move it away), then run `diffinery setup` again. |
 | A cloud session has no `/diffinery-ci` command | Look for the `Claude Code plugins` line at the end of the environment's setup log. No line: the snapshot is older than the plugins, so change the setup script and save (see the note in [the cloud steps](#in-cloud-sessions-and-project-threads)). A `✗` line: it says what failed, usually `diffinery.com` missing from the allowed domains. |
-| You'd rather install from the marketplace | Anyone who can read codician/diffinery can run `claude plugin marketplace add https://diffinery.com/codician/diffinery.git`, then `claude plugin install diffinery-ci@diffinery`. `diffinery setup` then leaves that plugin to the marketplace. |
+| You'd rather install from the marketplace | Run `claude plugin marketplace add codician-team/diffinery` (the public GitHub repository, no sign-in needed), then `claude plugin install diffinery-ci@diffinery`. `diffinery setup` then leaves that plugin to the marketplace. |

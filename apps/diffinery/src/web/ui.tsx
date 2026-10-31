@@ -434,7 +434,7 @@ export function appearanceOf(c: AppContext): Appearance | null {
 }
 
 /**
- * "Star on GitHub", with the mirror's star count once the server knows it (web/github-stars.ts). A plain link to
+ * "Star on GitHub", with the repository's star count once the server knows it (web/github-stars.ts). A plain link to
  * GitHub: no script, nothing loaded from GitHub. `compact` (the header) says only "Star", and only the logo and
  * count on phones.
  */
@@ -476,7 +476,7 @@ const SiteFooter: FC<{ stars: number | null }> = ({ stars }) => (
       { title: "Product", links: [["/features", "Features"], ["/agents", "For AI agents"], ["/performance", "Performance"], ["/security", "Security"], ["/built-on-cloudflare", "Built on Cloudflare"], ["/open-source", "Open source"], ["/docs/migrate-from-github", "Migrate from GitHub"]] },
       { title: "Compare", links: [["/compare", "All comparisons"], ["/compare/github", "vs GitHub"], ["/compare/gitlab", "vs GitLab"], ["/compare/blacksmith", "vs Blacksmith"], ["/compare/depot", "vs Depot"]] },
       { title: "Resources", links: [["/docs", "Docs"], ["/docs/self-hosting", "Self-hosting"], ["/docs/guides", "Guides"], ["/docs/connect", "Connect AI apps"], ["/llms.txt", "llms.txt"], ["/status", "Status"], ["/docs/security/disclosure", "Report a vulnerability"]] },
-      { title: "Company", links: [["/about", "About"], ["/faq", "FAQ"], ["/blog", "Blog"], ["https://diffinery.com/codician/diffinery", "Source code"], [GITHUB_REPO, "GitHub mirror"], ["/contact", "Contact"], ["/privacy", "Privacy"]] },
+      { title: "Company", links: [["/about", "About"], ["/faq", "FAQ"], ["/blog", "Blog"], [GITHUB_REPO, "Source code"], ["/contact", "Contact"], ["/privacy", "Privacy"]] },
     ].map((col) => (
       <nav aria-label={col.title}>
         <h2>{col.title}</h2>

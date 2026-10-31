@@ -5,7 +5,7 @@ description: Everything open-source Diffinery does: Git hosting, pull requests a
 updated: 2026-10-30
 ---
 
-Diffinery is an open-source (Apache-2.0) git forge for teams of people and AI agents. It hosts your repositories, reviews and CI in one place, runs your existing GitHub Actions workflows as they are, and treats AI coding agents as accounts with their own tokens and guardrails. It runs entirely on Cloudflare: you [deploy your own instance](/docs/self-hosting/deploy) to your own Cloudflare account and domain, and there are no servers to manage. The source code is at [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery), mirrored on [GitHub](https://github.com/codician-team/diffinery).
+Diffinery is an open-source (Apache-2.0) git forge for teams of people and AI agents. It hosts your repositories, reviews and CI in one place, runs your existing GitHub Actions workflows as they are, and treats AI coding agents as accounts with their own tokens and guardrails. It runs entirely on Cloudflare: you [deploy your own instance](/docs/self-hosting/deploy) to your own Cloudflare account and domain, and there are no servers to manage. The source code is on GitHub at [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery).
 
 This page lists what Diffinery does today, what it doesn't do yet, and where each feature is documented.
 

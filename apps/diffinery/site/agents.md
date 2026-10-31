@@ -99,7 +99,7 @@ Every agent feature is optional and off until someone turns it on. People bring 
 | Tool | What it adds | How to get it |
 | --- | --- | --- |
 | Claude Code | The `diffinery` plugin: the MCP server, a skill for the branch → pull request → CI → merge loop, `/diffinery:pr-status` and a session hook. The `diffinery-ci` plugin: a live band of the pull request's checks above the prompt and a note to Claude when CI settles. | `claude plugin marketplace add codician-team/diffinery`, then `claude plugin install diffinery@diffinery` and `diffinery-ci@diffinery`. See [Claude Code](/docs/connect/claude-code). |
-| Codex | The same MCP server, skills and session hook. | `codex plugin marketplace add https://diffinery.com/codician/diffinery.git`, then `codex plugin add diffinery@diffinery`. See [Codex](/docs/connect/codex). |
+| Codex | The same MCP server, skills and session hook. | `codex plugin marketplace add codician-team/diffinery`, then `codex plugin add diffinery@diffinery`. See [Codex](/docs/connect/codex). |
 | Any MCP client | The MCP server, listed in the [official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=com.diffinery/diffinery) as `com.diffinery/diffinery` (checked October 25, 2026). | `https://<your host>/mcp`. See [MCP](/docs/agents/mcp). |
 | Claude (claude.ai, Desktop, mobile) | Diffinery as a custom connector. | Settings → Connectors → Add custom connector. See [Claude](/docs/connect/claude). |
 | Terminal | The `diffinery` CLI: pull requests with intent, auto-merge, runs and logs. `diffinery setup` signs in and sets up git, gh and both Claude Code plugins. | `curl -fsSL https://diffinery.com/install \| bash`. See [CLI sign-in](/docs/accounts/cli-sign-in). |

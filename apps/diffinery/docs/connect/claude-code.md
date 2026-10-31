@@ -20,7 +20,7 @@ On Windows, in PowerShell: `irm https://diffinery.com/install.ps1 | iex`, then `
 
 `diffinery setup` installed it: its last lines include `✓ Claude Code plugins: diffinery … and diffinery-ci … load in new Claude Code sessions`. Start a new Claude Code session (or run `/reload-plugins` in an open one), and `/plugin` lists `diffinery` and `diffinery-ci`. Run `diffinery setup` again to bring them up to date.
 
-You can also install from the marketplace kept in the public [codician/diffinery](https://diffinery.com/codician/diffinery) repository, which `/plugin` then keeps up to date: `claude plugin marketplace add https://diffinery.com/codician/diffinery.git`, then `claude plugin install diffinery@diffinery`. The plugins' sources are in its `plugins/` folder.
+You can also install from the marketplace kept in the public [codician-team/diffinery](https://github.com/codician-team/diffinery) repository on GitHub, which `/plugin` then keeps up to date: `claude plugin marketplace add codician-team/diffinery`, then `claude plugin install diffinery@diffinery`. The plugins' sources are in its `plugins/` folder.
 
 ## 3. Sign in
 
@@ -131,7 +131,7 @@ The plugins work with any Diffinery instance, such as one you [deploy on your ow
 | Problem | What to do |
 | --- | --- |
 | `/plugin` doesn't list `diffinery` | Run `diffinery setup` (step 1) and start a new session. Its `Claude Code plugins` line says what went wrong, if anything. |
-| `claude plugin marketplace add` fails with an authentication error | Git can't read codician/diffinery with your sign-in. Run `diffinery auth setup-git`, or use `diffinery setup` instead (step 1). |
+| `claude plugin marketplace add` fails | Claude Code clones github.com/codician-team/diffinery with git, which needs no sign-in. Check that `git ls-remote https://github.com/codician-team/diffinery` works from your machine, or use `diffinery setup` instead (step 1). |
 | `/mcp` shows `https://diffinery.com/mcp` but your repositories are on your own instance | Set the plugin's Diffinery URL: run `diffinery setup --url https://<your instance>`, or change it in `/config`. See [Self-hosted Diffinery](#self-hosted-diffinery). |
 | `/mcp` shows the server as needing authentication | Choose **Authenticate**, or run `claude mcp login plugin:diffinery:diffinery`. |
 | The browser says "Can't connect this app" | Remove the server and add it again, then sign in. |
