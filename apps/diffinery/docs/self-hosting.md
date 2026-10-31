@@ -1,7 +1,7 @@
 ---
 title: Self-hosting
 description: Diffinery is open source (Apache-2.0) and runs on your own Cloudflare account. What an instance needs, what it costs, the steps to deploy one, and where to go next.
-updated: 2026-10-30
+updated: 2026-10-31
 ---
 
 Diffinery is open-source software under the Apache License 2.0, and the way to use it is to run your own instance on your own Cloudflare account and domain. There's no hosted service to sign up for: diffinery.com is the project's own instance. This page is the overview; [Deploy your own Diffinery](/docs/self-hosting/deploy) is the step-by-step guide.
@@ -10,7 +10,7 @@ Diffinery is open-source software under the Apache License 2.0, and the way to u
 
 ## Get the source
 
-The repository is [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery), mirrored to [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery). Clone either one; both carry the same `main` branch, with the `LICENSE` and `NOTICE` files at the top.
+The repository is [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery). Clone its `main` branch, which has the `LICENSE` and `NOTICE` files at the top. The copy at diffinery.com/codician/diffinery is older and no longer updated.
 
 ```sh
 git clone https://github.com/codician-team/diffinery.git
@@ -65,4 +65,4 @@ The same repository also targets [celld](https://celld.dev), the open-source Wor
 
 ## Get help and contribute
 
-Report bugs and send pull requests on [the GitHub mirror](https://github.com/codician-team/diffinery) or [the Diffinery repository](https://diffinery.com/codician/diffinery). Report security problems privately with the [report form](https://diffinery.com/security/report); see [Vulnerability disclosure](/docs/security/disclosure).
+Report bugs and send pull requests on [GitHub](https://github.com/codician-team/diffinery). Report security problems privately with the [report form](https://diffinery.com/security/report); see [Vulnerability disclosure](/docs/security/disclosure).

@@ -9,9 +9,8 @@
 - **A workflow behaves differently from GitHub Actions:** check
   [Compatibility with GitHub Actions](https://diffinery.com/docs/actions/compatibility) first,
   then open an issue with the "Actions compatibility" template.
-- **Bugs and feature requests:** open an issue on the
-  [GitHub mirror](https://github.com/codician-team/diffinery/issues) or, if you have an
-  account there, on [Diffinery](https://diffinery.com/codician/diffinery/issues).
+- **Bugs and feature requests:** open an issue on
+  [GitHub](https://github.com/codician-team/diffinery/issues).
 - **Security problems:** never in a public issue. See [SECURITY.md](SECURITY.md).
 
 Diffinery is a volunteer-run open-source project with no paid support. There is no hosted
