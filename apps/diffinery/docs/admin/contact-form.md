@@ -10,7 +10,7 @@ On diffinery.com, the project's own instance, this is how to reach the Diffinery
 Two things have their own, better places:
 
 - **A security problem:** use the private [security report form](/docs/security/disclosure) at `/security/report`.
-- **A bug or an idea for Diffinery itself:** open an issue on [the Diffinery repository](https://diffinery.com/codician/diffinery) or its [GitHub mirror](https://github.com/codician-team/diffinery).
+- **A bug or an idea for Diffinery itself:** open an issue on [the Diffinery repository on GitHub](https://github.com/codician-team/diffinery/issues).
 
 ## Send a message
 

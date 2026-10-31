@@ -11,9 +11,9 @@ Diffinery is developed at
 issues and pull requests there. Its CI runs on Diffinery's own runners for GitHub, and
 merges to `main` deploy diffinery.com.
 
-[diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery) is a mirror
-that follows GitHub's `main` every 15 minutes, with the same commits, and runs the same CI
-on Diffinery. Changes pushed to its `main` are overwritten, so land them on GitHub.
+[diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery) is an older
+copy that is no longer updated, and its Actions are off. Don't open issues or pull
+requests there.
 
 Security problems are the exception: report them privately, never in an issue or pull
 request. See [SECURITY.md](SECURITY.md).
