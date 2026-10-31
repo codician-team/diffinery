@@ -57,6 +57,12 @@ Pull requests must pass CI (typecheck, the Worker bundle and the unit tests) and
 end-to-end shards before they merge. Tests must not depend on the speed of the machine
 they run on.
 
+CI runs on Diffinery's own runners for GitHub (`runs-on: diffinery`), pull requests from
+forks included: in this repository the workflows default to that label when the
+repository variable `DIFFINERY_RUNS_ON`, which GitHub doesn't pass to forks, is missing.
+The "End-to-end (runner Docker)" job needs those runners and fails on GitHub's own. A
+maintainer may have to approve the workflows of your first pull request before they run.
+
 ## Conventions
 
 - **TypeScript everywhere**, in strict mode, sharing code through the workspace packages in
