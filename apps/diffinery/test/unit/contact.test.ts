@@ -157,10 +157,11 @@ describe("sending without signing in", () => {
     await submitMessage(env, audit, input("ada@example.net", { message: "Second message, about another." }), null, "203.0.113.9");
     expect(rows(DB)).toHaveLength(2);
     await confirmMessage(env, audit, tokenOf(queued[1]));
-    expect(rows(DB).map((r) => [r.message, r.state])).toEqual([
-      ["First message, about one thing.", "unconfirmed"],
-      ["Second message, about another.", "new"],
-    ]);
+    // Both can have the same created_at millisecond, and then the random id orders them.
+    expect(Object.fromEntries(rows(DB).map((r) => [r.message, r.state]))).toEqual({
+      "First message, about one thing.": "unconfirmed",
+      "Second message, about another.": "new",
+    });
   });
 
   it("limits one network, one address and the whole form per day, quietly past the last two", async () => {
