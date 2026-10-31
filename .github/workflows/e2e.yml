@@ -89,9 +89,12 @@ jobs:
   # Docker as the hosted runner image runs it, with this change's docker wrapper, daemon config
   # and agent (its registry relay). It needs a Diffinery hosted runner, for the real dockerd: on
   # Diffinery, or on GitHub with DIFFINERY_RUNS_ON=diffinery. On GitHub's own runners it fails.
+  # Pull requests from forks get no repository variables, so they would land on GitHub's runners:
+  # they skip the job, and a maintainer runs it by pushing the branch to this repository.
   # A daemon an earlier step started is stopped first, so the first uses below start it afresh.
   runner-docker:
     name: End-to-end (runner Docker)
+    if: ${{ !github.event.pull_request.head.repo.fork }}
     runs-on: ${{ vars.DIFFINERY_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
