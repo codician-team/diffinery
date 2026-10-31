@@ -91,6 +91,7 @@ they run on.
 - Changes to files under `.github/workflows` always need a maintainer to merge them, on
   purpose: agents can't land workflow changes.
 - Pull requests are squash-merged.
+- Maintainers cut releases with [docs/RELEASING.md](docs/RELEASING.md).
 
 ## AI agents
 

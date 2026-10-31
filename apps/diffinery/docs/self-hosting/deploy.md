@@ -302,7 +302,11 @@ Then it runs the Deploy workflow's steps, in order: `pnpm install --frozen-lockf
 
 ## Updating
 
-To update, bring your copy up to date with upstream and run `scripts/setup.sh` again, or run Deploy (or push to `main` if your workflow deploys on push). Each run:
+To update, bring your copy up to date with upstream and run `scripts/setup.sh` again, or run Deploy (or push to `main` if your workflow deploys on push).
+
+`main` is always deployable, and diffinery.com runs it. To stay on a named version instead, check out its tag before you deploy, for example `git fetch --tags && git checkout v0.2.0`. Each version's changes, including new settings and migrations, are in [CHANGELOG.md](https://github.com/codician-team/diffinery/blob/main/CHANGELOG.md) and on the [releases page](https://github.com/codician-team/diffinery/releases). Versions only move forward: D1 migrations can't be undone, so don't deploy an older version over a newer one.
+
+Each run:
 
 - Creates nothing that already exists and keeps your D1 data, R2 data, secrets, Access application and, unless you set `BOOTSTRAP_ADMINS`, the deployed `BOOTSTRAP_ADMINS` list.
 - Applies new D1 migrations before the new Worker goes live. For example, `0010_imports.sql` adds the tables for GitHub imports, linked GitHub accounts and organization variables.
