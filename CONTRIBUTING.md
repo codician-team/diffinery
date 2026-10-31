@@ -6,19 +6,14 @@ them.
 
 ## Where development happens
 
-Diffinery is developed on Diffinery itself, at
-[diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery). Its CI,
-pull requests, code review and deploys all run there.
-[github.com/codician-team/diffinery](https://github.com/codician-team/diffinery) is a
-mirror that follows `main`.
+Diffinery is developed at
+[github.com/codician-team/diffinery](https://github.com/codician-team/diffinery). Open
+issues and pull requests there. Its CI runs on Diffinery's own runners for GitHub, and
+merges to `main` deploy diffinery.com.
 
-- **If you have an account on diffinery.com**, open issues and pull requests there.
-- **If you don't**, open them on the GitHub mirror. Accounts on diffinery.com are by
-  invitation for now, so this is the usual path for new contributors. A maintainer lands
-  accepted pull requests on Diffinery and they come back to GitHub with the next sync;
-  the GitHub pull request is then closed with a link to the change. The mirror rewrites
-  commit authorship, so look for the change by its title or pull request number rather
-  than by commit SHA.
+[diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery) is a mirror
+that follows GitHub's `main` every 15 minutes, with the same commits, and runs the same CI
+on Diffinery. Changes pushed to its `main` are overwritten, so land them on GitHub.
 
 Security problems are the exception: report them privately, never in an issue or pull
 request. See [SECURITY.md](SECURITY.md).

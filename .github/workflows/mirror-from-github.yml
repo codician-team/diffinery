@@ -1,0 +1,42 @@
+name: Mirror from GitHub
+
+# Keeps diffinery.com/codician/diffinery in step with github.com/codician-team/diffinery,
+# where development happens, through scripts/mirror-from-github.sh: GitHub's main and tags
+# are copied as they are, and Diffinery runs CI on each copied commit. Runs on Diffinery
+# only. Uses DIFFINERY_MIRROR_TOKEN (a Diffinery token with the admin scope, of a person who
+# is an admin of codician/diffinery), a secret of the github-mirror environment. That
+# environment is limited to protected branches, so only main's runs get it. Without the
+# token the job says so and does nothing.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-from-github
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Copy GitHub's main to Diffinery
+    if: ${{ github.server_url != 'https://github.com' && github.repository == 'codician/diffinery' }}
+    runs-on: ${{ vars.DIFFINERY_RUNS_ON || 'ubuntu-latest' }}
+    environment: github-mirror
+    timeout-minutes: 10
+    env:
+      DIFFINERY_TOKEN: ${{ secrets.DIFFINERY_MIRROR_TOKEN }}
+    steps:
+      - name: Check the Diffinery token
+        id: token
+        run: |
+          if [ -z "$DIFFINERY_TOKEN" ]; then
+            echo "::notice::DIFFINERY_MIRROR_TOKEN is not set, so Diffinery is not updated."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.skip != 'true'
+      - if: steps.token.outputs.skip != 'true'
+        run: scripts/mirror-from-github.sh

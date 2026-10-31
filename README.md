@@ -19,7 +19,7 @@ Diffinery hosts Git repositories, pull requests with reviews and a merge queue, 
 
 Diffinery is built for the way software gets written with agents. Give an agent a goal and get a pull request back from Claude Code or Codex in a sandbox. Have another agent review every pull request for bugs. Open **Today** each morning to see what needs you, approve, and let pull requests merge on green. Plugins for Claude Code and Codex, an MCP server in the [official MCP Registry](https://registry.modelcontextprotocol.io/v0/servers?search=com.diffinery/diffinery), editor extensions and `gh` support bring all of it to the tools you already use. [What agents can do on Diffinery ↓](#built-for-ai-coding-agents)
 
-- **Source:** [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery), where development, CI and deploys happen, mirrored to [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery).
+- **Source:** [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery), where development happens, with CI on Diffinery's runners, mirrored to [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery).
 - **Documentation:** [diffinery.com/docs](https://diffinery.com/docs), also as Markdown and in [llms.txt](https://diffinery.com/llms.txt) and [llms-full.txt](https://diffinery.com/llms-full.txt) for AI assistants.
 
 If Diffinery is useful to you, [a star on GitHub](https://github.com/codician-team/diffinery) helps other people find it.
@@ -321,7 +321,7 @@ Not directly. diffinery.com is the project's home and the instance Diffinery is 
 No. Other open-source projects run Git or CI on Cloudflare too, and [Built on Cloudflare](https://diffinery.com/built-on-cloudflare#other-git-and-ci-projects-on-cloudflare) lists how they differ. As far as we know, Diffinery is the one where Git hosting, pull requests with reviews in a web UI and GitHub Actions–compatible CI with marketplace actions all run on Cloudflare (checked October 25, 2026).
 
 **Where is development happening?**
-On Diffinery itself, at [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery). Diffinery's own CI, deploys and pull requests run there. The GitHub repository is a mirror, and issues and pull requests are welcome in either place; see [CONTRIBUTING.md](CONTRIBUTING.md).
+On GitHub, at [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery), where issues and pull requests go. Its CI jobs run on Diffinery's own [GitHub runners](https://diffinery.com/docs/actions/github-runners), and [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery) mirrors it and runs the same CI on Diffinery; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Contributing, security and license
 
