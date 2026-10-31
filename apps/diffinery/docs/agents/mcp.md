@@ -18,7 +18,7 @@ Diffinery runs a Model Context Protocol (MCP) server at `https://diffinery.com/m
 | Protocol versions | `2025-06-18` (default), `2025-03-26`, `2024-11-05`. `initialize` answers with the version you asked for when it is supported, otherwise `2025-06-18`. |
 | Capabilities | `tools` only (`listChanged: false`). No resources or prompts. |
 | Methods | `initialize`, `ping`, `tools/list`, `tools/call`, and the notifications `notifications/initialized` and `notifications/cancelled` |
-| Server info | `{"name": "diffinery", "title": "Diffinery", "version": "0.1.0"}`, plus short usage `instructions` for the model (how to read code, commit, open pull requests, watch CI, use sandboxes and search the docs) |
+| Server info | `{"name": "diffinery", "title": "Diffinery", "version": "0.2.0"}`, plus short usage `instructions` for the model (how to read code, commit, open pull requests, watch CI, use sandboxes and search the docs) |
 
 ## Authentication
 
@@ -422,7 +422,7 @@ curl -s https://diffinery.com/mcp \
   "result": {
     "protocolVersion": "2025-06-18",
     "capabilities": { "tools": { "listChanged": false } },
-    "serverInfo": { "name": "diffinery", "title": "Diffinery", "version": "0.1.0" },
+    "serverInfo": { "name": "diffinery", "title": "Diffinery", "version": "0.2.0" },
     "instructions": "Diffinery is a git forge built for agents. Read code with get_file/list_tree, ..."
   }
 }

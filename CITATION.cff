@@ -12,8 +12,8 @@ abstract: >-
   or Codex in sandboxes, a built-in MCP server and plugins for Claude Code and Codex.
 authors:
   - name: "Codician Team"
-version: "0.1.0"
-date-released: "2026-10-25"
+version: "0.2.0"
+date-released: "2026-10-31"
 license: Apache-2.0
 url: "https://diffinery.com"
 repository-code: "https://github.com/codician-team/diffinery"
