@@ -17,6 +17,9 @@ import { HttpError, now } from "./util.js";
  * running then (RepoDO.stopActions); lifting one only allows new work again. Nobody is exempt,
  * not even site administrators' own accounts. A suspended person (lib/moderation.ts) counts as an
  * account whose Actions are suspended, with the suspension's reason.
+ *
+ * GitHub jobs on Diffinery runners (github-runners/) count as the linked account's hosted jobs: its
+ * suspension and the instance's pause stop them too (accountKillSwitches, stopGitHubRunners).
  */
 
 export const PAUSE_FLAG = "hosted_compute_paused";
@@ -60,6 +63,20 @@ export async function killSwitches(env: Env, repoId: string): Promise<KillSwitch
     account: r.a_at ? { at: r.a_at, by: r.a_by ?? null, reason: r.a_reason ?? null, login: r.login! } : r.s_at ? { at: r.s_at, by: r.s_by ?? null, reason: r.s_reason ?? null, login: r.login! } : null,
     paused: r.p_at ? { at: r.p_at, by: r.p_by ?? null, reason: r.p_reason || null } : null,
   };
+}
+
+/**
+ * The switches over an account's work outside its repositories (GitHub jobs on Diffinery runners): its own
+ * suspension (or the person's, lib/moderation.ts) and the instance's pause.
+ */
+export async function accountKillSwitches(env: Env, accountId: string): Promise<KillSwitches> {
+  const a = await env.DB.prepare(
+    "SELECT login, actions_suspended_at AS a_at, actions_suspended_by AS a_by, actions_suspended_reason AS a_reason, suspended_at AS s_at, suspended_by AS s_by, suspended_reason AS s_reason FROM accounts WHERE id = ?",
+  )
+    .bind(accountId)
+    .first<Record<string, string | null>>();
+  const account = a?.a_at ? { at: a.a_at, by: a.a_by ?? null, reason: a.a_reason ?? null, login: a.login! } : a?.s_at ? { at: a.s_at, by: a.s_by ?? null, reason: a.s_reason ?? null, login: a.login! } : null;
+  return { repo: null, account, paused: await computePause(env) };
 }
 
 /** Why `work` may not start under these switches (a sentence without a final period), or null when it may. */
@@ -121,6 +138,8 @@ export async function runningCompute(env: Env, at = new Date()): Promise<Map<str
   const out = new Map<string, { jobs: string[]; sandboxes: string[] }>();
   for (const r of rows.results) {
     if (Date.parse(r.started_at) + MAX_RUN_MS[r.kind] <= at.getTime()) continue;
+    // GitHub runners have no Diffinery repository (stopGitHubRunners stops them).
+    if (r.repo_id.startsWith(GITHUB_COMPUTE)) continue;
     const e = out.get(r.repo_id) ?? { jobs: [], sandboxes: [] };
     const id = r.kind === "sandbox" ? r.id.split(":")[0]! : r.id;
     const list = r.kind === "job" ? e.jobs : e.sandboxes;
@@ -167,6 +186,30 @@ export async function stopIn(env: Env, repoIds: string[], o: { hostedOnly: boole
   return out;
 }
 
+/** compute_usage.repo_id of GitHub runners starts with this (github-runners/service.ts githubComputeRepo). */
+const GITHUB_COMPUTE = "github:";
+
+/**
+ * Stops the GitHub jobs on Diffinery runners of these accounts (all accounts running one when null):
+ * queued ones fail and running runners stop, with `message`. Returns the runners stopped.
+ */
+export async function stopGitHubRunners(env: Env, accountIds: string[] | null, message: string): Promise<number> {
+  const ns = env.GITHUB_RUNNERS;
+  if (!ns) return 0;
+  const ids =
+    accountIds ??
+    (await env.DB.prepare("SELECT DISTINCT account_id FROM github_runner_jobs WHERE status IN ('queued', 'starting', 'running')").all<{ account_id: string }>()).results.map((r) => r.account_id);
+  let n = 0;
+  for (const id of ids) {
+    try {
+      n += await ns.get(ns.idFromName(id)).stopAll(id, message);
+    } catch (e) {
+      console.error(`kill switch: stopping GitHub runners of ${id} failed`, e);
+    }
+  }
+  return n;
+}
+
 type Actor = { id: string; login: string };
 type Audit = (entry: { actorId?: string; actorLogin?: string; action: string; target?: string; detail?: unknown }) => Promise<void>;
 
@@ -199,6 +242,7 @@ export async function changeSuspension(
   try {
     const ids = target.kind === "repo" ? [target.id] : (await env.DB.prepare("SELECT id FROM repos WHERE owner_id = ?").bind(target.id).all<{ id: string }>()).results.map((r) => r.id);
     stopped = await stopIn(env, ids, { hostedOnly: false, message });
+    if (target.kind === "account") stopped.jobs += await stopGitHubRunners(env, [target.id], message);
   } finally {
     // The switch is on even if stopping what ran failed: it is recorded either way.
     await audit({ actorId: actor.id, actorLogin: actor.login, action: "actions.suspend", target: label, detail: { kind: target.kind, reason, via, stopped } });
@@ -223,6 +267,7 @@ export async function changePause(env: Env, audit: Audit, actor: Actor, reason: 
   let stopped: Stopped | null = null;
   try {
     stopped = await stopIn(env, [...(await runningCompute(env)).keys()], { hostedOnly: true, message });
+    stopped.jobs += await stopGitHubRunners(env, null, message);
   } finally {
     await audit({ actorId: actor.id, actorLogin: actor.login, action: "compute.pause", detail: { reason, via, stopped } });
   }

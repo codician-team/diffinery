@@ -19,7 +19,7 @@ jobs:
   # Only the last shard needs a browser (passkeys).
   e2e:
     name: End-to-end (${{ matrix.name }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.DIFFINERY_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -87,11 +87,12 @@ jobs:
           node --test --test-concurrency=2 "${opts[@]}" $files
 
   # Docker as the hosted runner image runs it, with this change's docker wrapper, daemon config
-  # and agent (its registry relay): this job runs on a hosted runner, so the real dockerd is there.
+  # and agent (its registry relay). It needs a Diffinery hosted runner, for the real dockerd: on
+  # Diffinery, or on GitHub with DIFFINERY_RUNS_ON=diffinery. On GitHub's own runners it fails.
   # A daemon an earlier step started is stopped first, so the first uses below start it afresh.
   runner-docker:
     name: End-to-end (runner Docker)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.DIFFINERY_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4

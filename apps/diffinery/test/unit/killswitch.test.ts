@@ -126,4 +126,26 @@ describe("kill switches", () => {
     expect(() => cleanReason("x".repeat(501))).toThrow(/at most 500/);
     expect(cleanReason("  too   many\nspaces ")).toBe("too many spaces");
   });
+  it("reach GitHub jobs on Diffinery runners: an account's suspension stops its own, the pause everyone's", async () => {
+    const { env, DB, audit } = setup();
+    const stopAll: Array<{ account: string; message: string }> = [];
+    (env as unknown as Record<string, unknown>).GITHUB_RUNNERS = {
+      idFromName: (n: string) => n,
+      get: (n: string) => ({ stopAll: async (account: string, message: string) => (stopAll.push({ account, message }), n === "acme" ? 2 : 1) }),
+    };
+    const job = (id: string, account: string, status: string) =>
+      DB.sqlite.prepare("INSERT INTO github_runner_jobs (id, account_id, installation_id, repo, github_job_id, labels, size, status, created_at) VALUES (?, ?, 1, 'o/r', ?, '[]', 'large', ?, ?)").run(id, account, id.length, status, at);
+    job("a", "acme", "running");
+    job("bb", "ann", "queued");
+    job("ccc", "ann", "completed");
+    // A GitHub runner counts as hosted compute but has no Diffinery repository to stop it through.
+    DB.sqlite.prepare("INSERT INTO compute_usage (id, account_id, repo_id, kind, started_at) VALUES ('gh-a-1', 'acme', 'github:1', 'job', ?)").run(new Date().toISOString());
+    expect([...(await runningCompute(env)).keys()]).toEqual([]);
+
+    expect((await changeSuspension(env, audit, ann, { kind: "account", id: "acme", login: "acme" }, "abuse", "api"))!.jobs).toBe(2 * 2 + 2);
+    expect(stopAll).toEqual([{ account: "acme", message: "Actions are suspended for every repository of acme by a site administrator: abuse" }]);
+    stopAll.length = 0;
+    expect((await changePause(env, audit, ann, "maintenance", "api"))!.jobs).toBe(3);
+    expect(stopAll.map((s) => s.account).sort()).toEqual(["acme", "ann"]);
+  });
 });

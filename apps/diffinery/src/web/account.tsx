@@ -635,7 +635,7 @@ const AUTO_MERGE_METHODS = [
   { value: "rebase", label: "Rebase and merge" },
 ];
 
-export type SettingsTab = "profile" | "account" | "appearance" | "pull-requests" | "security" | "tokens" | "apps" | "installations" | "agents" | "model-access" | "orgs" | "invitations" | "notifications" | "email-address" | "blocked" | "linked" | "admin" | "reports" | "email" | "audit" | "kill-switches" | "errors" | "security-reports" | "status" | "early-access" | "contact" | "search-engines";
+export type SettingsTab = "profile" | "account" | "appearance" | "pull-requests" | "security" | "tokens" | "apps" | "installations" | "github-runners" | "agents" | "model-access" | "orgs" | "invitations" | "notifications" | "email-address" | "blocked" | "linked" | "admin" | "reports" | "email" | "audit" | "kill-switches" | "errors" | "security-reports" | "status" | "early-access" | "contact" | "search-engines";
 /** The site administration pages: they show when hosted compute is paused. */
 export const ADMIN_TABS: readonly SettingsTab[] = ["admin", "early-access", "contact", "reports", "email", "audit", "kill-switches", "errors", "security-reports", "status", "search-engines"];
 
@@ -718,6 +718,9 @@ export const SettingsNav: FC<{ me: Account; tab: SettingsTab; db?: D1Database }>
         </a>
         <a href="/settings/apps" class={tab === "apps" ? "on" : ""}>
           Apps
+        </a>
+        <a href="/settings/github-runners" class={tab === "github-runners" ? "on" : ""}>
+          GitHub runners
         </a>
         <a href="/settings/model-access" class={tab === "model-access" ? "on" : ""}>
           Model access

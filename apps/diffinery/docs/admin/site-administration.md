@@ -219,6 +219,7 @@ The repository's **Actions** page, its run pages and its **Settings** pages show
 
 - Suspending a repository or an account cancels each of its unfinished runs ("Cancelled: Actions are suspended ...", including jobs on self-hosted runners) and closes each of its open sandboxes.
 - Pausing hosted compute fails each running hosted job ("The job was stopped: Hosted runners are paused ...") and closes the open sandboxes, in every repository with hosted compute running (Diffinery finds them from the hosted minutes it is counting). Jobs that wait in the queue fail when they would start.
+- [GitHub jobs on Diffinery runners](/docs/actions/github-runners) count as the linked account's hosted jobs: suspending that account, or pausing hosted compute, fails its GitHub jobs that wait for a runner and stops its running GitHub runners (counted in `jobs`). The jobs on GitHub end as their runner stops.
 
 The answer says what was stopped: `stopped` with `repositories`, `runs`, `jobs`, `sandboxes`, and `failed` for repositories that didn't answer (their work still can't start).
 
@@ -299,7 +300,7 @@ Storage is counted per repository as it changes: each repository's Durable Objec
 
 | Item | What it shows |
 | --- | --- |
-| **Sending** | "Cloudflare Email Sending is bound", or "not configured (no EMAIL binding): emails are logged, not sent" |
+| **Sending** | "Cloudflare Email Sending is bound"; "over SMTP: smtps://user@host:465", the server in `SMTP_URL` (never the password); "SMTP_URL is set but can't be used: ..." with the reason; or "not configured (no EMAIL binding or SMTP_URL): emails are logged, not sent". See [SMTP](/docs/self-hosting/configuration#smtp). |
 | **Queue** | `diffinery-mail`, or "not bound: emails are dropped" |
 | **From** | The address emails are sent from: `MAIL_FROM`, or `notifications@<your hostname>` when it is empty (see [Configuration](/docs/self-hosting/configuration)) |
 | **Bounces and complaints** | Where they come from: the `diffinery-mail-events` queue, and whether the signed endpoint is on (`MAIL_EVENTS_SECRET` set) |
@@ -314,7 +315,7 @@ Under **Templates**, pick a template from the menu to preview it in the page. **
 
 **Suppressed addresses** lists every address Diffinery sends nothing to, newest first, with why (`hard-bounce`, `complaint` or `manual`), where that came from and since when. **Remove** sends email to the address again; **Suppress an address** adds one by hand, with an optional note. Both are recorded in the audit log. See [Bounces, complaints and the suppression list](#bounces-complaints-and-the-suppression-list).
 
-**Recent emails** lists the last 100 emails sent to anyone, with the time, recipient address, subject, template kind, Cloudflare's message ID, the status (`sent`, `failed` or `skipped`) and the reason when it wasn't sent. The log keeps 90 days.
+**Recent emails** lists the last 100 emails sent to anyone, with the time, recipient address, subject, template kind, the message ID (Cloudflare's, or the `Message-ID` Diffinery gave an email sent over SMTP), the status (`sent`, `failed` or `skipped`) and the reason when it wasn't sent. The log keeps 90 days.
 
 See [Notifications](/docs/accounts/notifications#every-email-diffinery-sends) for when each email is sent.
 
@@ -322,7 +323,7 @@ See [Notifications](/docs/accounts/notifications#every-email-diffinery-sends) fo
 
 | Method and path | Description | Needs |
 | --- | --- | --- |
-| `GET /api/v3/diffinery/admin/email` | `sending` and `queue` (whether they are configured), `from` (the sender address: `MAIL_FROM`, or `notifications@<your hostname>` when it is empty), `last_24h` counts (`sent`, `failed`, `skipped`) and the `last` email logged | site administrator, any token scope |
+| `GET /api/v3/diffinery/admin/email` | `sending` and `queue` (whether they are configured), `transport` (`email-sending`, `smtp` or `null`), `smtp` (`url`, the server without the password, and `error`, why `SMTP_URL` can't be used; `null` unless `transport` is `smtp`), `from` (the sender address: `MAIL_FROM`, or `notifications@<your hostname>` when it is empty), `last_24h` counts (`sent`, `failed`, `skipped`) and the `last` email logged | site administrator, any token scope |
 | `POST /api/v3/diffinery/admin/emails/samples` | Send every template to yourself now, or only some with `{"only": ["signin", "invite-org"]}`. Returns `to`, `sent`, `total` and each result. | site administrator, with an `admin` token for all repositories or a browser session |
 | `GET /api/v3/diffinery/admin/email/suppressions` | The suppression list, newest first: `email`, `reason`, `detail`, `source` (`cloudflare`, `webhook`, `send` or `admin`), `created_by`, `created_at` and `owner_can_lift` | site administrator, any token scope |
 | `PUT /api/v3/diffinery/admin/email/suppressions/{email}` | Suppress an address by hand, with an optional `{"note": "..."}`. Audited as `email.suppression.add`. | site administrator, with an `admin` token or a browser session |
@@ -337,7 +338,7 @@ Diffinery sends no email at all to an address on the suppression list: not notif
 
 | Reason | How |
 | --- | --- |
-| `hard-bounce` | Email to it bounced permanently (the mailbox or domain doesn't exist, or the receiving server refuses it for good), or Email Sending refused to send to it for good (`E_RECIPIENT_SUPPRESSED`, source `send`). Soft bounces, delays and temporary send errors (rate and daily limits, delivery errors) change nothing. |
+| `hard-bounce` | Email to it bounced permanently (the mailbox or domain doesn't exist, or the receiving server refuses it for good), or Email Sending refused to send to it for good (`E_RECIPIENT_SUPPRESSED`, source `send`), or the SMTP server refused the recipient for good (`E_SMTP_RECIPIENT_REJECTED`, source `send`). Soft bounces, delays and temporary send errors (rate and daily limits, delivery errors) change nothing. |
 | `complaint` | Its owner marked an email from Diffinery as spam. |
 | `manual` | A site administrator added it, under **Suppress an address** or with the API. |
 
@@ -514,8 +515,12 @@ Approving access requests, changing account status and creating sign-in links ar
 | "enable this account first" | Sign-in links can't be created for disabled accounts. Set the status to `active`, then create the link. |
 | "enter a valid email address" | The invite form needs an address like `friend@example.com`. |
 | `403 only site admins can invite people without an organization` | Instance invites from the CLI or API need a site administrator; others must pass `--org`. |
-| **Sending** says "not configured" | The Worker has no `send_email` binding, so emails are logged as skipped. See [Configuration](/docs/self-hosting/configuration). |
-| Emails show as `failed` | The **Recent emails** detail has Cloudflare's error. Check the sending domain's DNS records and the queue. |
+| **Sending** says "not configured" | The Worker has neither a `send_email` binding nor `SMTP_URL`, so emails are logged as skipped. See [Configuration](/docs/self-hosting/configuration) and [SMTP](/docs/self-hosting/configuration#smtp). |
+| **Sending** says "SMTP_URL is set but can't be used" | Fix what it names, such as a password in the URL (it belongs in the `SMTP_PASSWORD` secret) or a missing `SMTP_PASSWORD`. Until then emails fail with `E_SMTP_CONFIG`. |
+| `E_SMTP_REJECTED: SMTP AUTH: 535 ...` | The SMTP server refused the user or password. Check the user in `SMTP_URL` and the `SMTP_PASSWORD` secret. |
+| `E_SMTP_REJECTED: SMTP MAIL FROM: 5...` | The SMTP user may not send from `MAIL_FROM`. Use an address the server allows. |
+| `gave up after 6 attempts: SMTP ...` | The SMTP server kept answering `4xx`, or couldn't be reached in time. Check the host and port in `SMTP_URL`; port 25 is blocked on Cloudflare. |
+| Emails show as `failed` | The **Recent emails** detail has Cloudflare's or the SMTP server's error. Check the sending domain's DNS records and the queue. |
 | Emails show as `skipped` with "address is suppressed" | The address bounced, reported spam or was suppressed by hand. See [Bounces, complaints and the suppression list](#bounces-complaints-and-the-suppression-list). |
 | `E_RECIPIENT_SUPPRESSED` | The address is on Cloudflare's own suppression list. Remove it in the Cloudflare dashboard. |
 | `401 missing or bad signature` from `/-/email/events` | The `X-Diffinery-Signature` header is missing, signed with another secret, or more than 5 minutes old. |

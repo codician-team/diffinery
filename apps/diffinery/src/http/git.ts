@@ -7,7 +7,7 @@ import { pushBodyKey, type SpilledBody } from "../lib/storage-keys.js";
 import { importPushAllowed } from "../imports/service.js";
 import { loadRepo, repoStub } from "./common.js";
 import type { Caller } from "../repo/types.js";
-import { resetByDeploy } from "../git/protocol.js";
+import { resetByDeploy, UPLOAD_PACK_PATH } from "../git/protocol.js";
 
 /**
  * Git smart HTTP (protocol v2 for fetch/clone, v0 for push) and the Git LFS
@@ -39,8 +39,9 @@ git.get("/:owner/:repo/info/refs", async (c) => {
 git.post("/:owner/:repo/git-upload-pack", async (c) => {
   const { stub } = await loadRepo(c, c.req.param("owner"), c.req.param("repo"), "read", { readOnlyPost: true, follow: true });
   const body = await readBody(c.req.raw, MAX_UPLOAD_PACK_REQUEST, "fetch request exceeds 16 MB");
-  const out = await stub.gitUploadPack(body);
-  return new Response(out, { headers: { "content-type": "application/x-git-upload-pack-result", ...noCache } });
+  // Through RepoDO.fetch rather than RPC, so the pack streams on celld too.
+  const out = await stub.fetch(`https://repo${UPLOAD_PACK_PATH}`, { method: "POST", body });
+  return new Response(out.body, { headers: { "content-type": "application/x-git-upload-pack-result", ...noCache } });
 });
 
 git.post("/:owner/:repo/git-receive-pack", async (c) => {

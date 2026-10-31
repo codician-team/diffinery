@@ -146,7 +146,7 @@ export const MAX_RUNNER_RESTARTS = 2;
  * 2026-10-24 on a Typecheck job; its re-run started at once). The runtime marks other errors of its
  * own that pass as `retryable`.
  */
-const RETRYABLE_START = /no container instance|is shutting down|network connection lost|durable object reset|no longer active|overloaded|too many containers|aborted waiting for container to start|container did not start after|internal error|out of memory|sqlite_nomem/i;
+export const RETRYABLE_START = /no container instance|is shutting down|network connection lost|durable object reset|no longer active|overloaded|too many containers|aborted waiting for container to start|container did not start after|internal error|out of memory|sqlite_nomem/i;
 /**
  * Of those, the ones that say nothing about free machines (the runtime failing under one start): the
  * first is retried after QUICK_RETRY_SECONDS, like a fresh container's early stop, rather than waiting

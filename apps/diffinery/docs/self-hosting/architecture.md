@@ -3,7 +3,7 @@ title: Architecture
 description: How Diffinery maps onto Cloudflare products, how a git push and a workflow run flow through them, and where each kind of data is stored.
 ---
 
-Diffinery is one Cloudflare Worker plus the Cloudflare products it binds to. There are no servers or databases to run yourself. This page explains which product does what, how a git push and a workflow run move through the system, how the code is organized, and where each kind of data lives. Read it before you deploy or operate your own instance, or when you need to reason about consistency and failure modes.
+Diffinery is one Cloudflare Worker plus the Cloudflare products it binds to. There are no servers or databases to run yourself. This page explains which product does what, how a git push and a workflow run move through the system, how the code is organized, and where each kind of data lives. Read it before you deploy or operate your own instance, or when you need to reason about consistency and failure modes. The same code also runs on celld, the open-source Workers runtime; [Run on celld](/docs/self-hosting/celld) maps each product to its celld equivalent.
 
 ## Overview
 
@@ -24,6 +24,7 @@ Diffinery is one Cloudflare Worker plus the Cloudflare products it binds to. The
 | The Git transfer of a GitHub import | Containers (`ImportContainer`, one container per transfer) | `IMPORTER` |
 | Scheduled workflows | Durable Object alarm, every 5 minutes (`SchedulerDO`, one instance) | `SCHEDULER` |
 | Joining large artifact and cache uploads | Durable Objects, one per step (`ComposeDO`) | `COMPOSE` |
+| Request rate limits | Workers rate limiting; where it doesn't exist (`RATE_LIMITS=durable`), Durable Objects (`RateLimiterDO`, 32 shards) | `RL_AUTH`, `RL_ANON`, `RL_ACCOUNT`, `RL_CREATE`, `RL_MODEL`; `RATE_LIMITER` |
 | Token expiry reminders, email log pruning, registry cleanup, expiry of draft imports and of account exports, a check that the scheduler's alarm is set, IndexNow submissions | Cron Triggers, every 5 minutes | `scheduled` handler |
 | Live run logs and pull request updates in the browser | Durable Object WebSockets with hibernation | Through `REPO` |
 | Outgoing email | Email Sending | `EMAIL` |
@@ -54,7 +55,7 @@ Diffinery is one Cloudflare Worker plus the Cloudflare products it binds to. The
 
 ## The Worker
 
-`apps/diffinery/src/index.ts` exports the Worker's `fetch`, `queue` and `scheduled` handlers, and the classes Cloudflare instantiates: `RepoDO`, `SchedulerDO`, `ComposeDO`, `RunnerContainer`, `SandboxContainer`, `RunWorkflow`, `ImportWorkflow` and `ImportContainer`.
+`apps/diffinery/src/index.ts` exports the Worker's `fetch`, `queue` and `scheduled` handlers, and the classes Cloudflare instantiates: `RepoDO`, `SchedulerDO`, `ComposeDO`, `RateLimiterDO`, `RunnerContainer`, `SandboxContainer`, `RunWorkflow`, `ImportWorkflow` and `ImportContainer`.
 
 Every request goes through one middleware before it reaches a route:
 
@@ -214,6 +215,8 @@ Pages that show changing state (run logs, job status, pull requests) open a WebS
 ## Rate limits
 
 Every request passes the rate limiting bindings before it is handled (`src/lib/rate-limit.ts`). Sign-in, invitation and security report requests count per IP address in `RL_AUTH`, other anonymous requests per IP address in `RL_ANON`, and requests with a session or token per account in `RL_ACCOUNT`. Requests that create repositories, organizations, forks, issues, pull requests, releases, comments or reviews also count in `RL_CREATE`, as do MCP tool calls that change something. Job, sandbox, runner and import credentials, health checks and avatars aren't counted. Cloudflare keeps each count in the location that serves the request, so the limits stop bursts rather than meter use exactly. Past a limit the request answers `429` with `retry-after: 60`. See [Bindings](/docs/self-hosting/configuration#bindings).
+
+A missing binding lets requests through, as in local development. Where the bindings don't exist at all, such as on celld, the open-source Workers runtime, set the `RATE_LIMITS` variable to `durable`: each limit without a binding is then counted by the `RateLimiterDO` Durable Object (`src/rate-limiter.ts`, binding `RATE_LIMITER`) with the same limits. Keys are spread over 32 objects by a hash of the key (`ip:<address>`, `acct:<id>` and so on), and each object counts its keys in fixed 60-second windows, in memory, without writing to storage. A request costs at most one call to one object, because the buckets a request counts against share a key. The fixed windows let up to twice a limit through around the start of a minute, and an object that restarts or moves starts its counts again. If the object fails, the request goes through, as with a failing binding.
 
 ## Request flow: a git push
 
