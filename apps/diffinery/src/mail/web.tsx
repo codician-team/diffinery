@@ -12,7 +12,8 @@ import { digestSince } from "./digest.js";
 import { Form, Time, WATCH_OPTIONS, act, flash, post, prm, render, repoUrl, type WebApp } from "../web/ui.js";
 import { MailStore, WATCH_LEVELS, type EmailLogRow, type NotificationPrefs, type WatchLevel } from "./prefs.js";
 import { sampleJobs } from "./samples.js";
-import { buildMessage, deliver, enqueueMail, senderAddress } from "./send.js";
+import { buildMessage, deliver, enqueueMail, mailTransport, senderAddress } from "./send.js";
+import { smtpLabel } from "./smtp.js";
 import type { Category, MailJob } from "./types.js";
 import { readUnsubToken, type UnsubScope, type UnsubToken } from "./unsubscribe.js";
 import { normalEmail } from "../auth/signup.js";
@@ -59,6 +60,15 @@ const requireSiteAdmin = (c: AppContext): Account => {
   if (!me.site_admin) throw new HttpError(403, "site administrators only");
   return me;
 };
+
+/** The Sending line on Settings → Email: which transport sends, or why nothing does. */
+function sendingStatus(env: AppContext["env"]): Child {
+  const t = mailTransport(env);
+  if (!t) return <span class="bad">not configured (no EMAIL binding or SMTP_URL): emails are logged, not sent</span>;
+  if (t.kind === "email-sending") return <span class="ok">Cloudflare Email Sending is bound</span>;
+  if ("error" in t) return <span class="bad">SMTP_URL is set but can't be used: {t.error}</span>;
+  return <span class="ok">over SMTP: {smtpLabel(t.config)}</span>;
+}
 
 /** One-line description of what an unsubscribe link changes. */
 function scopeText(s: UnsubScope): string {
@@ -631,7 +641,7 @@ export function registerMailWeb(web: WebApp): void {
           <div class="body">
             <dl class="kv m0">
               <dt>Sending</dt>
-              <dd>{c.env.EMAIL ? <span class="ok">Cloudflare Email Sending is bound</span> : <span class="bad">not configured (no EMAIL binding): emails are logged, not sent</span>}</dd>
+              <dd>{sendingStatus(c.env)}</dd>
               <dt>Queue</dt>
               <dd>{c.env.MAIL ? "diffinery-mail" : <span class="bad">not bound: emails are dropped</span>}</dd>
               <dt>From</dt>

@@ -47,6 +47,7 @@ import {
   type ReceiveRequest,
   resetByDeploy,
   unpackFailure,
+  UPLOAD_PACK_PATH,
   type RefEntry,
   type RefResult,
 } from "../git/protocol.js";
@@ -623,7 +624,7 @@ export class RepoDO extends DurableObject<Env> {
   }
 
   /** The response streams: the pack is read and sent one object at a time, as the client takes it. */
-  async gitUploadPack(body: Uint8Array): Promise<ReadableStream<Uint8Array>> {
+  private async gitUploadPack(body: Uint8Array): Promise<ReadableStream<Uint8Array>> {
     const { readable, writable } = new IdentityTransformStream();
     const writer = writable.getWriter();
     let started = false;
@@ -2161,6 +2162,9 @@ export class RepoDO extends DurableObject<Env> {
   // ---------------------------------------------------------------- live updates (WebSockets with hibernation)
 
   override async fetch(request: Request): Promise<Response> {
+    // The pack streams back through fetch, not RPC: celld can't return a stream from an RPC call
+    // ("RPC streams cannot cross isolate boundaries yet"), and a fetch body streams on both runtimes.
+    if (request.method === "POST" && new URL(request.url).pathname === UPLOAD_PACK_PATH) return new Response(await this.gitUploadPack(new Uint8Array(await request.arrayBuffer())));
     if (request.headers.get("Upgrade") !== "websocket") return new Response("expected websocket", { status: 426 });
     const topics = (new URL(request.url).searchParams.get("topics") ?? "repo").split(",").filter((t) => /^[a-z]+(:[A-Za-z0-9_-]+)?$/.test(t)).slice(0, 10);
     const pair = new WebSocketPair();

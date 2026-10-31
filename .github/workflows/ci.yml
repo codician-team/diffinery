@@ -2,6 +2,10 @@ name: CI
 
 # Deploy waits for this workflow to pass on main. The end-to-end suite is its own
 # workflow (e2e.yml), so deploys don't wait for it too.
+#
+# Every job of this repository's workflows runs on the label in the repository variable
+# DIFFINERY_RUNS_ON, else ubuntu-latest (a hosted runner on Diffinery too). The GitHub copy
+# sets `diffinery` to run on diffinery.com's GitHub runners; forks need nothing.
 
 on:
   push:
@@ -20,7 +24,7 @@ jobs:
   # tests together took longer than either does alone.
   typecheck:
     name: Typecheck and bundle
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.DIFFINERY_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +44,7 @@ jobs:
 
   test:
     name: Unit tests (${{ matrix.shard }}/2)
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.DIFFINERY_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 20
     # Two halves of every package's test files, side by side: CI is the first step of a deploy.
     strategy:

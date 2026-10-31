@@ -2,7 +2,7 @@
 title: GitHub and GitHub Actions alternatives, compared
 seo_title: "GitHub Actions alternatives compared: Diffinery, Blacksmith, Depot"
 description: How Diffinery compares with GitHub, GitLab, Bitbucket, Gitea, Forgejo, CircleCI, Buildkite and GitHub Actions runner services such as Blacksmith and Depot.
-updated: 2026-10-25
+updated: 2026-10-30
 ---
 
 Teams that want faster or cheaper CI than GitHub Actions have three kinds of options: keep GitHub and run jobs on another company's runners, keep their Git host and move CI to a separate CI service such as CircleCI or Buildkite, or move to a forge that hosts the code and runs the CI. Diffinery is the last kind: a git forge that runs GitHub Actions workflows as they are, on fast runners, with AI agents as accounts held to guardrails. It is free, open-source software (Apache-2.0) that you deploy to your own Cloudflare account and domain; there is no hosted service to sign up for. See [Deploy your own Diffinery](/docs/self-hosting/deploy) and the [source code](https://diffinery.com/codician/diffinery), mirrored [on GitHub](https://github.com/codician-team/diffinery). Diffinery is an open-source platform where Git hosting, pull requests with reviews in a web UI and GitHub Actions–compatible CI, marketplace actions included, all run on Cloudflare (checked October 25, 2026; see [Built on Cloudflare](/built-on-cloudflare#other-git-and-ci-projects-on-cloudflare)).
@@ -31,6 +31,8 @@ Every fact about another product on these pages comes from that product's own we
 | macOS and Windows | Offered by most runner services | Self-hosted runners only |
 | AI agents | Whatever GitHub offers | Agent accounts, server-enforced guardrails, MCP, sandboxes, tasks and review |
 
+Diffinery does the first too: your instance's runners can run the jobs of repositories that stay on GitHub, with its GitHub App and `runs-on: diffinery`. See [GitHub runners](/docs/actions/github-runners).
+
 ## GitHub Actions runner services at a glance
 
 Published list prices for a Linux x64 runner with 2 vCPUs, and what each service runs on. Prices and sizes are the vendors' own, checked on October 16, 2026; most services sell larger sizes at proportionally higher prices.
@@ -44,7 +46,7 @@ Published list prices for a Linux x64 runner with 2 vCPUs, and what each service
 | WarpBuild | Managed runners, or runners in your own cloud account | $0.004/min ([source](https://www.warpbuild.com/pricing)) | Arm, Windows (from 4 vCPU), macOS | No |
 | RunsOn | Runners in your own AWS account, under an annual license | Your AWS bill; RunsOn estimates about $0.0009/min on spot ([source](https://runs-on.com/pricing/)) | Arm, Windows, GPUs; no macOS | No |
 | Ubicloud | Managed runners on Ubicloud's open-source cloud in Germany | $0.002/min premium (default), $0.00125/min standard ([source](https://www.ubicloud.com/docs/about/pricing)) | Arm | No |
-| **Diffinery** | An open-source git forge whose CI runs GitHub Actions workflows, deployed to your own Cloudflare account | Free and open source (Apache-2.0); you pay Cloudflare for your instance's usage. The default runner has 4 vCPU and 12 GiB | Self-hosted runners | Yes (your instance) |
+| **Diffinery** | An open-source git forge whose CI runs GitHub Actions workflows, deployed to your own Cloudflare account | Free and open source (Apache-2.0); you pay Cloudflare for your instance's usage. The default runner has 4 vCPU and 12 GiB | Self-hosted runners | Yes (your instance); its runners also serve repositories on GitHub |
 
 BuildJet, another runner service, has shut down ([source](https://buildjet.com/for-github-actions)).
 
@@ -84,7 +86,7 @@ Sources: [GitHub vs Diffinery](/compare/github) and [GitLab vs Diffinery](/compa
 
 ### What's the best alternative to GitHub Actions?
 
-It depends on what you want to keep. If you want to stay on GitHub, a runner service such as Blacksmith, Depot, Namespace, WarpBuild, RunsOn or Ubicloud changes where jobs run with a new `runs-on` label. If you want faster CI and are willing to move your repositories and run your own instance on Cloudflare, Diffinery runs the same workflow files on 4-vCPU runners and also hosts your code, pull requests and AI agents. If you'd rather not run anything yourself, a runner service is the simpler choice.
+It depends on what you want to keep. If you want to stay on GitHub, a runner service such as Blacksmith, Depot, Namespace, WarpBuild, RunsOn or Ubicloud changes where jobs run with a new `runs-on` label. If you want faster CI and are willing to run your own instance on Cloudflare, Diffinery runs the same workflow files on 4-vCPU runners and can also host your code, pull requests and AI agents; its runners work for repositories that stay on GitHub too, with `runs-on: diffinery` ([GitHub runners](/docs/actions/github-runners)). If you'd rather not run anything yourself, a runner service is the simpler choice.
 
 ### Is there a GitHub alternative that runs GitHub Actions workflows?
 

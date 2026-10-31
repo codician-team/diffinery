@@ -2,6 +2,8 @@ import { ByteWriter, FLUSH, DELIM, ZERO_OID, fromUtf8, planFetch, parseTag, pkt,
 import type { RawObject } from "../repo/objects.js";
 
 export const AGENT = "diffinery/0.1";
+/** The RepoDO.fetch path the Worker posts a git fetch request to (http/git.ts); the response is the streamed pack. */
+export const UPLOAD_PACK_PATH = "/git-upload-pack";
 
 export type RefEntry = {
   name: string;

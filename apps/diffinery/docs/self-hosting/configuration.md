@@ -13,6 +13,7 @@ A Diffinery instance is configured in four places: Worker variables in `apps/dif
 | `apps/diffinery/wrangler.deploy.jsonc` | `wrangler.jsonc` without the `dev` environment, plus the real D1 database ID, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `TURNSTILE_SITE_KEY`, and the route, `PUBLIC_URL` and `MAIL_FROM` for your hostname. Written by `scripts/render-config.mjs` on every deploy and ignored by git. | No. It is regenerated on each deploy. |
 | Worker secrets | `MASTER_KEY` and `OIDC_PRIVATE_KEY`, created by `scripts/ensure-secrets.sh`; `TURNSTILE_SECRET`, set by the deploy from its Turnstile widget; and optionally `GITHUB_OAUTH_CLIENT_SECRET`, which you set yourself. | Only to restore them, or to add the optional one. Never change `MASTER_KEY`. |
 | Repository secrets and variables | Cloudflare credentials and options for the Deploy workflow, and a token for the live test. | Yes, in your forge's repository settings. |
+| `apps/diffinery/wrangler.celld.jsonc` | `wrangler.jsonc` as [celld](/docs/self-hosting/celld) takes it, with the Cloudflare-only keys left out and the secrets in `vars`. Written by `scripts/celld-config.mjs` and ignored by git. | No. Render it again after changing `wrangler.jsonc`. |
 | `apps/diffinery/.dev.vars` | Local secrets for `wrangler dev`, such as `MASTER_KEY`. Ignored by git. | Yes, for local development only. |
 
 ## Worker variables
@@ -22,7 +23,8 @@ Set under `vars` in `wrangler.jsonc`. All values are strings.
 | Variable | Production value in the repository | Required | What it does |
 | --- | --- | --- | --- |
 | `PUBLIC_URL` | `https://diffinery.com` | Yes | The canonical origin of the instance. See [PUBLIC_URL](#public_url). On deploy, `scripts/bootstrap.sh` replaces it with `https://$DIFFINERY_DOMAIN` (default `https://diffinery.com`), whatever `wrangler.jsonc` says. |
-| `MAIL_FROM` | `notifications@diffinery.com` | No | Sender address of every email. The display name is "Diffinery", or `<actor> (Diffinery)` for emails about someone's action. On deploy, `scripts/bootstrap.sh` replaces it with `notifications@$MAIL_DOMAIN` (default `notifications@$DIFFINERY_DOMAIN`). When empty, Diffinery sends from `notifications@<hostname of PUBLIC_URL>`. The domain must be onboarded to Email Sending. |
+| `MAIL_FROM` | `notifications@diffinery.com` | No | Sender address of every email. The display name is "Diffinery", or `<actor> (Diffinery)` for emails about someone's action. On deploy, `scripts/bootstrap.sh` replaces it with `notifications@$MAIL_DOMAIN` (default `notifications@$DIFFINERY_DOMAIN`). When empty, Diffinery sends from `notifications@<hostname of PUBLIC_URL>`. The domain must be onboarded to Email Sending, or, with `SMTP_URL`, be one your SMTP server lets you send from. |
+| `SMTP_URL` | Not set | No | The SMTP server email goes through when the Worker has no `EMAIL` binding, such as an instance outside Cloudflare: `smtps://<user>@<host>:465` or `smtp://<user>@<host>:587`. The password goes in the `SMTP_PASSWORD` secret. See [SMTP](#smtp). |
 | `BOOTSTRAP_ADMINS` | Empty (set on deploy) | For the first sign-in | Emails (case-insensitive) that become site administrators. On deploy, `scripts/bootstrap.sh` sets it from the `BOOTSTRAP_ADMINS` environment variable, else keeps the deployed Worker's list. See [BOOTSTRAP_ADMINS](#bootstrap_admins). |
 | `ACCESS_TEAM_DOMAIN` | Empty (filled in on deploy) | For email sign-in | Your Cloudflare Zero Trust team domain, like `example.cloudflareaccess.com`. Used to fetch the Access signing keys and to check the token issuer. |
 | `ACCESS_AUD` | Empty (filled in on deploy) | For email sign-in | The audience tag of the Access application that guards `/auth/access`. |
@@ -35,6 +37,8 @@ Set under `vars` in `wrangler.jsonc`. All values are strings.
 | `HOSTED_JOBS_LIMIT` | Not set | No | Hosted Actions jobs the whole instance runs at once (default `80`); one account runs at most half of them, accounts run by a site administrator included. Keep it under the runner container classes' `max_instances`. Past it, hosted jobs wait as queued until one finishes. See [Limits](/docs/reference/limits#actions). |
 | `IMPORT_GHE_HOST` | Not set | No | The host name of a GitHub Enterprise Server (like `ghe.example.com`) that imports may download release assets from. Without it, imports download release assets only from github.com and its asset hosts, and assets of an Enterprise import are skipped with a warning. |
 | `GITHUB_OAUTH_CLIENT_ID` | Not set | No | The client ID of a GitHub OAuth app, for linking GitHub accounts with a GitHub sign-in instead of a gist. Needs `GITHUB_OAUTH_CLIENT_SECRET` too. See [GitHub imports](#github-imports). |
+| `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID` | Not set | No | The GitHub App that lets GitHub repositories run jobs on this instance's hosted runners: its App ID, its slug (the last part of `https://github.com/apps/<slug>`) and its Client ID. Needs `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` and `GITHUB_APP_WEBHOOK_SECRET` too. The deploy sets them from the environment (the Deploy workflow from the `DIFFINERY_GITHUB_APP_*` repository variables). See [GitHub runners](#github-runners). |
+| `GITHUB_APP_URL` | Not set | No | The origin of a GitHub Enterprise Server for that app, like `https://ghe.example.com`. Default `https://github.com`. |
 | `IMPORT_GIT_AGENT` | Not set in production; `external` in the `dev` environment | Never in production | With `external`, an import's Git transfer doesn't start a container: it waits for an import agent started by hand (see [The dev environment](#the-dev-environment)). |
 | `SCHEDULE_TICK_MINUTES` | Not set | No | Minutes between the workflow scheduler's checks, a whole number from 1 to 60. Default `5`, GitHub's shortest schedule interval. Anything else counts as not set. The end-to-end tests use `1`. |
 | `WAIT_TIMER_MINUTE_MS` | Not set | Never in production | Local development and the end-to-end tests only: how long one minute of a deployment environment's wait timer lasts, in milliseconds, from 1 to `60000` (the default). Anything else counts as not set. It counts only when `PUBLIC_URL` is on this machine (`localhost`, `127.x` or `[::1]`) and `ACCESS_AUD` is empty, as for `DEV_AUTH`; a deployed Worker ignores it. The end-to-end tests use `10000` so a wait timer passes in seconds. |
@@ -46,6 +50,7 @@ Set under `vars` in `wrangler.jsonc`. All values are strings.
 | `MCP_REGISTRY_AUTH` | Not set | No | The proof record served at `/.well-known/mcp-registry-auth`, such as `v=MCPv1; k=ed25519; p=<public key>`, so you can publish your instance's MCP server to the official MCP registry under your domain. Not set, that path is a 404. See [List your instance in the MCP registry](/docs/agents/mcp#list-your-instance-in-the-mcp-registry). |
 | `INDEXNOW` | Not set | No | `off` stops telling search engines about new, changed and removed public pages through IndexNow. Not set, or anything else, it is on whenever `PUBLIC_URL` is a public `https` origin and `MASTER_KEY` is set. Turn it off for an instance search engines can't reach. See [Search engines](/docs/admin/site-administration#search-engines). |
 | `TERMINALS` | Not set | No | `off` switches [terminals](/docs/agents/terminal) off: nobody can open one, and open ones end at their next check, within a minute. Anything else, or not set, leaves them on. |
+| `RATE_LIMITS` | Not set | Where the `ratelimits` bindings don't exist, such as celld, the open-source Workers runtime | `durable` counts requests in the `RATE_LIMITER` Durable Object for each rate limit whose binding (`RL_AUTH`, `RL_ANON`, `RL_ACCOUNT`, `RL_CREATE`, `RL_MODEL`) is missing, with the same limits. A limit that has its binding keeps using it. Anything else, or not set, lets requests through where a binding is missing. Leave it unset on Cloudflare and in local development. See [Rate limits](/docs/self-hosting/architecture#rate-limits). |
 
 When either `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is empty, email sign-in at `/auth/access` is off: the page answers "Account recovery by email is not set up on this instance. Ask an administrator for a sign-in link.", and the sign-in page doesn't offer **Recover your account by email**. Passkeys, invitations and admin sign-in links keep working, but the first administrator can't sign in, because email sign-in is how an account in `BOOTSTRAP_ADMINS` is created.
 
@@ -160,6 +165,39 @@ The deploy's API token needs **Account → Turnstile → Edit** for this (the [A
 
 To use a widget of your own instead, add `"TURNSTILE_SITE_KEY": "<site key>"` under `vars` in `wrangler.jsonc` and store its secret key with `printf '%s' "$TURNSTILE_SECRET" | pnpm exec wrangler secret put TURNSTILE_SECRET -c wrangler.deploy.jsonc`. The deploy then creates no widget and never replaces your secret; it only fills in a missing `TURNSTILE_SECRET` when your widget is in the same Cloudflare account. If you rotate the secret key of the deploy's widget in the dashboard, run `pnpm exec wrangler secret delete TURNSTILE_SECRET -c wrangler.deploy.jsonc` and deploy again, so the deploy stores the new one.
 
+### SMTP
+
+Without an `EMAIL` binding, Diffinery can send email through any SMTP server that speaks TLS: your mail provider's submission server, Amazon SES, Postmark, Mailgun or your own. This is how an instance outside Cloudflare, which has no Email Sending, sends sign-up codes, invitations and notifications. When the `EMAIL` binding is there, it is used and `SMTP_URL` is ignored.
+
+1. Add `SMTP_URL` under `vars` in `wrangler.jsonc`; the deploy keeps it.
+   - `smtps://<user>@<host>:465` uses TLS from the start. The port defaults to 465.
+   - `smtp://<user>@<host>:587` starts plain and upgrades with STARTTLS. The port defaults to 587. If the server doesn't offer STARTTLS, Diffinery sends nothing (`E_SMTP_REJECTED: SMTP: the server doesn't offer STARTTLS, and Diffinery doesn't send without TLS`), so the password never crosses the network in the clear.
+   - Write an `@` in the user as `%40`: `smtps://notifications%40example.com@smtp.example.com`.
+   - Leave the user out (`smtps://relay.internal:465`) for a relay that needs no sign-in.
+   - Cloudflare Workers can't open connections to port 25, so use 465 or 587.
+2. Store the password as a secret. Never put it in `SMTP_URL`: Diffinery refuses such a URL.
+
+   ```sh
+   cd apps/diffinery
+   printf '%s' "$SMTP_PASSWORD" | pnpm exec wrangler secret put SMTP_PASSWORD -c wrangler.deploy.jsonc
+   ```
+
+3. Make sure `MAIL_FROM` is an address the SMTP user may send from. It is both the `From` header and the envelope sender.
+4. Check it: **Settings → Email** shows **Sending** as "over SMTP: smtps://...", and **Send me a test email** sends one.
+
+Diffinery signs in with AUTH PLAIN, or AUTH LOGIN when the server offers only that. Each email is one connection, and each reply has 30 seconds to arrive. What happens to the email depends on the server's answer:
+
+| Answer | Result |
+| --- | --- |
+| `2xx` | `sent`. **Recent emails** shows the `Message-ID` Diffinery gave the email. |
+| `4xx`, a timeout or a dropped connection | `E_SMTP_TRANSIENT`. The queue tries again later, up to 6 times. |
+| `5xx` to `RCPT TO` that says the address doesn't exist (enhanced status `5.1.1`, `5.1.2`, `5.1.3`, `5.1.6`, `5.1.10` or `5.2.1`, or `550`, `551` or `553` without one) | `failed` with `E_SMTP_RECIPIENT_REJECTED`, and the address goes on the [suppression list](/docs/admin/site-administration#bounces-complaints-and-the-suppression-list) as a `hard-bounce` with source `send`. |
+| Any other `5xx`, such as `535` for a wrong password or `5.7.1` for a sender the server won't relay for | `failed` with `E_SMTP_REJECTED`. Nothing else changes. |
+
+Most submission servers accept every recipient and report a bounce later, by email to `MAIL_FROM`. Diffinery doesn't read that mailbox. To suppress those addresses too, have your provider post bounces and complaints to the signed intake, `POST /-/email/events` (see `MAIL_EVENTS_SECRET`).
+
+Diffinery never logs the password or the content of an email. Errors quote the server's reply, never the commands sent.
+
 ### DEV_AUTH
 
 When `DEV_AUTH` is set, `ACCESS_AUD` is empty and both `PUBLIC_URL` and the request's own address are on the local machine (`localhost`, `127.x.x.x` or `[::1]`), every request without credentials (no token, no session) acts as the account with the email in `DEV_AUTH`, with full access. That account is created on first use and is a site administrator if the email is also in `BOOTSTRAP_ADMINS`. While `DEV_AUTH` is set, the email log also keeps each whole message, and `GET /api/v3/diffinery/emails` returns it, so tests can read emails without delivering them.
@@ -176,7 +214,9 @@ Set with `wrangler secret put` (the deploy does this for you with `scripts/ensur
 | `MASTER_KEY_PREV` | The `MASTER_KEY` you replaced | You, only while [rotating `MASTER_KEY`](#rotating-master_key) | Everything sealed or signed with the old key keeps working: secrets encrypted with it still decrypt, and links and tokens signed with it still verify. Nothing new uses it. | The normal state. Right after a rotation without it, secrets stored under the old key can't be read and links signed with it stop working, as if the old key had been lost. |
 | `OIDC_PRIVATE_KEY` | An ECDSA P-256 private key as a JWK (JSON), with a `kid` | `ensure-secrets.sh`, once | Signs the ID tokens that workflow jobs request with `permissions: id-token: write` (ES256). Its public half is served at `/.well-known/jwks`. | Jobs that request an ID token fail with `OIDC is not configured on this Diffinery instance`, `/.well-known/jwks` returns no keys, and `GET /api/v3/meta` returns `"oidc": false`. |
 | `GITHUB_OAUTH_CLIENT_SECRET` | The client secret of a GitHub OAuth app | You, optionally | With `GITHUB_OAUTH_CLIENT_ID`, turns on the **Link with GitHub** option on **Settings → Linked accounts**. | People link GitHub accounts with the gist code only. |
+| `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_WEBHOOK_SECRET` | The GitHub App's client secret, its private key (the PEM file GitHub gives, as it is) and its webhook secret | You, optionally | With `GITHUB_APP_ID`, `GITHUB_APP_SLUG` and `GITHUB_APP_CLIENT_ID`, turns on [GitHub runners](#github-runners). | **Settings → GitHub runners** says the instance has no GitHub App, and `POST /-/github/webhook` answers 404. |
 | `MAIL_EVENTS_SECRET` | A random string, at least 32 characters | You, optionally | Turns on `POST /-/email/events`, the signed intake for bounces and complaints from anything other than Cloudflare's own event subscriptions. See [Bounces, complaints and the suppression list](/docs/admin/site-administration#bounces-complaints-and-the-suppression-list). | The endpoint answers 404. Bounces and complaints still arrive through the `diffinery-mail-events` queue. |
+| `SMTP_PASSWORD` | The password of the user in `SMTP_URL` | You, optionally | Signs in to the SMTP server in `SMTP_URL`. See [SMTP](#smtp). | With a user in `SMTP_URL`, nothing is sent: every email fails with `E_SMTP_CONFIG: SMTP_URL names a user but the SMTP_PASSWORD secret is not set`. |
 | `TURNSTILE_SECRET` | The secret key of a Cloudflare Turnstile widget | The deploy, from its widget (see [Turnstile](#turnstile)) | With `TURNSTILE_SITE_KEY`, checks that whoever asks for a sign-up code (with `SIGNUP=open`), or sends a security report, an early access request or a contact message without signing in, passed the Turnstile widget. See [SIGNUP](#signup) and [Security contact](#security-contact). | With `SIGNUP=open`, sign-up answers `503` "Sign-up needs Turnstile configured", the security report and contact forms take reports and messages only from people who are signed in, and the early access form is closed (local development skips the check). The next deploy sets it when the token has **Account → Turnstile → Edit**. |
 
 None of these secrets is rotated automatically, and `ensure-secrets.sh` never replaces one that exists. Keep a copy of `MASTER_KEY` somewhere safe: replacing it without keeping the old one as `MASTER_KEY_PREV` makes every stored secret undecryptable and invalidates unsubscribe links already sent, along with the runtime tokens of running jobs and cache and artifact links already handed out. To rotate it, follow [Rotating MASTER_KEY](#rotating-master_key). To rotate the OIDC key, delete `OIDC_PRIVATE_KEY` and deploy: a new key with a new `kid` (`diffinery-<date>`) is generated, and relying parties pick it up from `/.well-known/jwks`.
@@ -228,23 +268,25 @@ Defined in `wrangler.jsonc`. The deploy creates the underlying resources if they
 
 | Binding | Kind | Resource (production) | What Diffinery uses it for |
 | --- | --- | --- | --- |
-| `DB` | D1 database | `diffinery` (migrations in `migrations/`) | Accounts (including each account's appearance setting and profile picture version), organizations, tokens, repository list, topics and access, invitations, sessions and passkeys, notifications, audit log, schedules, organization secrets and variables, the registry index, email settings and log, GitHub imports and linked GitHub accounts. |
+| `DB` | D1 database | `diffinery` (migrations in `migrations/`) | Accounts (including each account's appearance setting and profile picture version), organizations, tokens, repository list, topics and access, invitations, sessions and passkeys, notifications, audit log, schedules, organization secrets and variables, the registry index, email settings and log, GitHub imports and linked GitHub accounts, and GitHub runners' installations and runners. |
 | `BUCKET` | R2 bucket | `diffinery-data` | Large git objects, LFS objects, archived job logs, caches, artifacts, container image layers and manifests, the event archive, release assets, cached source archives (zipball and tarball downloads) and profile pictures. |
 | `EVENTS` | Queue producer, with a consumer on the same Worker | `diffinery-events`, dead-letter queue `diffinery-events-dlq` | Repository events for webhooks, notifications and the audit log. Consumer: batches of up to 50, waiting up to 2 seconds, 8 retries. |
 | `MAIL` | Queue producer, with a consumer on the same Worker | `diffinery-mail`, dead-letter queue `diffinery-mail-dlq` | Email jobs. Consumer: batches of up to 20, waiting up to 2 seconds, 8 retries. Optional: without it emails are dropped with a warning in the logs. |
-| `EMAIL` | `send_email` (Email Sending) | Your onboarded domain | Sending email. Optional: without it every email is logged as `skipped`. |
+| `EMAIL` | `send_email` (Email Sending) | Your onboarded domain | Sending email. Optional: without it email goes to the SMTP server in `SMTP_URL`, and without that too every email is logged as `skipped`. |
 | (none) | Queue consumer | `diffinery-mail-events` | Bounces and complaints from Email Sending's event subscriptions; the deploy subscribes this queue to your sending domain's events (see [Site administration](/docs/admin/site-administration#where-bounces-and-complaints-come-from)). Consumer: batches of up to 50, waiting up to 5 seconds, 8 retries. |
-| `RL_AUTH`, `RL_ANON`, `RL_ACCOUNT`, `RL_CREATE`, `RL_MODEL` | Rate limiting (`ratelimits`) | Namespaces `1001` to `1005`; 20, 300, 2,000, 60 and 600 requests per 60 seconds | [Request rate limits](/docs/reference/rest-api#rate-limits): sign-in and security reports per IP address, anonymous requests per IP address, signed-in requests per account, new content per account, and agents' model requests per paying person (`MODEL_RATE_LIMIT` in `src/lib/rate-limit.ts`). Optional: a missing binding (the `dev` environment declares none) or one that fails lets requests through. If you change a limit, change `RATE_LIMITS` (or `MODEL_RATE_LIMIT`) in `src/lib/rate-limit.ts` to match, since the 429 messages quote it. Namespace IDs are shared across your Cloudflare account, so pick others if another Worker already uses these. |
+| `RL_AUTH`, `RL_ANON`, `RL_ACCOUNT`, `RL_CREATE`, `RL_MODEL` | Rate limiting (`ratelimits`) | Namespaces `1001` to `1005`; 20, 300, 2,000, 60 and 600 requests per 60 seconds | [Request rate limits](/docs/reference/rest-api#rate-limits): sign-in and security reports per IP address, anonymous requests per IP address, signed-in requests per account, new content per account, and agents' model requests per paying person (`MODEL_RATE_LIMIT` in `src/lib/rate-limit.ts`). Optional: a missing binding (the `dev` environment declares none) or one that fails lets requests through. If you change a limit, change `RATE_LIMITS` (or `MODEL_RATE_LIMIT`) in `src/lib/rate-limit.ts` to match, since the 429 messages quote it. Namespace IDs are shared across your Cloudflare account, so pick others if another Worker already uses these. Where these bindings don't exist, set `RATE_LIMITS` to `durable` to count in `RATE_LIMITER` instead. |
 | `REPO` | Durable Object namespace | Class `RepoDO` (SQLite) | One object per repository. |
 | `SCHEDULER` | Durable Object namespace | Class `SchedulerDO` (SQLite) | One object that starts scheduled workflow runs on its own alarm. |
 | `COMPOSE` | Durable Object namespace | Class `ComposeDO` (SQLite) | Joins the blocks of large artifact and cache uploads, one short-lived object per step, so the copying doesn't slow the repository's object. Without it, `RepoDO` does the joining. |
-| `RUNNER` | Durable Object namespace with a container | Class `RunnerContainer` (SQLite) | One container per hosted workflow job. |
+| `RATE_LIMITER` | Durable Object namespace | Class `RateLimiterDO` (SQLite) | Request rate limits when `RATE_LIMITS` is `durable` and the `ratelimits` bindings are missing, such as on celld. 32 objects, each counting a share of the keys in memory. Unused otherwise. |
+| `RUNNER` | Durable Object namespace with a container | Class `RunnerContainer` (SQLite) | One container per hosted workflow job, and per runner of a [GitHub job](/docs/actions/github-runners). |
+| `GITHUB_RUNNERS` | Durable Object namespace | Class `GitHubRunnersDO` (SQLite) | One object per account that pays for [GitHub runners](#github-runners): it starts runners for its GitHub jobs on its own alarm. |
 | `SANDBOX` | Durable Object namespace with a container | Class `SandboxContainer` (SQLite) | One container per agent sandbox. |
 | `RUN_WORKFLOW` | Workflow | `diffinery-run`, class `RunWorkflow` | One durable instance per workflow run. |
 | `IMPORTER` | Durable Object namespace with a container | Class `ImportContainer` (SQLite) | One container per Git transfer of a GitHub import. |
 | `IMPORT_WORKFLOW` | Workflow | `diffinery-import`, class `ImportWorkflow` | One durable instance per attempt of a GitHub import. |
 
-The Durable Object classes are declared in six migrations (`new_sqlite_classes`): tag `v1` for `RepoDO`, `RunnerContainer` and `SandboxContainer`, tag `v2` for `ImportContainer`, tag `v3` for `ProjectDO`, tag `v4` for `SchedulerDO`, tag `v5` for `RunnerContainerMedium`, `RunnerContainerSmall` and `RunnerContainerTiny`, and tag `v6` for `ComposeDO`. `wrangler deploy` applies a migration tag the account doesn't have yet.
+The Durable Object classes are declared in eight migrations (`new_sqlite_classes`): tag `v1` for `RepoDO`, `RunnerContainer` and `SandboxContainer`, tag `v2` for `ImportContainer`, tag `v3` for `ProjectDO`, tag `v4` for `SchedulerDO`, tag `v5` for `RunnerContainerMedium`, `RunnerContainerSmall` and `RunnerContainerTiny`, tag `v6` for `ComposeDO`, tag `v7` for `GitHubRunnersDO`, and tag `v8` for `RateLimiterDO`. `wrangler deploy` applies a migration tag the account doesn't have yet.
 
 ## Other Worker settings
 
@@ -316,6 +358,59 @@ printf '%s' "$CLIENT_SECRET" | pnpm exec wrangler secret put GITHUB_OAUTH_CLIENT
 The OAuth flow asks GitHub for the `read:user` scope only, uses github.com (not an Enterprise host), and binds its state to the signed-in account. Without the two settings, people link accounts with the gist code, which needs no configuration.
 
 Imports reach GitHub only on HTTPS hosts with public names; a GitHub API URL on a private address, `localhost`, `.local` or `.internal` is refused with `422 github_api_url must be a public host`.
+
+## GitHub runners
+
+[GitHub runners](/docs/actions/github-runners) let repositories that stay on GitHub run jobs on this instance's hosted runners. They need a GitHub App of your own; the runner containers, the `GITHUB_RUNNERS` Durable Object and the D1 tables of migration `0044_github_runners.sql` come with a normal deploy.
+
+Create the app on GitHub under **Settings → Developer settings → GitHub Apps → New GitHub App** (of your user, or of an organization for a shared instance), with these settings. `https://git.example.com` stands for your `PUBLIC_URL`.
+
+| Setting | Value |
+| --- | --- |
+| **GitHub App name** | Any, such as `Diffinery runners for git.example.com` |
+| **Homepage URL** | `https://git.example.com` |
+| **Callback URL** | `https://git.example.com/settings/github-runners/setup` |
+| **Request user authorization (OAuth) during installation** | Off |
+| **Setup URL** | `https://git.example.com/settings/github-runners/setup`, with **Redirect on update** on |
+| **Webhook** | Active, URL `https://git.example.com/-/github/webhook`, and a random secret of at least 32 characters |
+| **Repository permissions** | **Administration**: Read and write (to register and remove a repository's self-hosted runners). **Actions**: Read-only. **Metadata**: Read-only. Nothing else |
+| **Subscribe to events** | **Workflow job** |
+| **Where can this GitHub App be installed?** | **Any account** to let anyone with an account on your instance use it; **Only on this account** for your own repositories only |
+
+Then, on the app's page: note the **App ID** and the **Client ID**, click **Generate a new client secret**, and under **Private keys** click **Generate a private key**, which downloads a `.pem` file.
+
+Give the deploy the IDs and the slug (the last part of `https://github.com/apps/<slug>`). They aren't secrets, but they are your instance's, so the deploy takes them from the environment, like your hostname, and `scripts/render-config.mjs` writes them into the deployed config:
+
+| Deploy from | Set |
+| --- | --- |
+| The Deploy workflow | Repository variables `DIFFINERY_GITHUB_APP_ID`, `DIFFINERY_GITHUB_APP_SLUG` and `DIFFINERY_GITHUB_APP_CLIENT_ID` (and `DIFFINERY_GITHUB_APP_URL` for GitHub Enterprise Server). GitHub doesn't allow variable names that start with `GITHUB_`, so the workflow passes them on as `GITHUB_APP_ID` and the rest. |
+| `scripts/setup.sh` | The environment variables `GITHUB_APP_ID`, `GITHUB_APP_SLUG` and `GITHUB_APP_CLIENT_ID` (and `GITHUB_APP_URL`). |
+
+```sh
+gh variable set DIFFINERY_GITHUB_APP_ID --body 123456
+gh variable set DIFFINERY_GITHUB_APP_SLUG --body diffinery-runners-for-git-example-com
+gh variable set DIFFINERY_GITHUB_APP_CLIENT_ID --body Iv23li...
+```
+
+A value of the wrong shape, such as a slug with capital letters, stops the deploy with `GITHUB_APP_SLUG must be the slug, like diffinery-runners`. You can put them under `vars` in your copy's `wrangler.jsonc` instead; the environment wins when it has them.
+
+Then store the secrets:
+
+```sh
+cd apps/diffinery
+printf '%s' "$CLIENT_SECRET" | pnpm exec wrangler secret put GITHUB_APP_CLIENT_SECRET -c wrangler.deploy.jsonc
+pnpm exec wrangler secret put GITHUB_APP_PRIVATE_KEY -c wrangler.deploy.jsonc < diffinery-runners.private-key.pem
+printf '%s' "$WEBHOOK_SECRET" | pnpm exec wrangler secret put GITHUB_APP_WEBHOOK_SECRET -c wrangler.deploy.jsonc
+```
+
+After the next deploy, **Settings → GitHub runners** offers **Install on GitHub**. GitHub's **Recent Deliveries** on the app's **Advanced** tab shows each webhook delivery and Diffinery's answer, such as `{"queued":true,"size":"large"}` or `{"ignored":"not for a Diffinery runner"}`.
+
+What to know:
+
+- Jobs run GitHub's own runner, which the runner image includes (`ACTIONS_RUNNER_VERSION` in `containers/runner/Dockerfile`). GitHub updates a runner that has fallen too far behind as it starts, which adds a few seconds to each job, so keep that version close to [the latest release](https://github.com/actions/runner/releases).
+- GitHub jobs count against the linked account's quotas and the instance's `HOSTED_JOBS_LIMIT` like any hosted job, and [kill switches](/docs/admin/site-administration#kill-switches) stop them.
+- The webhook isn't rate limited per address, because GitHub sends every delivery from a few addresses; it refuses any delivery without a good signature.
+- Containers don't run under `wrangler dev`, so locally a GitHub job's runner fails to start ("Could not start a runner: ...").
 
 ## Deploy script settings
 

@@ -12,7 +12,9 @@
  *                                   image layer uploads to the Diffinery registry (see relay.ts)
  *
  * With DIFFINERY_IMPORT_ID and DIFFINERY_IMPORT_TOKEN set (instead of a job), it
- * runs a GitHub import's Git transfer (see importer.ts) and exits.
+ * runs a GitHub import's Git transfer (see importer.ts) and exits. With
+ * DIFFINERY_GITHUB_JIT_CONFIG set, it runs GitHub's own runner for one job of a
+ * GitHub repository (see github-runner.ts) and exits.
  */
 import { readFile } from "node:fs/promises";
 import type { JobSpec } from "@diffinery/shared";
@@ -25,6 +27,7 @@ import { runImportAgent } from "./importer.js";
 import { startSandbox } from "./sandbox.js";
 import { startSandboxPool } from "./sandbox-pool.js";
 import { startRelay } from "./relay.js";
+import { runGitHubRunner } from "./github-runner.js";
 
 interface Args {
   spec?: string;
@@ -99,6 +102,13 @@ async function main(): Promise<void> {
     process.on("SIGTERM", stop);
     process.on("SIGINT", stop);
     return;
+  }
+
+  if (env.DIFFINERY_GITHUB_JIT_CONFIG) {
+    const code = await runGitHubRunner({ jitConfig: env.DIFFINERY_GITHUB_JIT_CONFIG });
+    process.stdout.write(`[diffinery-runner] GitHub's runner exited with code ${code}
+`);
+    process.exit(code);
   }
 
   if (env.DIFFINERY_IMPORT_ID) {
