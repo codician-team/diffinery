@@ -5,7 +5,7 @@ description: How Diffinery protects code and secrets: passkeys instead of passwo
 updated: 2026-10-25
 ---
 
-A forge holds a team's most valuable asset and the keys to its production systems. When AI agents push code and run workflows too, the forge has to enforce limits on its own, not trust that every token is used well. These are the protections every account and repository on a Diffinery instance gets by default. Diffinery is open source (Apache-2.0), so you can read the code that enforces them at [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery).
+A forge holds a team's most valuable asset and the keys to its production systems. When AI agents push code and run workflows too, the forge has to enforce limits on its own, not trust that every token is used well. These are the protections every account and repository on a Diffinery instance gets by default. Diffinery is open source (Apache-2.0), so you can read the code that enforces them at [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery).
 
 ## People sign in with passkeys
 

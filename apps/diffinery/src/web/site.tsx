@@ -113,7 +113,7 @@ const HOME = {
   /** The tools Diffinery plugs into: the home page's integrations, its Markdown and the structured data. */
   integrations: [
     { icon: "bot", title: "Claude Code plugin", text: "The MCP server, a skill for the branch → pull request → CI → merge loop, /diffinery:pr-status, and a live band of the pull request's CI checks above the prompt.", install: "claude plugin marketplace add codician-team/diffinery", href: "/docs/connect/claude-code" },
-    { icon: "code", title: "Codex plugin", text: "The same MCP server, skills and session hook for OpenAI's Codex CLI.", install: "codex plugin marketplace add https://diffinery.com/codician/diffinery.git", href: "/docs/connect/codex" },
+    { icon: "code", title: "Codex plugin", text: "The same MCP server, skills and session hook for OpenAI's Codex CLI.", install: "codex plugin marketplace add codician-team/diffinery", href: "/docs/connect/codex" },
     { icon: "link", title: "MCP server, in the official registry", text: "52 tools for code, pull requests, CI logs, sandboxes, Today and the docs, with a browser sign-in, for Claude, Claude Code, Codex, Cursor and any MCP client. Listed as com.diffinery/diffinery.", install: "https://<your host>/mcp", href: "/docs/agents/mcp" },
     { icon: "play", title: "The diffinery CLI and gh", text: "Pull requests with intent, auto-merge, runs and logs, runners and migrations. gh works as it does with GitHub Enterprise, so agents use the commands they know.", install: "curl -fsSL https://diffinery.com/install | bash", href: "/docs/agents/github-cli" },
     { icon: "repo", title: "VS Code, Cursor and Windsurf", text: "Clone from Diffinery with a passkey sign-in, and push and pull with it.", install: "https://diffinery.com/install-editor", href: "/docs/repositories/clone-in-your-editor" },
@@ -174,7 +174,7 @@ jobs:
     },
     {
       q: "Is Diffinery open source?",
-      a: "Yes, under the Apache License 2.0, with no paid edition and nothing sold. The source code is at [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery) and mirrored to [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery). See [Open source](/open-source).",
+      a: "Yes, under the Apache License 2.0, with no paid edition and nothing sold. The source code is at [github.com/codician-team/diffinery](https://github.com/codician-team/diffinery), where it's developed. See [Open source](/open-source).",
     },
     {
       q: "Can I try Diffinery without deploying it?",
@@ -232,7 +232,7 @@ export function homeMarkdown(o: string): string {
     "",
     "## Open source, on your own Cloudflare account",
     "",
-    `Diffinery is open source under the Apache License 2.0: [source code](${SOURCE.repo}), [mirror on GitHub](${SOURCE.github}). Deploy it with [Deploy your own Diffinery](/docs/self-hosting/deploy); you pay Cloudflare only for what your instance uses. To try it first, [request early access](${EARLY_ACCESS}) to diffinery.com. See [Open source](/open-source).`,
+    `Diffinery is open source under the Apache License 2.0: [source code on GitHub](${SOURCE.repo}). Deploy it with [Deploy your own Diffinery](/docs/self-hosting/deploy); you pay Cloudflare only for what your instance uses. To try it first, [request early access](${EARLY_ACCESS}) to diffinery.com. See [Open source](/open-source).`,
     "",
     "## Frequently asked questions",
     "",
@@ -256,10 +256,9 @@ export async function homeContent(o: string): Promise<string> {
 export const CLOUDFLARE_CLAIM =
   "an open-source platform where Git hosting, pull requests with reviews in a web UI and GitHub Actions–compatible CI, marketplace actions included, all run on Cloudflare (checked October 25, 2026).";
 
-/** Where Diffinery's source lives, whatever instance serves this page, and its license. */
+/** Where Diffinery's source lives and is developed, whatever instance serves this page, and its license. */
 export const SOURCE = {
-  repo: "https://diffinery.com/codician/diffinery",
-  github: GITHUB_REPO,
+  repo: GITHUB_REPO,
   license: "https://www.apache.org/licenses/LICENSE-2.0",
   spdx: "Apache-2.0",
 };
@@ -300,7 +299,7 @@ function entities(o: string): object[] {
       installUrl: `${o}/docs/self-hosting/deploy`,
       downloadUrl: `${SOURCE.repo}/releases`,
       publisher: { "@id": id.org },
-      sameAs: [`${o}/docs`, SOURCE.repo, SOURCE.github],
+      sameAs: [`${o}/docs`, SOURCE.repo],
     },
     {
       "@type": "SoftwareSourceCode",
@@ -308,7 +307,6 @@ function entities(o: string): object[] {
       name: SITE.name,
       description: `The source code of ${SITE.name}, which you deploy to your own Cloudflare account.`,
       codeRepository: SOURCE.repo,
-      sameAs: [SOURCE.github],
       license: SOURCE.license,
       programmingLanguage: "TypeScript",
       runtimePlatform: "Cloudflare Workers",
@@ -375,7 +373,7 @@ const Cta: FC = () => (
 /** Inline Markdown (links and code) of a home page answer, as HTML. */
 const inline = (md: string) => renderMarkdown(md, { idPrefix: "" }).replace(/^<p>|<\/p>\s*$/g, "");
 
-/** The home page for visitors. `stars` is the GitHub mirror's star count, left out where the page's copy is compared (homeContent). */
+/** The home page for visitors. `stars` is the GitHub repository's star count, left out where the page's copy is compared (homeContent). */
 export const Landing: FC<{ stars?: number | null }> = ({ stars }) => (
   <div class="mk">
     <style>{raw(MARKETING_CSS)}</style>
@@ -390,7 +388,7 @@ export const Landing: FC<{ stars?: number | null }> = ({ stars }) => (
         {stars === undefined ? null : <StarButton stars={stars} />}
       </p>
       <p class="muted small">
-        Free, with nothing to buy: you run Diffinery on your own Cloudflare account. Want to try it first? <a href={EARLY_ACCESS}>Request early access</a> to diffinery.com. Source on <a href={SOURCE.repo}>Diffinery</a> and <a href={SOURCE.github}>GitHub</a>.
+        Free, with nothing to buy: you run Diffinery on your own Cloudflare account. Want to try it first? <a href={EARLY_ACCESS}>Request early access</a> to diffinery.com. Source on <a href={SOURCE.repo}>GitHub</a>.
       </p>
     </section>
     <ul class="mk-stats" aria-label="Diffinery in numbers">
@@ -572,7 +570,7 @@ function crumbs(p: SitePageInfo): Array<{ name: string; path: string }> {
 
 async function sitePageResponse(c: AppContext, p: SitePageInfo): Promise<Response> {
   const o = origin(c);
-  // The Open source page leads with where to get the source, and a Star button for the mirror.
+  // The Open source page leads with where to get the source, and a Star button for the GitHub repository.
   const source = p.path === "/open-source";
   const stars = source ? await githubStars(c) : null;
   const url = `${o}${p.path}`;
@@ -677,14 +675,14 @@ export function siteLlmsLines(o: string): string[] {
     "## About Diffinery",
     "",
     `- [Home page](${o}/index.md): ${HOME.description}`,
-    `- Open source under the Apache License 2.0 (SPDX: ${SOURCE.spdx}). Source code: ${SOURCE.repo}, mirrored to ${SOURCE.github}. Free, with no paid edition and nothing sold.`,
+    `- Open source under the Apache License 2.0 (SPDX: ${SOURCE.spdx}). Source code: ${SOURCE.repo}, where development happens. Free, with no paid edition and nothing sold.`,
     `- How to use it: deploy your own instance to your own Cloudflare account and domain (Workers Paid plan); you pay Cloudflare for what it uses. Guide: ${o}/docs/self-hosting/deploy.md. Overview: ${o}/docs/self-hosting.md. There's no hosted service for teams to sign up for: diffinery.com is the project's home and its own instance, with accounts by invitation. To try Diffinery before deploying your own, request early access at ${EARLY_ACCESS} (how it works: ${o}/docs/accounts/early-access.md).`,
     `- Contact the Diffinery team: ${o}${CONTACT.path} (a form; a person replies by email). Private security reports: ${o}/security/report. Bugs and ideas: issues on ${SOURCE.repo}.`,
     `- Runs entirely on Cloudflare (Workers, Durable Objects, R2, D1, Queues, Workflows, Containers): code, pull requests, CI runners and the agent features alike. It is ${CLOUDFLARE_CLAIM} See ${o}/built-on-cloudflare.md, which compares the other Git and CI projects on Cloudflare.`,
     "- Hosted CI runners: Ubuntu 24.04 x64 containers, 4 vCPU and 12 GiB of memory by default, with smaller sizes chosen per job from its measured runs. No hosted macOS, Windows or Arm runners; self-hosted runners cover them.",
     "- Runs GitHub Actions workflow files from `.github/workflows/` as they are; differences are listed at " + `${o}/docs/actions/compatibility.md`,
     `- Built for AI coding agents (${o}/agents.md): agent accounts with server-enforced guardrails (${o}/docs/agents/overview.md); agent tasks that run Claude Code or Codex in a sandbox with the person's own model key and open a pull request (${o}/docs/agents/tasks.md); agent review with inline findings and an Agent review check (${o}/docs/agents/review.md); a Today page of what needs you (${o}/docs/agents/today.md); merge on green (${o}/docs/collaboration/merge-on-green.md); browser terminals where Claude Code or Codex runs on the person's own Claude or ChatGPT plan (${o}/docs/agents/terminal.md). All opt-in; Diffinery doesn't sell or include model access.`,
-    `- Plugins and integrations: Claude Code and Codex plugins (marketplace codician-team/diffinery on GitHub, or ${SOURCE.repo}.git), an MCP server listed in the official MCP Registry as com.diffinery/diffinery (https://{diffinery_host}/mcp), the diffinery CLI, gh through the GitHub-compatible REST and GraphQL APIs, and extensions for VS Code, Cursor, Windsurf and JetBrains IDEs. Guides: ${o}/docs/connect.md`,
+    `- Plugins and integrations: Claude Code and Codex plugins (marketplace codician-team/diffinery on GitHub), an MCP server listed in the official MCP Registry as com.diffinery/diffinery (https://{diffinery_host}/mcp), the diffinery CLI, gh through the GitHub-compatible REST and GraphQL APIs, and extensions for VS Code, Cursor, Windsurf and JetBrains IDEs. Guides: ${o}/docs/connect.md`,
     "",
   ];
   for (const s of SITE_NAV) {

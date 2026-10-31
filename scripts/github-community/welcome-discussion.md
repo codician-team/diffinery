@@ -11,6 +11,6 @@ Welcome! Diffinery is an open-source GitHub and GitHub Actions alternative that 
 - [Compatibility with GitHub Actions](https://diffinery.com/docs/actions/compatibility)
 - [Contributing](https://github.com/codician-team/diffinery/blob/main/CONTRIBUTING.md)
 
-Development happens on [diffinery.com/codician/diffinery](https://diffinery.com/codician/diffinery) and is mirrored here; pull requests are welcome in either place.
+Development happens here, in this repository; pull requests are welcome.
 
 – the Codician team

@@ -1,12 +1,12 @@
 {
   "name": "diffinery",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Work with repositories hosted on Diffinery: pull requests, CI checks, workflow logs and issues through the diffinery CLI and the Diffinery MCP server.",
   "author": {
     "name": "Codician Team"
   },
   "homepage": "https://diffinery.com/docs/connect/claude-code",
-  "repository": "https://diffinery.com/codician/diffinery",
+  "repository": "https://github.com/codician-team/diffinery",
   "license": "Apache-2.0",
   "keywords": [
     "diffinery",

@@ -1,5 +1,5 @@
 /**
- * The star count of Diffinery's GitHub mirror (GITHUB_REPO), for the "Star on GitHub" buttons on the public site.
+ * The star count of Diffinery's GitHub repository (GITHUB_REPO), for the "Star on GitHub" buttons on the public site.
  *
  * Fetched by the server, never by the visitor's browser, so no page loads a third-party script or tells GitHub who
  * looked at it. Pages never wait for GitHub: a request reads the isolate's copy or the colo's Cache API entry, and
@@ -9,7 +9,7 @@
  */
 import type { AppContext } from "../auth/principal.js";
 
-/** Diffinery's mirror on GitHub (site.tsx's SOURCE.github), where people star the project. */
+/** Diffinery's repository on GitHub (site.tsx's SOURCE.repo), where it's developed and people star the project. */
 export const GITHUB_REPO = "https://github.com/codician-team/diffinery";
 
 export interface Stored {
@@ -136,7 +136,7 @@ const isolate = new StarCount();
 const perRequest = new WeakMap<Request, Promise<number | null>>();
 
 /**
- * The mirror's star count for this request (looked up once however many buttons the page has), or null while unknown.
+ * The GitHub repository's star count for this request (looked up once however many buttons the page has), or null while unknown.
  * Without the Cache API (unit tests, workers.dev) there is nowhere to keep a count, so GitHub isn't asked.
  */
 export function githubStars(c: AppContext): Promise<number | null> {

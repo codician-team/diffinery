@@ -12,12 +12,12 @@ curl -fsSL https://diffinery.com/install | bash
 diffinery setup
 ```
 
-On Windows, in PowerShell: `irm https://diffinery.com/install.ps1 | iex`, then `diffinery setup`. It signs you in through your browser, lets git use the sign-in (as `diffinery auth setup-git` does) and signs in `gh` when you have it. The CLI gives Codex git access and the pull request commands. The plugin's marketplace lives in the public codician/diffinery repository. See [Install and sign in to the CLI](/docs/accounts/cli-sign-in).
+On Windows, in PowerShell: `irm https://diffinery.com/install.ps1 | iex`, then `diffinery setup`. It signs you in through your browser, lets git use the sign-in (as `diffinery auth setup-git` does) and signs in `gh` when you have it. The CLI gives Codex git access and the pull request commands. The plugin's marketplace lives in the public [codician-team/diffinery](https://github.com/codician-team/diffinery) repository on GitHub. See [Install and sign in to the CLI](/docs/accounts/cli-sign-in).
 
 ## 2. Install the plugin
 
 ```sh
-codex plugin marketplace add https://diffinery.com/codician/diffinery.git
+codex plugin marketplace add codician-team/diffinery
 codex plugin add diffinery@diffinery
 ```
 
@@ -108,7 +108,7 @@ Or add it yourself: `codex mcp add diffinery --url https://git.example.com/mcp`.
 
 | Problem | What to do |
 | --- | --- |
-| `codex plugin marketplace add` fails to fetch | Run `diffinery setup` first (step 1). |
+| `codex plugin marketplace add` fails to fetch | Codex clones github.com/codician-team/diffinery with git, which needs no sign-in. Check that `git ls-remote https://github.com/codician-team/diffinery` works from your machine. |
 | `codex mcp list` says **Not logged in** | Run `codex mcp login diffinery`. |
 | The browser says "Can't connect this app" | Run `codex mcp logout diffinery`, then `codex mcp login diffinery` again. |
 | A tool says it needs the write scope | You connected with **Read**. Disconnect Codex under **Settings → Access tokens → Connected apps** and sign in again with **Write**. |
