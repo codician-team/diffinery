@@ -70,7 +70,15 @@ To move every job at once, and to be able to move them back without a commit, re
     runs-on: ${{ vars.RUNS_ON || 'ubuntu-latest' }}
 ```
 
-Then set the variable to `diffinery` (`gh variable set RUNS_ON --body diffinery`). Setting it back to `ubuntu-latest` returns the jobs to GitHub-hosted runners, for example to keep a deploy working while Diffinery can't start runners. Forks without the variable keep running on GitHub. Diffinery's own repository does this with `DIFFINERY_RUNS_ON`.
+Then set the variable to `diffinery` (`gh variable set RUNS_ON --body diffinery`). Setting it back to `ubuntu-latest` returns the jobs to GitHub-hosted runners, for example to keep a deploy working while Diffinery can't start runners. Forks without the variable keep running on GitHub.
+
+GitHub passes no repository variables to workflows of pull requests from forks, so those jobs run on `ubuntu-latest` too. To run them on Diffinery as well, default to `diffinery` in your own repository, and keep `ubuntu-latest` for copies of it:
+
+```yaml
+    runs-on: ${{ vars.RUNS_ON || (github.repository == 'my-org/my-repo' && 'diffinery') || 'ubuntu-latest' }}
+```
+
+Diffinery's own repository does this with `DIFFINERY_RUNS_ON`. Read [Security](#security) first: anyone who opens a pull request can then use your minutes.
 
 ## The machine
 

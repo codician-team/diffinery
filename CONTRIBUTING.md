@@ -57,11 +57,11 @@ Pull requests must pass CI (typecheck, the Worker bundle and the unit tests) and
 end-to-end shards before they merge. Tests must not depend on the speed of the machine
 they run on.
 
-The "End-to-end (runner Docker)" job needs one of Diffinery's own runners, which GitHub
-picks through the repository variable `DIFFINERY_RUNS_ON`. GitHub doesn't pass repository
-variables to pull requests from forks, so on a fork's pull request that job is skipped,
-not failed. If your change touches the runner's Docker support (`containers/runner`), a
-maintainer runs the job by pushing your branch to this repository.
+CI runs on Diffinery's own runners for GitHub (`runs-on: diffinery`), pull requests from
+forks included: in this repository the workflows default to that label when the
+repository variable `DIFFINERY_RUNS_ON`, which GitHub doesn't pass to forks, is missing.
+The "End-to-end (runner Docker)" job needs those runners and fails on GitHub's own. A
+maintainer may have to approve the workflows of your first pull request before they run.
 
 ## Conventions
 
