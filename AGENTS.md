@@ -10,8 +10,9 @@ Diffinery: an open-source git forge with GitHub Actions–compatible CI that run
 Cloudflare. One Cloudflare Worker serves the web UI, git over HTTPS, a GitHub-compatible
 REST and GraphQL API and an MCP server; each repository is a Durable Object with its own
 SQLite database; CI jobs run in Cloudflare Containers. Development happens at
-https://github.com/codician-team/diffinery; https://diffinery.com/codician/diffinery is a
-mirror of its `main`, so push branches and open pull requests on GitHub.
+https://github.com/codician-team/diffinery: push branches and open pull requests there.
+https://diffinery.com/codician/diffinery is an older copy that is no longer updated, with
+Actions off.
 
 ## Layout
 

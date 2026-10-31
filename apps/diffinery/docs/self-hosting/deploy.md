@@ -15,7 +15,7 @@ There are two ways to deploy, and both run the same scripts:
 The short version, after [creating an API token](#step-2-create-a-cloudflare-api-token):
 
 ```sh
-git clone https://diffinery.com/codician/diffinery.git && cd diffinery
+git clone https://github.com/codician-team/diffinery.git && cd diffinery
 CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... DIFFINERY_DOMAIN=git.example.com \
   BOOTSTRAP_ADMINS=you@example.com scripts/setup.sh
 ```
@@ -68,7 +68,7 @@ You don't edit any code to deploy your own instance. `apps/diffinery/wrangler.js
 - `DIFFINERY_ZONE`, if the Cloudflare zone that holds your hostname is not its last two labels. For `git.example.com` the default zone is `example.com`, which is right; for `git.example.co.uk` the default would be `co.uk`, so set `DIFFINERY_ZONE` to `example.co.uk`.
 - `MAIL_DOMAIN`, if email should come from another domain than your hostname, for example `example.com` to send from `notifications@example.com`.
 
-The Deploy job runs on every push to `main` once the CI workflow passes on that commit, on GitHub or on a Diffinery instance, and whenever you start it by hand (`workflow_dispatch`). A mirror of a repository that already deploys would deploy too, on GitHub or on Diffinery, so keep Actions or the Cloudflare secrets off on such a mirror. The upstream project's own Diffinery mirror, `codician/diffinery` on diffinery.com, is skipped by name.
+The Deploy job runs on every push to `main` once the CI workflow passes on that commit, on GitHub or on a Diffinery instance, and whenever you start it by hand (`workflow_dispatch`). A mirror of a repository that already deploys would deploy too, on GitHub or on Diffinery, so keep Actions or the Cloudflare secrets off on such a mirror. The upstream project's older copy on diffinery.com, `codician/diffinery`, is skipped by name.
 
 The workflow doesn't pass `BOOTSTRAP_ADMINS`. Set the list with a first deploy from your machine (`scripts/setup.sh`), or put it under `vars` in your copy's `wrangler.jsonc`; after that, workflow deploys keep it.
 
