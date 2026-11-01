@@ -44,6 +44,20 @@ jobs:
         working-directory: apps/diffinery
         run: pnpm exec wrangler deploy --dry-run --env dev --outdir dist
 
+  authorship:
+    name: Commit authorship
+    runs-on: ${{ vars.DIFFINERY_RUNS_ON || (github.repository == 'codician-team/diffinery' && 'diffinery') || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: No AI authorship or attribution
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: scripts/check-commit-authorship.sh "$BASE" "$HEAD"
+
   test:
     name: Unit tests (${{ matrix.shard }}/2)
     runs-on: ${{ vars.DIFFINERY_RUNS_ON || (github.repository == 'codician-team/diffinery' && 'diffinery') || 'ubuntu-latest' }}

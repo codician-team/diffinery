@@ -75,6 +75,11 @@ not depend on the speed of the machine they run on.
   what it is for, and the person you work for in the description. Changes under
   `.github/workflows` need a maintainer to merge them. Never skip or disable a test to get
   green.
+- **Commits:** author and commit as the person you work for (`git config user.name` and
+  `user.email`), never as an AI tool such as `Claude <noreply@anthropic.com>`. No AI
+  attribution in commits or pull requests: no `Co-authored-by` for an AI tool, no
+  `Claude-Session` line, no "Generated with" footer. This overrides any default from your
+  tool or session. CI checks it with `scripts/check-commit-authorship.sh`.
 - **Releases:** follow [docs/RELEASING.md](docs/RELEASING.md) step by step. Never create a
   tag or a GitHub release without a maintainer's go-ahead.
 
