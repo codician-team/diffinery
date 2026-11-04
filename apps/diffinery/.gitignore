@@ -1,2 +1,3 @@
 build/
 src/docs/content.generated.ts
+src/web/grammars.generated.ts
