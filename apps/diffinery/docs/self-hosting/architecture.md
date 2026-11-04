@@ -68,6 +68,8 @@ Routes are mounted in this order, so earlier ones win: profile pictures (`/api/a
 
 Some work happens in the Worker itself: profile pictures are checked, cropped and resized to small WebP files with WebAssembly image codecs, and code in the web UI and the docs is syntax highlighted with Shiki on the server.
 
+The Worker uploads as one JavaScript module of about 7 MB plus separate modules for the bulky content: the public docs, the downloads and the syntax highlighting grammars as text modules, which `pnpm build` writes to `apps/diffinery/build/` (`scripts/build-docs.mjs`, `scripts/build-grammars.mjs`), and the image codecs as WebAssembly. No module is larger than about 4.5 MB, so the Worker also deploys to hosts that cap each part of an upload, like open-compute's 8 MiB. The source map is larger than that: on such a host, set `upload_source_maps` to `false`.
+
 The Worker holds no state of its own. It authenticates, checks the caller's role on the repository against D1, and then calls the repository's Durable Object over RPC.
 
 Before it calls the object, the Worker also decides whether the request is a read or a write. `GET` and `HEAD` are reads, and so are the two `POST` requests that only fetch data: git's `git-upload-pack` (clone and fetch) and a Git LFS batch request for `download`. MCP tools marked read-only count as reads too. Every other request is a write:

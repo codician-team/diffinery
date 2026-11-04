@@ -1,82 +1,29 @@
 /**
  * Syntax highlighting with Shiki (JavaScript regex engine, fine-grained grammars
- * loaded on first use). Tokens carry both GitHub themes as CSS variables
- * (--shiki-light / --shiki-dark); the site stylesheet picks one. Everything here
- * fails soft: an unknown language, an oversized input or an error means plain text.
+ * parsed on first use from the text modules scripts/build-grammars.mjs writes).
+ * Tokens carry both GitHub themes as CSS variables (--shiki-light / --shiki-dark);
+ * the site stylesheet picks one. Everything here fails soft: an unknown language,
+ * an oversized input or an error means plain text.
  */
 import { createHighlighterCore, type HighlighterCore, type LanguageRegistration, type ThemedToken, type ThemeRegistration } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import { GRAMMAR_LANGS, GRAMMAR_ORDER, GRAMMAR_TEXT } from "./grammars.generated.js";
 import { escapeHtml } from "./markdown.js";
 
-type Grammar = () => Promise<{ default: LanguageRegistration[] }>;
+export type Lang = (typeof GRAMMAR_LANGS)[number];
+export const LANGS: Lang[] = [...GRAMMAR_LANGS];
+const KNOWN = new Set<string>(GRAMMAR_LANGS);
 
-const GRAMMARS = {
-  astro: () => import("shiki/langs/astro.mjs"),
-  bat: () => import("shiki/langs/bat.mjs"),
-  c: () => import("shiki/langs/c.mjs"),
-  clojure: () => import("shiki/langs/clojure.mjs"),
-  cmake: () => import("shiki/langs/cmake.mjs"),
-  cpp: () => import("shiki/langs/cpp.mjs"),
-  csharp: () => import("shiki/langs/csharp.mjs"),
-  css: () => import("shiki/langs/css.mjs"),
-  dart: () => import("shiki/langs/dart.mjs"),
-  diff: () => import("shiki/langs/diff.mjs"),
-  docker: () => import("shiki/langs/docker.mjs"),
-  dotenv: () => import("shiki/langs/dotenv.mjs"),
-  elixir: () => import("shiki/langs/elixir.mjs"),
-  erlang: () => import("shiki/langs/erlang.mjs"),
-  fish: () => import("shiki/langs/fish.mjs"),
-  fsharp: () => import("shiki/langs/fsharp.mjs"),
-  go: () => import("shiki/langs/go.mjs"),
-  graphql: () => import("shiki/langs/graphql.mjs"),
-  groovy: () => import("shiki/langs/groovy.mjs"),
-  haskell: () => import("shiki/langs/haskell.mjs"),
-  hcl: () => import("shiki/langs/hcl.mjs"),
-  html: () => import("shiki/langs/html.mjs"),
-  ini: () => import("shiki/langs/ini.mjs"),
-  java: () => import("shiki/langs/java.mjs"),
-  javascript: () => import("shiki/langs/javascript.mjs"),
-  json: () => import("shiki/langs/json.mjs"),
-  json5: () => import("shiki/langs/json5.mjs"),
-  jsonc: () => import("shiki/langs/jsonc.mjs"),
-  jsx: () => import("shiki/langs/jsx.mjs"),
-  julia: () => import("shiki/langs/julia.mjs"),
-  kotlin: () => import("shiki/langs/kotlin.mjs"),
-  less: () => import("shiki/langs/less.mjs"),
-  lua: () => import("shiki/langs/lua.mjs"),
-  make: () => import("shiki/langs/make.mjs"),
-  markdown: () => import("shiki/langs/markdown.mjs"),
-  nginx: () => import("shiki/langs/nginx.mjs"),
-  nix: () => import("shiki/langs/nix.mjs"),
-  "objective-c": () => import("shiki/langs/objective-c.mjs"),
-  ocaml: () => import("shiki/langs/ocaml.mjs"),
-  perl: () => import("shiki/langs/perl.mjs"),
-  php: () => import("shiki/langs/php.mjs"),
-  powershell: () => import("shiki/langs/powershell.mjs"),
-  proto: () => import("shiki/langs/proto.mjs"),
-  python: () => import("shiki/langs/python.mjs"),
-  r: () => import("shiki/langs/r.mjs"),
-  ruby: () => import("shiki/langs/ruby.mjs"),
-  rust: () => import("shiki/langs/rust.mjs"),
-  sass: () => import("shiki/langs/sass.mjs"),
-  scala: () => import("shiki/langs/scala.mjs"),
-  scss: () => import("shiki/langs/scss.mjs"),
-  shellscript: () => import("shiki/langs/shellscript.mjs"),
-  sql: () => import("shiki/langs/sql.mjs"),
-  svelte: () => import("shiki/langs/svelte.mjs"),
-  swift: () => import("shiki/langs/swift.mjs"),
-  terraform: () => import("shiki/langs/terraform.mjs"),
-  toml: () => import("shiki/langs/toml.mjs"),
-  tsx: () => import("shiki/langs/tsx.mjs"),
-  typescript: () => import("shiki/langs/typescript.mjs"),
-  vue: () => import("shiki/langs/vue.mjs"),
-  xml: () => import("shiki/langs/xml.mjs"),
-  yaml: () => import("shiki/langs/yaml.mjs"),
-  zig: () => import("shiki/langs/zig.mjs"),
-} satisfies Record<string, Grammar>;
+const parsed = new Map<string, LanguageRegistration>();
 
-export type Lang = keyof typeof GRAMMARS;
-export const LANGS = Object.keys(GRAMMARS) as Lang[];
+/** A language's grammars (the ones it embeds, then its own), each parsed from its text module once. */
+function grammar(lang: Lang): LanguageRegistration[] {
+  return GRAMMAR_ORDER[lang].map((name) => {
+    let g = parsed.get(name);
+    if (!g) parsed.set(name, (g = JSON.parse(GRAMMAR_TEXT[name]!) as LanguageRegistration));
+    return g;
+  });
+}
 
 const EXT: Record<string, Lang> = {
   ts: "typescript", mts: "typescript", cts: "typescript", tsx: "tsx",
@@ -137,7 +84,7 @@ const ALIASES: Record<string, Lang> = {
 /** Shiki language for a Markdown fence info string ("ts", "yaml", "c++" …), or null. */
 export function langForFence(info: string): Lang | null {
   const name = info.trim().toLowerCase().replace(/^\{?\.?/, "").replace(/\}$/, "");
-  return name in GRAMMARS ? (name as Lang) : (ALIASES[name] ?? null);
+  return KNOWN.has(name) ? (name as Lang) : (ALIASES[name] ?? null);
 }
 
 // ---------------------------------------------------------------- highlighter
@@ -207,7 +154,7 @@ export async function ready(langs: Iterable<Lang>): Promise<HighlighterCore | nu
         let p = loading.get(l);
         if (!p) {
           p = hl
-            .loadLanguage(GRAMMARS[l]())
+            .loadLanguage(...grammar(l))
             // Compile the grammar's top-level rules now: on a cold Worker that alone can outlast the
             // per-line time limit, which would leave the first line of a file unhighlighted.
             .then(() => void hl.codeToTokens("x", { lang: l, theme: PAIR }))

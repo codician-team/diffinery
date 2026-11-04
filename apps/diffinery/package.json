@@ -12,8 +12,8 @@
     "cf-typegen": "wrangler types",
     "e2e": "node --test --test-concurrency=1 --test-timeout=600000 test/e2e/e2e.test.mjs test/e2e/passkeys.test.mjs test/e2e/accounts.test.mjs test/e2e/registry.test.mjs test/e2e/email.test.mjs test/e2e/security-txt.test.mjs test/e2e/security.test.mjs test/e2e/security-limits.test.mjs test/e2e/agentic.test.mjs test/e2e/tasks.test.mjs test/e2e/terminals.test.mjs test/e2e/review.test.mjs",
     "db:migrate:local": "wrangler d1 migrations apply diffinery-dev --local -e dev",
-    "build": "node islands/build.mjs && node scripts/build-docs.mjs",
-    "predev": "node islands/build.mjs && node scripts/build-docs.mjs",
+    "build": "node islands/build.mjs && node scripts/build-docs.mjs && node scripts/build-grammars.mjs",
+    "predev": "node islands/build.mjs && node scripts/build-docs.mjs && node scripts/build-grammars.mjs",
     "build:docs": "node scripts/build-docs.mjs"
   },
   "dependencies": {

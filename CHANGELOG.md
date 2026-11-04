@@ -6,6 +6,13 @@ How a release is made is in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## [Unreleased]
 
+### Self-hosting
+
+- The Worker's main module is about 7 MB instead of 14 MB: the docs, the downloads and the
+  syntax highlighting grammars upload as separate text modules, none larger than about
+  4.5 MB. Hosts that cap each part of an upload, like open-compute (8 MiB), take it, and
+  a cold start parses less JavaScript.
+
 ## [0.2.0] - 2026-10-31
 
 Development moved to [GitHub](https://github.com/codician-team/diffinery). GitHub
